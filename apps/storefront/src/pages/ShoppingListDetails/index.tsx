@@ -49,7 +49,7 @@ import {
   ShoppingListDetailsProvider,
 } from './context/ShoppingListDetailsContext';
 
-import { getShoppingListItemQuantities, setShoppingListItemQuantities } from '@/shared/service/vs/shoppingListQuantityService';
+import { clearShoppingListItemQuantities, getShoppingListItemQuantities, setShoppingListItemQuantities } from '@/shared/service/vs/shoppingListQuantityService';
 import { getCustomFields } from '@/shared/service/bc/graphql/product';
 
 interface TableRefProps extends HTMLInputElement {
@@ -329,7 +329,8 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
   }
 
   const handleResetQuantities = () => {
-    setCheckedArr([]);
+    setCheckedArr(() => []);
+    clearShoppingListItemQuantities();
     
     tableRef.current?.reload();
   }
@@ -354,13 +355,6 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
         totalCount: 0,
       };
     }
-
-    for(let edge of listProducts) {
-      const qty = Number(edge.node.quantity);
-      if(!isNaN(qty) && qty > 0) {
-        addItemToCheckedArr(edge);
-      }
-    };
 
     return {
       edges: listProducts,
@@ -441,7 +435,7 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
           await deleteShoppingListItem(node.itemId);
         });
 
-        setCheckedArr([]);
+        setCheckedArr(() => []);
       }
 
       snackbar.success(b3Lang('shoppingList.productRemoved'));

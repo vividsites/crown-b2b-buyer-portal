@@ -261,6 +261,7 @@ function ShoppingDetailFooter(props: ShoppingDetailFooterProps) {
             window.location.href = CHECKOUT_URL;
           } else {
             b3TriggerCartNumber();
+            handleResetQuantitiesInternal();
             window.parent.postMessage({
               type: 'open-cart-flyout',
             }, '*');
@@ -271,7 +272,6 @@ function ShoppingDetailFooter(props: ShoppingDetailFooterProps) {
 
       setValidateFailureProducts(validateFailureArr);
       setValidateSuccessProducts(validateSuccessArr);
-      handleResetQuantitiesInternal();
     } finally {
       setLoading(false);
     }
