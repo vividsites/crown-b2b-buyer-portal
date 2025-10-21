@@ -2,7 +2,7 @@ import B3Request from '../../request/b3Fetch';
 
 const customFields = (data: CustomFieldItems) => `query getCustomFields {
   site {
-    products(entityIds: [${data.productIds || []}]) {
+    products(entityIds: [${data.productIds || []}]${data.pageSize ? `, first:${data.pageSize || null}` : ''}${data.cursor ? `, after:"${data.cursor || null}"` : ''}) {
       edges {
         node {
           customFields {
@@ -12,15 +12,15 @@ const customFields = (data: CustomFieldItems) => `query getCustomFields {
                 value
               }
             }
-            pageInfo {
-              hasNextPage
-              startCursor
-              endCursor
-              hasPreviousPage
-            }
           }
           entityId
         }
+      }
+      pageInfo {
+        hasNextPage
+        startCursor
+        endCursor
+        hasPreviousPage
       }
     }
   }

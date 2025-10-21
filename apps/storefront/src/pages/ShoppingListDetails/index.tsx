@@ -258,12 +258,22 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
         });
 
         const newProductsSearch = await getProducts(productIds);
-        const customFields = await getCustomFields({productIds});
+        let customFieldData = [];
+        let customFields = await getCustomFields({productIds, pageSize: productIds.length});
+        
+        while (customFields?.data?.site?.products?.edges?.length > 0) {
+          customFieldData.push(...customFields?.data?.site?.products?.edges);
+          if(customFields?.data?.site?.products?.pageInfo?.hasNextPage) {
+            customFields = await getCustomFields({productIds, cursor: customFields?.data?.site?.products?.pageInfo?.endCursor});
+          } else {
+            break;
+          }
+        }
 
         listProducts.forEach((item) => {
           const { node } = item;
 
-          const customFieldList = customFields?.data?.site?.products?.edges?.find((field: CustomFieldItems) => {
+          const customFieldList = customFieldData.find((field: CustomFieldItems) => {
             const { node: { entityId } } = field;
 
             return node.productId === entityId;
