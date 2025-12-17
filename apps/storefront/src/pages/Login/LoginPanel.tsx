@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import { Box, Button, useTheme } from '@mui/material';
 
 import { useMobile } from '@/hooks';
@@ -8,12 +7,12 @@ import LoginWidget from './component/LoginWidget';
 interface LoginPanelProps {
   widgetBodyText: string;
   createAccountButtonText: string;
+  handleCreateAccountClick: () => void;
 }
 
 function LoginPanel(props: LoginPanelProps) {
-  const { widgetBodyText, createAccountButtonText } = props;
+  const { widgetBodyText, createAccountButtonText, handleCreateAccountClick } = props;
 
-  const theme = useTheme();
   const [isMobile] = useMobile();
 
   return (
@@ -26,7 +25,6 @@ function LoginPanel(props: LoginPanelProps) {
     >
       <LoginWidget
         sx={{
-          minHeight: '250px',
           '& .panel': {
             '.panel-title': {
               display: 'flex',
@@ -35,6 +33,7 @@ function LoginPanel(props: LoginPanelProps) {
               alignItems: 'center',
               fontWeight: 400,
               fontSize: '24px',
+              margin: '0',
             },
           },
         }}
@@ -42,16 +41,24 @@ function LoginPanel(props: LoginPanelProps) {
       />
       <Box
         sx={{
-          marginTop: '5px',
+          backgroundColor: '#15296e',
+          padding: '12px 20px 20px 20px',
+          marginTop: '0px',
+          textAlign: 'center',
         }}
       >
         <Button
-          component={Link}
-          to="/register"
+          type="button"
+          onClick={handleCreateAccountClick}
           variant="contained"
           sx={{
             ml: isMobile ? 0 : 1,
-            backgroundColor: theme.palette.primary.main,
+            backgroundColor: '#FFF',
+            color: '#ea1c2d',
+            '&:hover': {
+              backgroundColor: '#FFF',
+              color: '#cd1323',
+            },
           }}
         >
           {createAccountButtonText}

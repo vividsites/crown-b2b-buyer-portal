@@ -7,15 +7,18 @@ import { getContrastColor } from '@/components/outSideComponents/utils/b3CustomS
 import { useB3Lang } from '@/lib/lang';
 
 import { getLoginFields, LoginConfig } from './config';
+import LoginWidget from './component/LoginWidget';
 
 interface LoginFormProps {
   loginBtn: string;
+  headerText?: string;
+  footerText?: string;
   handleLoginSubmit: (data: LoginConfig) => void;
   backgroundColor: string;
 }
 
 function LoginForm(props: LoginFormProps) {
-  const { loginBtn, handleLoginSubmit, backgroundColor } = props;
+  const { loginBtn, headerText, footerText, handleLoginSubmit, backgroundColor } = props;
 
   const b3Lang = useB3Lang();
   const theme = useTheme();
@@ -46,7 +49,7 @@ function LoginForm(props: LoginFormProps) {
       <Typography
         variant="h5"
         sx={{
-          margin: '20px 0',
+          margin: '0',
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
@@ -54,6 +57,16 @@ function LoginForm(props: LoginFormProps) {
       >
         {b3Lang('login.loginText.signInHeader')}
       </Typography>
+      {headerText && (
+        <LoginWidget
+          sx={{
+            marginBottom: '20px',
+            minHeight: '48px',
+            width: '100%',
+          }}
+          html={headerText}
+        />
+      )}
       <Box
         sx={{
           width: '100%',
@@ -101,6 +114,16 @@ function LoginForm(props: LoginFormProps) {
           </Box>
         </form>
       </Box>
+      {footerText && (
+        <LoginWidget
+          sx={{
+            marginTop: '20px',
+            minHeight: '48px',
+            width: '100%',
+          }}
+          html={footerText}
+        />
+      )}
     </Box>
   );
 }

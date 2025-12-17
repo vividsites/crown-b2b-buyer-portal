@@ -24,7 +24,6 @@ import { getCurrentCustomerInfo } from '@/utils/loginInfo';
 
 import { type PageProps } from '../PageProps';
 
-import LoginWidget from './component/LoginWidget';
 import { CatalystLogin } from './CatalystLogin';
 import { isLoginFlagType, loginCheckout, LoginConfig, loginType } from './config';
 import LoginForm from './LoginForm';
@@ -247,6 +246,12 @@ function Login(props: PageProps) {
     }
   };
 
+  const handleCreateAccountClick = () => {
+    window.parent.postMessage({
+      type: 'create-account',
+    }, '*');
+  };
+
   const loginAndRegisterContainerWidth = registerEnabled ? '100%' : '50%';
   const loginContainerWidth = registerEnabled ? '50%' : 'auto';
 
@@ -304,15 +309,6 @@ function Login(props: PageProps) {
                     </ImageListItem>
                   </LoginImage>
                 </Box>
-                {loginInfo.widgetHeadText && (
-                  <LoginWidget
-                    sx={{
-                      minHeight: '48px',
-                      width: registerEnabled || isMobile ? '100%' : '50%',
-                    }}
-                    html={loginInfo.widgetHeadText}
-                  />
-                )}
                 <Box
                   sx={{
                     display: 'flex',
@@ -323,7 +319,6 @@ function Login(props: PageProps) {
                 >
                   <Box
                     sx={{
-                      bgcolor: '#FFFFFF',
                       borderRadius: '4px',
                       margin: '20px 0',
                       display: 'flex',
@@ -337,21 +332,22 @@ function Login(props: PageProps) {
                         mb: '20px',
                         display: 'flex',
                         flexDirection: isMobile ? 'column' : 'row',
+                        gap: '20px',
                         justifyContent: 'center',
                         width: isMobile ? 'auto' : '100%',
                       }}
                     >
                       <Box
                         sx={{
+                          bgcolor: '#FFFFFF',
                           width: isMobile ? 'auto' : loginContainerWidth,
-                          paddingRight: isMobile ? 0 : '2%',
-                          ml: '16px',
-                          mr: isMobile ? '16px' : '',
-                          pb: registerEnabled ? '' : '36px',
+                          padding: '20px',
                         }}
                       >
                         <LoginForm
                           loginBtn={loginInfo.loginBtn}
+                          headerText={loginInfo.widgetHeadText}
+                          footerText={loginInfo.widgetFooterText}
                           handleLoginSubmit={handleLoginSubmit}
                           backgroundColor={backgroundColor}
                         />
@@ -361,10 +357,10 @@ function Login(props: PageProps) {
                         <Box
                           sx={{
                             flex: '1',
-                            paddingLeft: isMobile ? 0 : '2%',
                           }}
                         >
                           <LoginPanel
+                            handleCreateAccountClick={handleCreateAccountClick}
                             createAccountButtonText={loginInfo.createAccountButtonText}
                             widgetBodyText={loginInfo.widgetBodyText}
                           />
@@ -373,15 +369,6 @@ function Login(props: PageProps) {
                     </Box>
                   </Box>
                 </Box>
-                {loginInfo.widgetFooterText && (
-                  <LoginWidget
-                    sx={{
-                      minHeight: '48px',
-                      width: registerEnabled || isMobile ? '100%' : '50%',
-                    }}
-                    html={loginInfo.widgetFooterText}
-                  />
-                )}
               </>
             )}
           </Box>
