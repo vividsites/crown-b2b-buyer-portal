@@ -3,10 +3,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Alert, Box, ImageListItem } from '@mui/material';
 
 import b2bLogo from '@/assets/b2bLogo.png';
-import { B3Card } from '@/components';
+import { B3Card } from '@/components/B3Card';
 import B3Spin from '@/components/spin/B3Spin';
 import { CHECKOUT_URL, PATH_ROUTES } from '@/constants';
-import { dispatchEvent, useMobile } from '@/hooks';
+import { dispatchEvent } from '@/hooks/useB2BCallback';
+import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { CustomStyleContext } from '@/shared/customStyleButton';
 import { defaultCreateAccountPanel } from '@/shared/customStyleButton/context/config';
@@ -17,8 +18,12 @@ import { isLoggedInSelector, useAppDispatch, useAppSelector } from '@/store';
 import { setB2BToken } from '@/store/slices/company';
 import { CustomerRole, UserTypes } from '@/types';
 import { LoginFlagType } from '@/types/login';
-import { b2bJumpPath, channelId, loginJump, platform, snackbar, storeHash } from '@/utils';
+import { b2bJumpPath } from '@/utils/b3CheckPermissions/b2bPermissionPath';
 import b2bLogger from '@/utils/b3Logger';
+import { loginJump } from '@/utils/b3Login';
+import { snackbar } from '@/utils/b3Tip';
+import { channelId, platform, storeHash } from '@/utils/basicConfig';
+import { CompanyStatusKey, isCompanyError } from '@/utils/companyUtils';
 import { getAssetUrl } from '@/utils/getAssetUrl';
 import { getCurrentCustomerInfo } from '@/utils/loginInfo';
 
@@ -30,6 +35,24 @@ import LoginForm from './LoginForm';
 import LoginPanel from './LoginPanel';
 import { LoginContainer, LoginImage } from './styled';
 import { useLogout } from './useLogout';
+
+const COMPANY_STATUS_MAPPINGS: Record<CompanyStatusKey, string> = {
+  pendingApprovalToViewPrices:
+    'global.statusNotifications.willGainAccessToBusinessFeatProductsAndPricingAfterApproval',
+  pendingApprovalToOrder:
+    'global.statusNotifications.productsPricingAndOrderingWillBeEnabledAfterApproval',
+  pendingApprovalToAccessFeatures:
+    'global.statusNotifications.willGainAccessToBusinessFeatAfterApproval',
+  accountInactive: 'global.statusNotifications.businessAccountInactive',
+};
+
+const shouldLogout: LoginFlagType[] = [
+  'loggedOutLogin',
+  'pendingApprovalToViewPrices',
+  'pendingApprovalToOrder',
+  'pendingApprovalToAccessFeatures',
+  'accountInactive',
+];
 
 function Login(props: PageProps) {
   const { setOpenPage } = props;
@@ -100,15 +123,13 @@ function Login(props: PageProps) {
 
         if (isLoginFlagType(loginFlag)) {
           setLoginFlag(loginFlag);
-        }
 
-        if (loginFlag === 'invoiceErrorTip') {
-          const { tip } = loginType[loginFlag];
-          snackbar.error(b3Lang(tip));
-        }
-
-        if (loginFlag === 'loggedOutLogin' && isLoggedIn) {
-          await logout();
+          if (isLoggedIn && loginFlag === 'loggedOutLogin') {
+            await logout({ showLogoutBanner: true });
+            // All company-related flags have isLoggedIn set to false.
+          } else if (!isLoggedIn && shouldLogout.includes(loginFlag)) {
+            await logout({ showLogoutBanner: false });
+          }
         }
 
         setLoading(false);
@@ -238,8 +259,13 @@ function Login(props: PageProps) {
 
           navigate(path);
         }
-      } catch (error) {
-        snackbar.error(b3Lang('login.loginTipInfo.accountIncorrect'));
+      } catch (error: unknown) {
+        if (isCompanyError(error)) {
+          snackbar.error(b3Lang(COMPANY_STATUS_MAPPINGS[error.reason]));
+          await logout({ showLogoutBanner: false });
+        } else if (error instanceof Error) {
+          snackbar.error(b3Lang('login.loginTipInfo.accountIncorrect'));
+        }
       } finally {
         setLoading(false);
       }

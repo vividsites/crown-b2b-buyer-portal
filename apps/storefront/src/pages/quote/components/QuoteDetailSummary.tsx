@@ -2,7 +2,7 @@ import { Box, Card, CardContent, Grid, Typography } from '@mui/material';
 
 import { useB3Lang } from '@/lib/lang';
 import { useAppSelector } from '@/store';
-import { currencyFormatConvert } from '@/utils';
+import { currencyFormatConvert } from '@/utils/b3CurrencyFormat';
 import { CustomerRole } from '@/types';
 
 interface Summary {
@@ -18,7 +18,7 @@ interface QuoteDetailSummaryProps {
   quoteDetailTax: number;
   status: string;
   quoteDetail: CustomFieldItems;
-  isHideQuoteCheckout: boolean;
+  shouldHidePrice: boolean;
 }
 
 export default function QuoteDetailSummary({
@@ -26,7 +26,7 @@ export default function QuoteDetailSummary({
   quoteDetailTax = 0,
   status,
   quoteDetail,
-  isHideQuoteCheckout,
+  shouldHidePrice,
 }: QuoteDetailSummaryProps) {
   const b3Lang = useB3Lang();
   const enteredInclusiveTax = useAppSelector(
@@ -92,7 +92,7 @@ export default function QuoteDetailSummary({
   const shippingAndTax = getShippingAndTax();
 
   const showPrice = (price: string | number): string | number => {
-    if (isHideQuoteCheckout) return b3Lang('quoteDraft.quoteSummary.tbd');
+    if (shouldHidePrice) return b3Lang('quoteDraft.quoteSummary.tbd');
 
     return price;
   };
@@ -100,7 +100,7 @@ export default function QuoteDetailSummary({
   const subtotalPrice = Number(originalSubtotal);
   const quotedSubtotal = Number(originalSubtotal) - Number(discount);
   return (
-    <Card>
+    <Card data-testid="quote-summary">
       <CardContent>
         <Box>
           <Typography variant="h5">{b3Lang('quoteDetail.summary.quoteSummary')}</Typography>
@@ -112,6 +112,7 @@ export default function QuoteDetailSummary({
           >
             {quoteDetail?.displayDiscount && (
               <Grid
+                role="row"
                 container
                 justifyContent="space-between"
                 sx={{
@@ -127,6 +128,7 @@ export default function QuoteDetailSummary({
 
             {!quoteDetail?.salesRepEmail && Number(status) === 1 ? null : (
               <Grid
+                role="row"
                 container
                 justifyContent="space-between"
                 sx={{
@@ -144,6 +146,7 @@ export default function QuoteDetailSummary({
             )}
 
             <Grid
+              role="row"
               container
               justifyContent="space-between"
               sx={{
@@ -171,6 +174,7 @@ export default function QuoteDetailSummary({
             {shippingAndTax && (
               <>
                 <Grid
+                  role="row"
                   container
                   justifyContent="space-between"
                   sx={{
@@ -188,6 +192,7 @@ export default function QuoteDetailSummary({
                   <Typography>{role === CustomerRole.GUEST ? b3Lang('quoteDraft.quoteSummary.tbd') : showPrice(shippingAndTax.shippingVal)}</Typography>
                 </Grid>
                 <Grid
+                  role="row"
                   container
                   justifyContent="space-between"
                   sx={{
@@ -201,6 +206,7 @@ export default function QuoteDetailSummary({
             )}
 
             <Grid
+              role="row"
               container
               justifyContent="space-between"
               sx={{

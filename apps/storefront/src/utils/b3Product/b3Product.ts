@@ -14,7 +14,8 @@ import {
   Variant,
 } from '@/types/products';
 import { QuoteItem } from '@/types/quotes';
-import { channelId, getActiveCurrencyInfo, storeHash } from '@/utils';
+import { channelId, storeHash } from '@/utils/basicConfig';
+import { getActiveCurrencyInfo } from '@/utils/currencyUtils';
 
 import b2bLogger from '../b3Logger';
 
@@ -836,9 +837,17 @@ interface DisplayPriceProps {
 export const getProductInfoDisplayPrice = (
   price: string | number,
   productInfo: CustomFieldItems,
+  isBackorderValidationEnabled: boolean,
 ) => {
   const currentPrice = price || '0';
-  const { availability, inventoryLevel, inventoryTracking, quantity } = productInfo;
+  const {
+    availability,
+    inventoryLevel,
+    inventoryTracking,
+    quantity,
+    availableToSell,
+    unlimitedBackorder,
+  } = productInfo;
 
   if (availability === 'disabled') {
     return '';
@@ -847,7 +856,12 @@ export const getProductInfoDisplayPrice = (
   if (inventoryTracking === 'none') {
     return currentPrice;
   }
-  if (Number(quantity) > Number(inventoryLevel)) {
+
+  if (isBackorderValidationEnabled) {
+    if (!unlimitedBackorder && Number(quantity) > Number(availableToSell)) {
+      return '';
+    }
+  } else if (Number(quantity) > Number(inventoryLevel)) {
     return '';
   }
 
@@ -910,6 +924,7 @@ export const getVariantInfoOOSAndPurchase = (productInfo: CustomFieldItems) => {
 export const getVariantInfoDisplayPrice = (
   price: string | number,
   productInfo: CustomFieldItems,
+  isBackorderValidationEnabled: boolean,
   option?: {
     sku?: string;
   },
@@ -926,6 +941,15 @@ export const getVariantInfoDisplayPrice = (
   const productInventoryLevel = newProductInfo?.productsSearch
     ? newProductInfo.productsSearch.inventoryLevel
     : newProductInfo.inventoryLevel;
+
+  const productAvailableToSell = newProductInfo?.productsSearch
+    ? newProductInfo.productsSearch.availableToSell
+    : newProductInfo.availableToSell;
+
+  const productUnlimitedBackorder = newProductInfo?.productsSearch
+    ? newProductInfo.productsSearch.unlimitedBackorder
+    : newProductInfo.unlimitedBackorder;
+
   const availability = newProductInfo?.productsSearch
     ? newProductInfo.productsSearch.availability
     : newProductInfo.availability;
@@ -943,18 +967,33 @@ export const getVariantInfoDisplayPrice = (
   const variant = newVariants ? newVariants.find((item: Variant) => item.sku === variantSku) : {};
 
   if (variant && variant?.sku) {
-    const { purchasing_disabled: purchasingDisabled, inventory_level: inventoryLevel } = variant;
+    const {
+      purchasing_disabled: variantPurchasingDisabled,
+      inventory_level: variantInventoryLevel,
+      available_to_sell: variantAvailableToSell,
+      unlimited_backorder: variantUnlimitedBackorder,
+    } = variant;
 
-    if (purchasingDisabled) return '';
+    if (variantPurchasingDisabled) return '';
 
     if (inventoryTracking === 'none') return currentPrice;
 
-    if (inventoryTracking === 'product' && Number(quantity) > Number(productInventoryLevel)) {
-      return '';
-    }
+    if (isBackorderValidationEnabled) {
+      const availableToSell =
+        inventoryTracking === 'product' ? productAvailableToSell : variantAvailableToSell;
+      const unlimitedBackorder =
+        inventoryTracking === 'product' ? productUnlimitedBackorder : variantUnlimitedBackorder;
 
-    if (inventoryTracking === 'variant' && Number(quantity) > Number(inventoryLevel)) {
-      return '';
+      if (!unlimitedBackorder && Number(quantity) > Number(availableToSell)) {
+        return '';
+      }
+    } else {
+      const inventoryLevel =
+        inventoryTracking === 'product' ? productInventoryLevel : variantInventoryLevel;
+
+      if (Number(quantity) > Number(inventoryLevel)) {
+        return '';
+      }
     }
   }
 
@@ -971,6 +1010,8 @@ const getDisplayPrice = ({
   const {
     global: {
       blockPendingQuoteNonPurchasableOOS: { isEnableProduct },
+      featureFlags,
+      backorderEnabled,
     },
   } = store.getState();
 
@@ -980,21 +1021,33 @@ const getDisplayPrice = ({
 
   if (newProductInfo?.purchaseHandled) return price;
 
+  const isBackorderValidationEnabled =
+    (featureFlags['B2B-3318.move_stock_and_backorder_validation_to_backend'] ?? false) &&
+    backorderEnabled;
+
   const newPrice = isProduct
-    ? getProductInfoDisplayPrice(price, newProductInfo)
-    : getVariantInfoDisplayPrice(price, newProductInfo);
+    ? getProductInfoDisplayPrice(price, newProductInfo, isBackorderValidationEnabled)
+    : getVariantInfoDisplayPrice(price, newProductInfo, isBackorderValidationEnabled);
 
   return newPrice || showText || '';
 };
 
 const judgmentBuyerProduct = ({ productInfo, isProduct, price }: DisplayPriceProps): boolean => {
+  const {
+    global: { featureFlags, backorderEnabled },
+  } = store.getState();
+
   const newProductInfo = productInfo?.node ? productInfo.node : productInfo;
 
   if (newProductInfo?.purchaseHandled) return true;
 
+  const isBackorderValidationEnabled =
+    (featureFlags['B2B-3318.move_stock_and_backorder_validation_to_backend'] ?? false) &&
+    backorderEnabled;
+
   const newPrice = isProduct
-    ? getProductInfoDisplayPrice(price, newProductInfo)
-    : getVariantInfoDisplayPrice(price, newProductInfo);
+    ? getProductInfoDisplayPrice(price, newProductInfo, isBackorderValidationEnabled)
+    : getVariantInfoDisplayPrice(price, newProductInfo, isBackorderValidationEnabled);
 
   return !!newPrice;
 };

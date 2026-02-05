@@ -106,6 +106,8 @@ const buildProductWith = builder<Product>(() => ({
   productUrl: faker.internet.url(),
   quantity: faker.number.int(),
   product_options: [],
+  unlimitedBackorder: faker.datatype.boolean(),
+  availableToSell: faker.number.int(),
 }));
 
 const buildDraftQuoteItemWith = builder<QuoteItem>(() => ({
@@ -169,17 +171,23 @@ const storeInfoWithDateFormat = buildStoreInfoStateWith({ timeFormat: { display:
 const preloadedState = { company: approvedB2BCompany, storeInfo: storeInfoWithDateFormat };
 
 it('renders the quick add section', () => {
-  renderWithProviders(<QuickAdd updateList={vi.fn()} quickAddToList={vi.fn()} />, {
-    preloadedState,
-  });
+  renderWithProviders(
+    <QuickAdd updateList={vi.fn()} quickAddToList={vi.fn()} type="quoteDraft" />,
+    {
+      preloadedState,
+    },
+  );
 
   expect(screen.getByText('Quick add')).toBeInTheDocument();
 });
 
 it('increases the number of input rows when clicking -show more rows- button', async () => {
-  renderWithProviders(<QuickAdd updateList={vi.fn()} quickAddToList={vi.fn()} />, {
-    preloadedState,
-  });
+  renderWithProviders(
+    <QuickAdd updateList={vi.fn()} quickAddToList={vi.fn()} type="shoppingList" />,
+    {
+      preloadedState,
+    },
+  );
 
   const showMoreRowsButton = screen.getByRole('button', { name: 'Show more rows' });
 
@@ -214,9 +222,12 @@ it('calls "quickAddToList" with the skus and the quantities when clicking on the
 
   const quickAddToList = vi.fn();
 
-  renderWithProviders(<QuickAdd updateList={vi.fn()} quickAddToList={quickAddToList} />, {
-    preloadedState,
-  });
+  renderWithProviders(
+    <QuickAdd updateList={vi.fn()} quickAddToList={quickAddToList} type="shoppingList" />,
+    {
+      preloadedState,
+    },
+  );
 
   const [skuInput] = screen.getAllByRole('textbox', { name: 'SKU#' });
   const [qtyInput] = screen.getAllByRole('spinbutton', { name: 'Qty' });
@@ -258,9 +269,12 @@ it('only clears inputs that were passed to "quickAddToList", keeps the rest', as
 
   const quickAddToList = vi.fn();
 
-  renderWithProviders(<QuickAdd updateList={vi.fn()} quickAddToList={quickAddToList} />, {
-    preloadedState,
-  });
+  renderWithProviders(
+    <QuickAdd updateList={vi.fn()} quickAddToList={quickAddToList} type="shoppingList" />,
+    {
+      preloadedState,
+    },
+  );
 
   const [firstInput, secondSkuInput] = screen.getAllByRole('textbox', { name: 'SKU#' });
   const [firstQtyInput, secondQtyInput] = screen.getAllByRole('spinbutton', { name: 'Qty' });
@@ -295,9 +309,12 @@ it('submits the form when pressing enter on either of the inputs', async () => {
     graphql.query('GetVariantInfoBySkus', () => HttpResponse.json({ data: { variantSku: [] } })),
   );
 
-  renderWithProviders(<QuickAdd updateList={vi.fn()} quickAddToList={vi.fn()} />, {
-    preloadedState,
-  });
+  renderWithProviders(
+    <QuickAdd updateList={vi.fn()} quickAddToList={vi.fn()} type="shoppingList" />,
+    {
+      preloadedState,
+    },
+  );
 
   const [skuInput] = screen.getAllByRole('textbox', { name: 'SKU#' });
   const [qtyInput] = screen.getAllByRole('spinbutton', { name: 'Qty' });
@@ -343,9 +360,10 @@ describe('when there is a problem with some of the skus', () => {
       ),
     );
 
-    renderWithProviders(<QuickAdd updateList={vi.fn()} quickAddToList={vi.fn()} />, {
-      preloadedState,
-    });
+    renderWithProviders(
+      <QuickAdd updateList={vi.fn()} quickAddToList={vi.fn()} type="quoteDraft" />,
+      { preloadedState },
+    );
 
     const [skuInput] = screen.getAllByRole('textbox', { name: 'SKU#' });
     const [qtyInput] = screen.getAllByRole('spinbutton', { name: 'Qty' });
@@ -384,9 +402,10 @@ describe('when there is a problem with some of the skus', () => {
       ),
     );
 
-    renderWithProviders(<QuickAdd updateList={vi.fn()} quickAddToList={vi.fn()} />, {
-      preloadedState,
-    });
+    renderWithProviders(
+      <QuickAdd updateList={vi.fn()} quickAddToList={vi.fn()} type="quoteDraft" />,
+      { preloadedState },
+    );
 
     const [skuInput] = screen.getAllByRole('textbox', { name: 'SKU#' });
     const [qtyInput] = screen.getAllByRole('spinbutton', { name: 'Qty' });
@@ -426,9 +445,10 @@ describe('when the sku has a required modifier', () => {
       ),
     );
 
-    renderWithProviders(<QuickAdd updateList={vi.fn()} quickAddToList={vi.fn()} />, {
-      preloadedState,
-    });
+    renderWithProviders(
+      <QuickAdd updateList={vi.fn()} quickAddToList={vi.fn()} type="quoteDraft" />,
+      { preloadedState },
+    );
 
     const [skuInput] = screen.getAllByRole('textbox', { name: 'SKU#' });
     const [qtyInput] = screen.getAllByRole('spinbutton', { name: 'Qty' });
@@ -446,7 +466,7 @@ describe('when the sku has a required modifier', () => {
   });
 });
 
-describe('when an existing sky on the draft quote is over the quantity limit', () => {
+describe('when an existing sku on the draft quote is over the quantity limit', () => {
   it('displays a quantity error when additional quantities of the sku are added', async () => {
     const getVariantInfoBySkus = vi.fn();
 
@@ -473,14 +493,17 @@ describe('when an existing sky on the draft quote is over the quantity limit', (
       ),
     );
 
-    renderWithProviders(<QuickAdd updateList={vi.fn()} quickAddToList={vi.fn()} />, {
-      preloadedState: {
-        ...preloadedState,
-        quoteInfo: buildQuoteInfoStateWith({
-          draftQuoteList: [draftItemOverLimit],
-        }),
+    renderWithProviders(
+      <QuickAdd updateList={vi.fn()} quickAddToList={vi.fn()} type="quoteDraft" />,
+      {
+        preloadedState: {
+          ...preloadedState,
+          quoteInfo: buildQuoteInfoStateWith({
+            draftQuoteList: [draftItemOverLimit],
+          }),
+        },
       },
-    });
+    );
 
     const [skuInput] = screen.getAllByRole('textbox', { name: 'SKU#' });
     const [qtyInput] = screen.getAllByRole('spinbutton', { name: 'Qty' });
@@ -500,9 +523,10 @@ describe('when an existing sky on the draft quote is over the quantity limit', (
 
 describe('when some data is missing in the form', async () => {
   it('shows an error message when sku or quantity are not provided', async () => {
-    renderWithProviders(<QuickAdd updateList={vi.fn()} quickAddToList={vi.fn()} />, {
-      preloadedState,
-    });
+    renderWithProviders(
+      <QuickAdd updateList={vi.fn()} quickAddToList={vi.fn()} type="shoppingList" />,
+      { preloadedState },
+    );
 
     const [firstSkuInput, secondSkuInput] = screen.getAllByRole('textbox', { name: 'SKU#' });
     const [firstQtyInput, secondQtyInput] = screen.getAllByRole('spinbutton', { name: 'Qty' });
@@ -528,9 +552,10 @@ describe('when some data is missing in the form', async () => {
   });
 
   it('shows an error message when quantity is negative', async () => {
-    renderWithProviders(<QuickAdd updateList={vi.fn()} quickAddToList={vi.fn()} />, {
-      preloadedState,
-    });
+    renderWithProviders(
+      <QuickAdd updateList={vi.fn()} quickAddToList={vi.fn()} type="shoppingList" />,
+      { preloadedState },
+    );
 
     const [skuInput] = screen.getAllByRole('textbox', { name: 'SKU#' });
     const [qtyInput] = screen.getAllByRole('spinbutton', { name: 'Qty' });
@@ -542,5 +567,54 @@ describe('when some data is missing in the form', async () => {
 
     expect(qtyInput).not.toBeValid();
     expect(qtyInput).toHaveAccessibleDescription('incorrect number');
+  });
+
+  it('clears the input regardless of the case', async () => {
+    const variantInfo = buildVariantInfoWith({
+      variantSku: 'S-123', // Backend will return the sku in uppercase
+      minQuantity: 0,
+      purchasingDisabled: '0',
+      isStock: '1',
+    });
+
+    const getVariantInfoBySkus = when(vi.fn())
+      .calledWith(expect.stringContaining('variantSkus: ["s-123","s-456"]'))
+      .thenDo(() => buildVariantInfoResponseWith({ data: { variantSku: [variantInfo] } }));
+
+    server.use(
+      graphql.query('GetVariantInfoBySkus', ({ query }) =>
+        HttpResponse.json(getVariantInfoBySkus(query)),
+      ),
+    );
+
+    const quickAddToList = vi.fn();
+
+    renderWithProviders(
+      <QuickAdd updateList={vi.fn()} quickAddToList={quickAddToList} type="shoppingList" />,
+      { preloadedState },
+    );
+
+    const [firstInput, secondSkuInput] = screen.getAllByRole('textbox', { name: 'SKU#' });
+    const [firstQtyInput, secondQtyInput] = screen.getAllByRole('spinbutton', { name: 'Qty' });
+
+    await userEvent.type(firstInput, 's-123');
+    await userEvent.type(firstQtyInput, '2');
+
+    await userEvent.type(secondSkuInput, 's-456');
+    await userEvent.type(secondQtyInput, '3');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add product to list' }));
+
+    await waitFor(() =>
+      expect(quickAddToList).toHaveBeenCalledWith([
+        expect.objectContaining({ variantSku: 'S-123', quantity: 2 }),
+      ]),
+    );
+
+    expect(firstInput).toHaveValue('');
+    expect(firstQtyInput).toHaveValue(null);
+
+    expect(secondSkuInput).toHaveValue('s-456');
+    expect(secondQtyInput).toHaveValue(3);
   });
 });

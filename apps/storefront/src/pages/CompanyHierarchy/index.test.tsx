@@ -16,6 +16,9 @@ import { when } from 'vitest-when';
 
 import CompanyHierarchy from './index';
 
+const INACTIVE_COMPANY_ERROR_MESSAGE =
+  'This business account is inactive. Reach out to our support team to reactivate your account.';
+
 vi.mock('js-cookie');
 
 const { server } = startMockServer();
@@ -285,6 +288,55 @@ describe('when continuing to switch to a different company', () => {
     await waitFor(() => expect(modal).not.toBeInTheDocument());
     expect(within(rowOfApple).getByText('Representing')).toBeInTheDocument();
   });
+
+  it('shows snackbar error, when company masquerading fails due to inactive company', async () => {
+    const acme = buildSubsidiaryWith({ companyName: 'ACME', parentCompanyId: null });
+    const inactiveCompany = buildSubsidiaryWith({
+      companyName: 'Inactive Company',
+      parentCompanyId: acme.companyId,
+      channelFlag: true,
+    });
+
+    const beginMasquerading = vi.fn();
+
+    server.use(
+      graphql.query('CompanySubsidiaries', () =>
+        HttpResponse.json({ data: { companySubsidiaries: [acme, inactiveCompany] } }),
+      ),
+      graphql.mutation('userMasqueradingCompanyBegin', ({ variables }) =>
+        HttpResponse.json(beginMasquerading(variables)),
+      ),
+    );
+
+    const companyState = buildCompanyStateWith({ companyInfo: { id: `${acme.companyId}` } });
+    const preloadedState = { company: companyState };
+
+    renderWithProviders(<CompanyHierarchy />, { preloadedState });
+
+    const rowOfInactiveCompany = await screen.findByRole('row', { name: /Inactive Company/ });
+    const rowOfAcme = await screen.findByRole('row', { name: /ACME/ });
+
+    await userEvent.click(within(rowOfInactiveCompany).getByTestId('actions'));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Switch company' }));
+
+    const modal = await screen.findByRole('dialog');
+
+    when(beginMasquerading)
+      .calledWith({ companyId: inactiveCompany.companyId })
+      .thenReturn({
+        data: { userMasqueradingCompanyBegin: null },
+        errors: [{ message: INACTIVE_COMPANY_ERROR_MESSAGE }],
+      });
+
+    await userEvent.click(within(modal).getByRole('button', { name: 'Continue' }));
+
+    await waitFor(() => expect(modal).not.toBeInTheDocument());
+    await waitFor(() => {
+      const snackbar = screen.getByRole('alert');
+      expect(within(snackbar).getByText(INACTIVE_COMPANY_ERROR_MESSAGE)).toBeVisible();
+    });
+    expect(within(rowOfAcme).getByText('Your company')).toBeVisible();
+  });
 });
 
 describe('when the user has a current cart and switches company', () => {
@@ -347,5 +399,64 @@ describe('when the user has a current cart and switches company', () => {
     await waitFor(() =>
       expect(deleteCart).toHaveBeenCalledWith({ deleteCartInput: { cartEntityId: '12345' } }),
     );
+  });
+});
+
+describe('CompanyHierarchy - Representation Indicators', () => {
+  it('should show representing company chip for selected company', async () => {
+    const parentCompany = buildSubsidiaryWith({
+      companyId: 1,
+      companyName: 'Parent Company',
+      parentCompanyId: null,
+      channelFlag: false,
+    });
+
+    const subsidiaryCompany = buildSubsidiaryWith({
+      companyId: 5,
+      companyName: 'Subsidiary Company',
+      parentCompanyId: 1,
+      parentCompanyName: 'Parent Company',
+      channelFlag: true,
+    });
+
+    server.use(
+      graphql.query('CompanySubsidiaries', () =>
+        HttpResponse.json({ data: { companySubsidiaries: [parentCompany, subsidiaryCompany] } }),
+      ),
+    );
+
+    const companyState = buildCompanyStateWith({
+      companyInfo: { id: '1', companyName: 'Parent Company', status: 1 },
+      companyHierarchyInfo: {
+        selectCompanyHierarchyId: '5',
+        isEnabledCompanyHierarchy: true,
+        isHasCurrentPagePermission: true,
+        companyHierarchyList: [
+          {
+            companyId: 1,
+            companyName: 'Parent Company',
+            parentCompanyId: null,
+            channelFlag: false,
+          },
+          {
+            companyId: 5,
+            companyName: 'Subsidiary Company',
+            parentCompanyId: 1,
+            parentCompanyName: 'Parent Company',
+            channelFlag: true,
+          },
+        ],
+        companyHierarchyAllList: [],
+        companyHierarchySelectSubsidiariesList: [],
+      },
+    });
+
+    renderWithProviders(<CompanyHierarchy />, {
+      preloadedState: { company: companyState },
+    });
+
+    const rowOfSubsidiary = await screen.findByRole('row', { name: /Subsidiary Company/ });
+
+    expect(within(rowOfSubsidiary).getByText('Representing')).toBeInTheDocument();
   });
 });

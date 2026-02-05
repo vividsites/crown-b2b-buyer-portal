@@ -4,7 +4,7 @@ import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import Typography from '@mui/material/Typography';
 
-import { B3Tag } from '@/components';
+import { B3Tag } from '@/components/B3Tag';
 import CustomButton from '@/components/button/CustomButton';
 import { useB3Lang } from '@/lib/lang';
 
@@ -93,7 +93,7 @@ export function AddressItemCard(props: OrderItemCardProps) {
         <Typography variant="body1">{`${addressInfo.city}, ${addressInfo.state} ${addressInfo.zipCode}, ${addressInfo.country}`}</Typography>
         <Typography variant="body1">{addressInfo.phoneNumber}</Typography>
 
-        <Flex>
+        <Flex theme={theme}>
           <CustomButton
             variant="text"
             onClick={() => {

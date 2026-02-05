@@ -1,19 +1,23 @@
 import { useState } from 'react';
 import { UploadFile as UploadFileIcon } from '@mui/icons-material';
 import { Box, Card, CardContent, Divider } from '@mui/material';
+import { chunk } from 'lodash-es';
 import { v1 as uuid } from 'uuid';
 
-import { B3CollapseContainer, B3Upload } from '@/components';
+import { B3CollapseContainer } from '@/components/B3CollapseContainer';
 import CustomButton from '@/components/button/CustomButton';
+import { B3Upload } from '@/components/upload/B3Upload';
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
-import { useBlockPendingAccountViewPrice } from '@/hooks';
+import { useBlockPendingAccountViewPrice } from '@/hooks/useBlockPendingAccountViewPrice';
+import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { useB3Lang } from '@/lib/lang';
 import { searchProducts } from '@/shared/service/b2b';
 import { useAppSelector } from '@/store';
-import { snackbar } from '@/utils';
+import { Product } from '@/types';
 import b2bLogger from '@/utils/b3Logger';
 import { calculateProductListPrice, validProductQty } from '@/utils/b3Product/b3Product';
 import { conversionProductsList } from '@/utils/b3Product/shared/config';
+import { snackbar } from '@/utils/b3Tip';
 
 import QuickAdd from '../../ShoppingListDetails/components/QuickAdd';
 import SearchProduct from '../../ShoppingListDetails/components/SearchProduct';
@@ -36,6 +40,10 @@ export default function AddToQuote(props: AddToListProps) {
   const [blockPendingAccountViewPrice] = useBlockPendingAccountViewPrice();
 
   const b3Lang = useB3Lang();
+
+  const featureFlags = useFeatureFlags();
+  const breakProductSearchesIntoChunks =
+    featureFlags['B2B-4231.chunk_product_searches_in_csv_upload'] ?? false;
 
   const getNewQuoteProduct = (products: CustomFieldItems[]) =>
     products.map((product) => {
@@ -179,11 +187,31 @@ export default function AddToQuote(props: AddToListProps) {
         }
       });
 
-      const { productsSearch } = await searchProducts({
-        productIds,
-        companyId,
-        customerGroupId,
-      });
+      let productsSearch: Product[] = [];
+      if (breakProductSearchesIntoChunks) {
+        // TODO(B2B-4256): SearchProducts will only return 50 products at a time.
+        const chunkedProductIds = chunk(productIds, 50);
+        // Search with batches and await all.
+        const chunkedProductSearches = await Promise.all(
+          chunkedProductIds.map((chunkOfProductIds) =>
+            searchProducts({
+              productIds: chunkOfProductIds,
+              companyId,
+              customerGroupId,
+            }),
+          ),
+        );
+        productsSearch = chunkedProductSearches.flatMap(
+          (result) => result.productsSearch,
+        ) as Product[];
+      } else {
+        const { productsSearch: ps } = await searchProducts({
+          productIds,
+          companyId,
+          customerGroupId,
+        });
+        productsSearch = ps;
+      }
 
       const newProductInfo: CustomFieldItems = conversionProductsList(productsSearch);
 
@@ -278,7 +306,7 @@ export default function AddToQuote(props: AddToListProps) {
           <QuickAdd
             updateList={updateList}
             quickAddToList={quickAddToList}
-            level={1}
+            type="quoteDraft"
             buttonText={b3Lang('quoteDraft.button.addProductsToAddToQuote')}
             type="quote"
           />

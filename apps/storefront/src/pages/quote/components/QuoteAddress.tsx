@@ -3,8 +3,9 @@ import { useForm } from 'react-hook-form';
 import { Box, Typography } from '@mui/material';
 import cloneDeep from 'lodash-es/cloneDeep';
 
-import { B3CustomForm } from '@/components';
-import { useGetCountry, useMobile } from '@/hooks';
+import { B3CustomForm } from '@/components/B3CustomForm';
+import { useGetCountry } from '@/hooks/useGetCountry';
+import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { AddressItemType } from '@/types/address';
 import { BillingAddress, ContactInfo, ShippingAddress } from '@/types/quotes';
@@ -60,6 +61,7 @@ function QuoteAddress(
     getValues,
     formState: { errors },
     setValue,
+    reset,
   } = useForm({
     mode: 'onSubmit',
   });
@@ -106,6 +108,7 @@ function QuoteAddress(
   };
 
   const handleChangeAddress = (address: AddressItemType) => {
+    reset(); // reset the form before setting new values
     const addressItem: any = {
       label: address?.label || '',
       firstName: address?.firstName || '',
@@ -118,7 +121,11 @@ function QuoteAddress(
       state: address?.state || '',
       zipCode: address?.zipCode || '',
       phoneNumber: address?.phoneNumber || '',
+      addressId: Number(address?.id) || 0,
     };
+
+    // masterCopy temporarily stores the original address to detect changes and will be removed before submitting the quote.
+    addressItem.masterCopy = cloneDeep(addressItem);
 
     Object.keys(addressItem).forEach((item: string) => {
       if (item === 'company') return;

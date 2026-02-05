@@ -1,19 +1,18 @@
-import { lazy, Suspense, useContext, useEffect } from 'react';
+import { Suspense, useContext, useEffect } from 'react';
 import { Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 
-import { RegisteredProvider } from '@/pages/Registered/context/RegisteredContext';
+import B3Layout from '@/components/layout/B3Layout';
+import B3LayoutTip from '@/components/layout/B3LayoutTip';
 import { type SetOpenPage } from '@/pages/SetOpenPage';
 import { GlobalContext } from '@/shared/global';
-import { RouteFirstLevelItem, RouteItem } from '@/shared/routeList';
+import { RouteItem } from '@/shared/routeList';
 import { firstLevelRouting, getAllowedRoutes } from '@/shared/routes';
 import { getPageTranslations, useAppDispatch } from '@/store';
-import { channelId } from '@/utils';
+import { channelId } from '@/utils/basicConfig';
 
 import Loading from '../loading/Loading';
 
-const B3Layout = lazy(() => import('@/components/layout/B3Layout'));
-
-const B3LayoutTip = lazy(() => import('@/components/layout/B3LayoutTip'));
+import { RedirectFallback } from './B3FallbackRoute';
 
 interface B3RenderRouterProps {
   setOpenPage: SetOpenPage;
@@ -24,7 +23,7 @@ interface B3RenderRouterProps {
 export default function B3RenderRouter(props: B3RenderRouterProps) {
   const { setOpenPage, openUrl, isOpen } = props;
   const { state: globalState } = useContext(GlobalContext);
-  const newRoutes = () => getAllowedRoutes(globalState);
+  const routes = getAllowedRoutes(globalState);
   const location = useLocation();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
@@ -69,30 +68,20 @@ export default function B3RenderRouter(props: B3RenderRouterProps) {
             </B3Layout>
           }
         >
-          {newRoutes().map((route: RouteItem) => {
+          {routes.map((route: RouteItem) => {
             const { path, component: Component } = route;
             return (
               <Route key={path} path={path} element={<Component setOpenPage={setOpenPage} />} />
             );
           })}
+          <Route
+            path="*"
+            element={<RedirectFallback path={routes[0]?.path} setOpenPage={setOpenPage} />}
+          />
         </Route>
-        {firstLevelRouting.map((route: RouteFirstLevelItem) => {
-          const { isProvider, path, component: Component } = route;
-          if (isProvider) {
-            return (
-              <Route
-                key={path}
-                path={path}
-                element={
-                  <RegisteredProvider>
-                    <Component setOpenPage={setOpenPage} />
-                  </RegisteredProvider>
-                }
-              />
-            );
-          }
-          return <Route key={path} path={path} element={<Component setOpenPage={setOpenPage} />} />;
-        })}
+        {firstLevelRouting.map(({ path, component: Component }) => (
+          <Route key={path} path={path} element={<Component setOpenPage={setOpenPage} />} />
+        ))}
       </Routes>
     </Suspense>
   );

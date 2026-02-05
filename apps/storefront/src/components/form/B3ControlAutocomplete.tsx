@@ -15,7 +15,7 @@ interface Option {
 
 const first = 10;
 
-export default function B3ControlAutocomplete({ control, errors, ...rest }: Form.B3UIProps) {
+export function B3ControlAutocomplete({ control, errors, ...rest }: Form.B3UIProps) {
   const {
     name,
     default: defaultValue,
@@ -97,9 +97,17 @@ export default function B3ControlAutocomplete({ control, errors, ...rest }: Form
         search: value,
       });
 
-      const list = edges.map((item: any) => ({
+      const defaultRolesTranslation: Record<string, string> = {
+        Admin: 'userManagement.userRole.admin',
+        'Senior Buyer': 'userManagement.userRole.seniorBuyer',
+        'Junior Buyer': 'userManagement.userRole.juniorBuyer',
+      };
+
+      const list = edges.map((item) => ({
         id: item.node.id,
-        name: item.node.name,
+        name: defaultRolesTranslation[item.node.name]
+          ? b3Lang(defaultRolesTranslation[item.node.name])
+          : item.node.name,
       }));
 
       setOptions((prevOptions) => (type === 'search' ? [...list] : [...prevOptions, ...list]));

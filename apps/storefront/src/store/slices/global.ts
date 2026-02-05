@@ -1,6 +1,5 @@
 import { Dispatch, SetStateAction } from 'react';
-import type { PayloadAction } from '@reduxjs/toolkit';
-import { createSlice } from '@reduxjs/toolkit';
+import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 import { LOGIN_LANDING_LOCATIONS } from '@/constants';
 import { OpenPageState } from '@/types/hooks';
@@ -79,9 +78,10 @@ export interface GlobalState {
   quoteSubmissionResponse: QuoteSubmissionResponseProps;
   isOpenCompanyHierarchyDropDown: boolean;
   featureFlags: FeatureFlags;
+  backorderEnabled: boolean;
 }
 
-const initialState: GlobalState = {
+export const initialState: GlobalState = {
   taxZoneRates: [],
   isClickEnterBtn: false,
   currentClickedUrl: '',
@@ -115,6 +115,7 @@ const initialState: GlobalState = {
   },
   loginLandingLocation: LOGIN_LANDING_LOCATIONS.BUYER_PORTAL,
   recordOpenHash: '',
+  backorderEnabled: false,
   quoteSubmissionResponse: {
     value: '0',
     key: 'quote_submission_response',
@@ -182,6 +183,9 @@ export const globalSlice = createSlice({
         ...payload,
       };
     },
+    setBackorderEnabled: (state, { payload }: PayloadAction<boolean>) => {
+      state.backorderEnabled = payload;
+    },
   },
 });
 
@@ -199,6 +203,7 @@ export const {
   setQuoteSubmissionResponse,
   setOpenCompanyHierarchyDropDown,
   setFeatureFlags,
+  setBackorderEnabled,
 } = globalSlice.actions;
 
 export default globalSlice.reducer;

@@ -77,6 +77,8 @@ export interface QuoteItem {
     variantSku?: string;
     calculatedValue: CalculatedValue;
     productsSearch: Product;
+    inventoryTracking?: 'none' | 'product' | 'variant';
+    inventoryLevel?: number;
     additionalCalculatedPrices?:
       | AdditionalCalculatedPricesProps
       | AdditionalCalculatedPricesProps[];
@@ -144,4 +146,12 @@ export interface QuoteExtraFieldsType {
 export interface QuoteExtraFieldsData {
   fieldName: string | undefined;
   fieldValue: string | number;
+}
+
+export interface CreateQuoteResponse {
+  data: {
+    quoteCreate: {
+      quote: { id: number; createdAt: string; uuid?: string };
+    };
+  };
 }

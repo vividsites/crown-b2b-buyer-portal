@@ -3,16 +3,21 @@ import isEmpty from 'lodash-es/isEmpty';
 import { LOGIN_LANDING_LOCATIONS } from '@/constants';
 import { CustomStyleButtonState } from '@/shared/customStyleButton/context/config';
 import { DispatchProps } from '@/shared/global/context/config';
+import { newPermissions } from '@/shared/routes/config';
 import {
+  endUserMasqueradingCompany,
   getCurrencies,
   getStoreConfigsSwitchStatus,
   getStorefrontConfig,
   getStorefrontConfigs,
+  getStorefrontConfigWithCompanyHierarchy,
   getStorefrontDefaultLanguages,
   getTaxZoneRates,
 } from '@/shared/service/b2b';
 import { getActiveBcCurrency } from '@/shared/service/bc';
+import { getStorefrontTaxDisplayType } from '@/shared/service/bc/graphql/tax';
 import { store } from '@/store';
+import { setCompanyHierarchyInfoModules } from '@/store/slices/company';
 import {
   setBlockPendingAccountViewPrice,
   setBlockPendingQuoteNonPurchasableOOS,
@@ -23,8 +28,11 @@ import {
   setTaxZoneRates,
 } from '@/store/slices/global';
 import { setActiveCurrency, setCurrencies } from '@/store/slices/storeConfigs';
-import { B3SStorage, channelId } from '@/utils';
+import { B3SStorage } from '@/utils/b3Storage';
+import { channelId } from '@/utils/basicConfig';
 import { FeatureFlagKey, featureFlags } from '@/utils/featureFlags';
+
+import { checkEveryPermissionsCode } from './b3CheckPermissions/check';
 
 interface StorefrontKeysProps {
   key: string;
@@ -167,7 +175,7 @@ const storefrontKeys: StorefrontKeysProps[] = [
   ...featureFlags,
 ];
 
-const getTemPlateConfig = async (dispatch: any, dispatchGlobal: any) => {
+const getStoreConfigs = async (dispatch: any, dispatchGlobal: any) => {
   const keys = storefrontKeys.map((item: StorefrontKeysProps) => item.key);
   const { storefrontConfigs } = await getStorefrontConfigs(channelId, keys);
 
@@ -262,9 +270,9 @@ const getTemPlateConfig = async (dispatch: any, dispatchGlobal: any) => {
       if (storefrontKey.key === 'quote_on_non_purchasable_product_page') {
         storefrontConfig.extraFields = {
           ...item.extraFields,
-          locationSelector: item.extraFields?.locationSelector || '.add-to-cart-buttons',
+          locationSelector: item.extraFields?.locationSelector || '',
           classSelector: item.extraFields?.classSelector || 'button',
-          customCss: item.extraFields?.customCss || '',
+          customCss: item.extraFields?.customCss || 'margin-top: 0.5rem',
         };
       }
 
@@ -297,7 +305,7 @@ const getTemPlateConfig = async (dispatch: any, dispatchGlobal: any) => {
       if (featureFlags.some((ff) => ff.key === storefrontKey.key)) {
         store.dispatch(
           setFeatureFlags({
-            [storefrontKey.key as FeatureFlagKey]: item.value === '1',
+            [storefrontKey.key as FeatureFlagKey]: item.value === 'true',
           }),
         );
       }
@@ -335,41 +343,140 @@ export const getAccountHierarchyIsEnabled = async () => {
 };
 
 const setStorefrontConfig = async (dispatch: DispatchProps) => {
-  const {
-    storefrontConfig: { config: storefrontConfig },
-  } = await getStorefrontConfig();
-  const { currencies } = await getCurrencies(channelId);
-  store.dispatch(setCurrencies(currencies));
+  const { featureFlags } = store.getState().global;
+  const useCombinedQuery = featureFlags['B2B-3817.disable_masquerading_cleanup_on_login'] ?? false;
 
-  const {
-    storefrontDefaultLanguage: { language },
-  } = await getStorefrontDefaultLanguages(channelId);
+  if (useCombinedQuery) {
+    const hasCompanyHierarchyPermission = checkEveryPermissionsCode(
+      newPermissions.companyHierarchyPermissionCodes,
+    );
 
-  let langCode: string = language || 'en';
+    const response = await getStorefrontConfigWithCompanyHierarchy(hasCompanyHierarchyPermission);
 
-  if (language && language.includes('-')) {
-    const [lang] = language.split('-');
-    langCode = lang;
-  }
+    const {
+      storefrontConfig: { config: storefrontConfig },
+      companySubsidiaries,
+      userMasqueradingCompany,
+    } = response;
 
-  const {
-    data: {
-      site: {
-        currencies: { edges },
+    const { currencies } = await getCurrencies(channelId);
+    store.dispatch(setCurrencies(currencies));
+
+    const resetCompanyHierarchyState = () => ({
+      isEnabledCompanyHierarchy: false,
+      companyHierarchyAllList: [],
+      selectCompanyHierarchyId: '',
+      companyHierarchyList: [],
+      companyHierarchySelectSubsidiariesList: [],
+    });
+
+    try {
+      if (hasCompanyHierarchyPermission) {
+        const isEnabledAccountHierarchy = await getAccountHierarchyIsEnabled();
+
+        if (isEnabledAccountHierarchy) {
+          const shouldEndCompanyMasqueradingOnLogin =
+            featureFlags['B2B-3817.disable_masquerading_cleanup_on_login'] ?? false;
+
+          if (userMasqueradingCompany?.companyId && !shouldEndCompanyMasqueradingOnLogin) {
+            await endUserMasqueradingCompany();
+          }
+
+          store.dispatch(
+            setCompanyHierarchyInfoModules({
+              companyHierarchyAllList: companySubsidiaries || [],
+              isEnabledCompanyHierarchy: isEnabledAccountHierarchy,
+              selectCompanyHierarchyId: userMasqueradingCompany?.companyId ?? '',
+            }),
+          );
+        } else {
+          store.dispatch(setCompanyHierarchyInfoModules(resetCompanyHierarchyState()));
+        }
+      } else {
+        store.dispatch(setCompanyHierarchyInfoModules(resetCompanyHierarchyState()));
+      }
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to initialize company hierarchy:', error);
+      store.dispatch(setCompanyHierarchyInfoModules(resetCompanyHierarchyState()));
+    }
+
+    const {
+      storefrontDefaultLanguage: { language },
+    } = await getStorefrontDefaultLanguages(channelId);
+
+    let langCode: string = language || 'en';
+
+    if (language && language.includes('-')) {
+      const [lang] = language.split('-');
+      langCode = lang;
+    }
+
+    const {
+      data: {
+        site: {
+          currencies: { edges },
+        },
       },
-    },
-  } = await getActiveBcCurrency();
+    } = await getActiveBcCurrency();
 
-  store.dispatch(setActiveCurrency(edges.find((item: CurrencyNodeProps) => item.node.isActive)));
-  B3SStorage.set('bcLanguage', langCode);
+    store.dispatch(setActiveCurrency(edges.find((item: CurrencyNodeProps) => item.node.isActive)));
+    B3SStorage.set('bcLanguage', langCode);
 
-  dispatch({
-    type: 'common',
-    payload: {
-      storefrontConfig,
-      bcLanguage: langCode,
-    },
-  });
+    dispatch({
+      type: 'common',
+      payload: {
+        storefrontConfig,
+        bcLanguage: langCode,
+      },
+    });
+  } else {
+    const response = await getStorefrontConfig();
+
+    const {
+      storefrontConfig: { config: storefrontConfig },
+    } = response;
+
+    const { currencies } = await getCurrencies(channelId);
+    store.dispatch(setCurrencies(currencies));
+
+    const {
+      storefrontDefaultLanguage: { language },
+    } = await getStorefrontDefaultLanguages(channelId);
+
+    let langCode: string = language || 'en';
+
+    if (language && language.includes('-')) {
+      const [lang] = language.split('-');
+      langCode = lang;
+    }
+
+    const {
+      data: {
+        site: {
+          currencies: { edges },
+        },
+      },
+    } = await getActiveBcCurrency();
+
+    store.dispatch(setActiveCurrency(edges.find((item: CurrencyNodeProps) => item.node.isActive)));
+    B3SStorage.set('bcLanguage', langCode);
+
+    dispatch({
+      type: 'common',
+      payload: {
+        storefrontConfig,
+        bcLanguage: langCode,
+      },
+    });
+  }
+};
+
+const getTaxDisplayTypeFromStorefrontGraph = async () => {
+  const response = await getStorefrontTaxDisplayType();
+  const showInclusive = response.pdp === 'INC';
+  B3SStorage.set('showInclusiveTaxPrice', showInclusive);
+  store.dispatch(setShowInclusiveTaxPrice(showInclusive));
 };
 
 const getStoreTaxZoneRates = async () => {
@@ -391,4 +498,15 @@ const getStoreTaxZoneRates = async () => {
   store.dispatch(setTaxZoneRates(taxZoneRates));
 };
 
-export { getStoreTaxZoneRates, getTemPlateConfig, setStorefrontConfig };
+const getGlobalStoreTax = async () => {
+  const { featureFlags } = store.getState().global;
+  const taxZoneRatesPromise = featureFlags[
+    'B2B-3857.move_tax_display_settings_to_bc_storefront_graph'
+  ]
+    ? getTaxDisplayTypeFromStorefrontGraph()
+    : getStoreTaxZoneRates();
+
+  return taxZoneRatesPromise;
+};
+
+export { getStoreConfigs, setStorefrontConfig, getGlobalStoreTax };

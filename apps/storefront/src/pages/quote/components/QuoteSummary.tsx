@@ -11,7 +11,7 @@ import { Box, Card, CardContent, Grid, Typography } from '@mui/material';
 
 import { useB3Lang } from '@/lib/lang';
 import { useAppSelector } from '@/store';
-import { currencyFormat } from '@/utils';
+import { currencyFormat } from '@/utils/b3CurrencyFormat';
 import { getBCPrice } from '@/utils/b3Product/b3Product';
 
 import getQuoteDraftShowPriceTBD from '../shared/utils';
@@ -121,8 +121,8 @@ const QuoteSummary = forwardRef((_, ref: Ref<unknown>) => {
                 margin: '4px 0',
               }}
             >
-              <Typography>{b3Lang('quoteDraft.quoteSummary.subTotal')}</Typography>
-              <Typography>{role === CustomerRole.GUEST ? b3Lang('quoteDraft.quoteSummary.tbd') : showPrice(priceFormat(quoteSummary.subtotal))}</Typography>
+              <Typography id="quote-draft-subtotal">{b3Lang('quoteDraft.quoteSummary.subTotal')}</Typography>
+              <Typography aria-labelledby="quote-draft-subtotal">{role === CustomerRole.GUEST ? b3Lang('quoteDraft.quoteSummary.tbd') : showPrice(priceFormat(quoteSummary.subtotal))}</Typography>
             </Grid>
 
             <Grid
@@ -132,8 +132,12 @@ const QuoteSummary = forwardRef((_, ref: Ref<unknown>) => {
                 margin: '4px 0',
               }}
             >
-              <Typography>{b3Lang('quoteDraft.quoteSummary.shipping')}</Typography>
-              <Typography>{b3Lang('quoteDraft.quoteSummary.tbd')}</Typography>
+              <Typography id="quote-draft-shipping">
+                {b3Lang('quoteDraft.quoteSummary.shipping')}
+              </Typography>
+              <Typography aria-labelledby="quote-draft-shipping">
+                {b3Lang('quoteDraft.quoteSummary.tbd')}
+              </Typography>
             </Grid>
 
             <Grid
@@ -143,8 +147,8 @@ const QuoteSummary = forwardRef((_, ref: Ref<unknown>) => {
                 margin: '4px 0',
               }}
             >
-              <Typography>{b3Lang('quoteDraft.quoteSummary.tax')}</Typography>
-              <Typography>{role === CustomerRole.GUEST ? b3Lang('quoteDraft.quoteSummary.tbd') : showPrice(priceFormat(quoteSummary.tax))}</Typography>
+              <Typography id="quote-draft-tax">{b3Lang('quoteDraft.quoteSummary.tax')}</Typography>
+              <Typography aria-labelledby="quote-draft-tax">{role === CustomerRole.GUEST ? b3Lang('quoteDraft.quoteSummary.tbd') : showPrice(priceFormat(quoteSummary.tax))}</Typography>
             </Grid>
 
             <Grid
@@ -155,6 +159,7 @@ const QuoteSummary = forwardRef((_, ref: Ref<unknown>) => {
               }}
             >
               <Typography
+                id="quote-draft-grand-total"
                 sx={{
                   fontWeight: 'bold',
                 }}
@@ -162,6 +167,7 @@ const QuoteSummary = forwardRef((_, ref: Ref<unknown>) => {
                 {b3Lang('quoteDraft.quoteSummary.grandTotal')}
               </Typography>
               <Typography
+                aria-labelledby="quote-draft-grand-total"
                 sx={{
                   fontWeight: 'bold',
                 }}

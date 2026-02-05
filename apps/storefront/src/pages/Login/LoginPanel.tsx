@@ -1,6 +1,6 @@
 import { Box, Button } from '@mui/material';
 
-import { useMobile } from '@/hooks';
+import { useMobile } from '@/hooks/useMobile';
 
 import LoginWidget from './component/LoginWidget';
 

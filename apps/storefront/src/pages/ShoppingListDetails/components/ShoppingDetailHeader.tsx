@@ -5,13 +5,16 @@ import { Box, Grid, styled, Typography } from '@mui/material';
 
 import CustomButton from '@/components/button/CustomButton';
 import { getContrastColor } from '@/components/outSideComponents/utils/b3CustomStyles';
-import { useMobile } from '@/hooks';
+import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { type SetOpenPage } from '@/pages/SetOpenPage';
 import { CustomStyleContext } from '@/shared/customStyleButton';
 import { rolePermissionSelector, useAppSelector } from '@/store';
 import { ShoppingListStatus } from '@/types/shoppingList';
-import { verifyLevelPermission, verifySubmitShoppingListSubsidiariesPermission } from '@/utils';
+import {
+  verifyLevelPermission,
+  verifySubmitShoppingListSubsidiariesPermission,
+} from '@/utils/b3CheckPermissions/check';
 import { b2bPermissionsMap } from '@/utils/b3CheckPermissions/config';
 
 import { ShoppingListStatusTag } from '../../ShoppingLists/ShoppingListStatusTag';
@@ -23,7 +26,6 @@ const StyledCreateName = styled('div')(() => ({
 
 interface ShoppingDetailHeaderProps {
   shoppingListInfo: any;
-  role: string | number;
   customerInfo: any;
   goToShoppingLists: () => void;
   handleUpdateShoppingList: (status: number) => void;
@@ -36,20 +38,18 @@ interface ShoppingDetailHeaderProps {
   customColor: string;
 }
 
-function ShoppingDetailHeader(props: ShoppingDetailHeaderProps) {
+function ShoppingDetailHeader({
+  shoppingListInfo,
+  customerInfo,
+  handleUpdateShoppingList,
+  goToShoppingLists,
+  isB2BUser,
+  setOpenPage,
+  openAPPParams,
+  customColor,
+}: ShoppingDetailHeaderProps) {
   const b3Lang = useB3Lang();
   const [isMobile] = useMobile();
-
-  const {
-    shoppingListInfo,
-    customerInfo,
-    handleUpdateShoppingList,
-    goToShoppingLists,
-    isB2BUser,
-    setOpenPage,
-    openAPPParams,
-    customColor,
-  } = props;
 
   const {
     state: {

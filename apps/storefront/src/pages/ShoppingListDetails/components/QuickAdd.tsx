@@ -2,45 +2,48 @@ import { KeyboardEventHandler, useCallback, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Box, Grid, Typography } from '@mui/material';
 
-import { B3CustomForm } from '@/components';
+import { B3CustomForm } from '@/components/B3CustomForm';
 import CustomButton from '@/components/button/CustomButton';
 import B3Spin from '@/components/spin/B3Spin';
-import { useBlockPendingAccountViewPrice } from '@/hooks';
+import { useBlockPendingAccountViewPrice } from '@/hooks/useBlockPendingAccountViewPrice';
 import { useB3Lang } from '@/lib/lang';
 import { getVariantInfoBySkus } from '@/shared/service/b2b';
 import { useAppSelector } from '@/store';
-import { snackbar } from '@/utils';
 import { compareOption } from '@/utils/b3Product/b3Product';
 import { getAllModifierDefaultValue, getQuickAddRowFields } from '@/utils/b3Product/shared/config';
+import { snackbar } from '@/utils/b3Tip';
 
 import { ShoppingListAddProductOption, SimpleObject } from '../../../types';
 
 interface AddToListContentProps {
   updateList: () => void;
   quickAddToList: (products: CustomFieldItems[]) => Promise<void>;
-  level?: number;
   buttonText?: string;
   buttonLoading?: boolean;
-  type?: string;
+  type: 'shoppingList' | 'quoteDraft';
 }
+
+const rowStepSize = 3;
 
 export default function QuickAdd(props: AddToListContentProps) {
   const b3Lang = useB3Lang();
   const {
     updateList,
     quickAddToList,
-    level = 3,
     buttonText = b3Lang('shoppingList.quickAdd.addToShoppingList'),
     buttonLoading = false,
     type,
   } = props;
 
+  const allowAddNonPurchasableProduct = useAppSelector(
+    ({ global }) => global.blockPendingQuoteNonPurchasableOOS.isEnableProduct || false,
+  );
   const companyStatus = useAppSelector(({ company }) => company.companyInfo.status);
   const draftQuoteList = useAppSelector(({ quoteInfo }) => quoteInfo.draftQuoteList);
 
   const [blockPendingAccountViewPrice] = useBlockPendingAccountViewPrice();
 
-  const [rows, setRows] = useState(level);
+  const [rows, setRows] = useState(rowStepSize);
   const [formFields, setFormFields] = useState<CustomFieldItems[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -57,10 +60,6 @@ export default function QuickAdd(props: AddToListContentProps) {
     // disabling since b3Lang since it has rendering issues
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows]);
-
-  const handleAddRowsClick = () => {
-    setRows(rows + level);
-  };
 
   const {
     control,
@@ -164,7 +163,7 @@ export default function QuickAdd(props: AddToListContentProps) {
 
         const quantity = (skuValue[sku] as number) || 0;
 
-        if (purchasingDisabled === '1' && type !== 'shoppingList') {
+        if (purchasingDisabled === '1' && !allowAddNonPurchasableProduct && type === 'quoteDraft') {
           notPurchaseSku.push(sku);
           return;
         }
@@ -262,7 +261,7 @@ export default function QuickAdd(props: AddToListContentProps) {
         numberLimit,
       };
     },
-    [draftQuoteList, type],
+    [allowAddNonPurchasableProduct, draftQuoteList, type],
   );
 
   const showErrors = (
@@ -284,12 +283,12 @@ export default function QuickAdd(props: AddToListContentProps) {
   };
 
   const clearInputValue = (value: CustomFieldItems, skus: string[]) => {
-    skus.forEach((sku) => {
-      const skuFieldName = Object.keys(value).find((name) => value[name] === sku) || '';
+    const lowerCaseSkus = skus.map((sku) => sku.toLowerCase());
 
-      if (skuFieldName) {
-        setValue(skuFieldName, '');
-        setValue(skuFieldName.replace('sku', 'qty'), '');
+    Object.entries(value).forEach(([key, value]) => {
+      if (typeof value === 'string' && lowerCaseSkus.includes(value.toLowerCase())) {
+        setValue(key, '');
+        setValue(key.replace('sku', 'qty'), '');
       }
     });
   };
@@ -416,7 +415,7 @@ export default function QuickAdd(props: AddToListContentProps) {
                 ml: '-8px',
                 fontWeight: '400',
               }}
-              onClick={handleAddRowsClick}
+              onClick={() => setRows(rows + rowStepSize)}
             >
               {b3Lang('shoppingList.quickAdd.showMoreRows')}
             </CustomButton>

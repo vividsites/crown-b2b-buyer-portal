@@ -4,12 +4,12 @@ import { GlobalContext } from '@/shared/global';
 import { useAppSelector } from '@/store';
 import { CustomerRole } from '@/types';
 import { OpenPageState } from '@/types/hooks';
-import { setCartPermissions } from '@/utils';
+import { setCartPermissions } from '@/utils/b3CheckPermissions/juniorRolePermissions';
 
 import useCartToQuote from './useCartToQuote';
 import useHideGoogleCustomerReviews from './useHideGoogleCustomerReviews';
 import useMonitorBrowserBack from './useMonitorBrowserBack';
-import useMyQuote from './useMyQuote';
+import { useMyQuote } from './useMyQuote';
 import { useOpenPDP } from './useOpenPDP';
 import useRegisteredbctob2b from './useRegisteredbctob2b';
 

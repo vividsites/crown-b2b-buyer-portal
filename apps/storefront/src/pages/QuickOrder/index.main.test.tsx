@@ -9,6 +9,7 @@ import {
   buildStoreInfoStateWith,
   bulk,
   faker,
+  fireEvent,
   getUnixTime,
   graphql,
   HttpResponse,
@@ -23,13 +24,18 @@ import {
 } from 'tests/test-utils';
 import { when } from 'vitest-when';
 
-import { SearchProductsResponse } from '@/shared/service/b2b/graphql/product';
+import { PriceProductsResponse } from '@/shared/service/b2b/graphql/global';
 import {
+  SearchProductsResponse,
+  ValidateProductResponse,
+} from '@/shared/service/b2b/graphql/product';
+import {
+  OptionList,
   OrderedProductNode,
   RecentlyOrderedProductsResponse,
 } from '@/shared/service/b2b/graphql/quickOrder';
 import { GetCart } from '@/shared/service/bc/graphql/cart';
-import { CompanyStatus, UserTypes } from '@/types';
+import { CompanyStatus, CustomerRole, UserTypes } from '@/types';
 import { LineItem } from '@/utils/b3Product/b3Product';
 
 import QuickOrder from '.';
@@ -39,6 +45,23 @@ const { server } = startMockServer();
 const buildMoneyWith = builder(() => ({
   currencyCode: faker.finance.currencyCode(),
   value: faker.number.float(),
+}));
+
+const buildRecentlyOrderedProductNodeOptionListWith = builder<OptionList>(() => ({
+  id: faker.number.int(),
+  option_id: faker.number.int(),
+  order_product_id: faker.number.int(),
+  product_option_id: faker.number.int(),
+  display_name: faker.commerce.productName(),
+  display_name_customer: faker.commerce.productName(),
+  display_name_merchant: faker.commerce.productName(),
+  display_value: faker.commerce.productAdjective(),
+  display_value_customer: faker.commerce.productAdjective(),
+  display_value_merchant: faker.commerce.productAdjective(),
+  value: faker.commerce.productMaterial(),
+  type: faker.commerce.productDescription(),
+  name: faker.commerce.productName(),
+  display_style: '',
 }));
 
 const buildRecentlyOrderedProductNodeWith = builder<OrderedProductNode>(() => ({
@@ -72,6 +95,33 @@ const buildRecentlyOrderedProductNodeWith = builder<OrderedProductNode>(() => ({
 type SearchProduct = SearchProductsResponse['data']['productsSearch'][number];
 type SearchProductV3Option = SearchProduct['optionsV3'][number];
 type SearchProductV3OptionValue = SearchProductV3Option['option_values'][number];
+
+type ValidateProduct = ValidateProductResponse['data']['validateProduct'];
+
+interface VariantInfo {
+  isStock: '1' | '0';
+  stock: number;
+  calculatedPrice: string;
+  productId: string;
+  variantId: string;
+  baseSku: string;
+  productName: string;
+  categories: string[];
+  option: unknown[];
+  isVisible: '1' | '0';
+  minQuantity: number;
+  maxQuantity: number;
+  modifiers: unknown[];
+  purchasingDisabled: '1' | '0';
+  variantSku: string;
+  imageUrl: string;
+}
+
+interface VariantInfoResponse {
+  data: {
+    variantSku: VariantInfo[];
+  };
+}
 
 const buildSearchProductV3OptionValueWith = builder<SearchProductV3OptionValue>(() => ({
   id: faker.number.int(),
@@ -121,6 +171,8 @@ const buildVariantWith = builder<SearchProduct['variants'][number]>(() => ({
     tax_exclusive: Number(faker.commerce.price()),
     entered_inclusive: faker.datatype.boolean(),
   },
+  available_to_sell: faker.number.int(),
+  unlimited_backorder: faker.datatype.boolean(),
 }));
 
 const buildSearchProductOptionsWith = builder(() => ({
@@ -154,6 +206,8 @@ const buildSearchProductWith = builder<SearchProduct>(() => ({
   productUrl: faker.internet.url(),
   taxClassId: faker.number.int(),
   isPriceHidden: faker.datatype.boolean(),
+  availableToSell: 0,
+  unlimitedBackorder: faker.datatype.boolean(),
 }));
 
 const buildGetRecentlyOrderedProductsWith = builder<RecentlyOrderedProductsResponse>(() => {
@@ -175,6 +229,36 @@ const buildCartItemWith = builder<LineItem>(() => ({
   productEntityId: faker.number.int(),
   variantEntityId: faker.number.int(),
   sku: faker.string.uuid(),
+}));
+
+const buildPrice = builder(() => ({
+  asEntered: Number(faker.commerce.price()),
+  enteredInclusive: faker.datatype.boolean(),
+  taxExclusive: Number(faker.commerce.price()),
+  taxInclusive: Number(faker.commerce.price()),
+}));
+
+const buildProductPriceWith = builder(() => ({
+  productId: faker.number.int(),
+  variantId: faker.number.int(),
+  options: [],
+  referenceRequest: {
+    productId: faker.number.int(),
+    variantId: faker.number.int(),
+    options: null,
+  },
+  retailPrice: null,
+  salePrice: null,
+  minimumAdvertisedPrice: null,
+  saved: null,
+  price: buildPrice('WHATEVER_VALUES'),
+  calculatedPrice: buildPrice('WHATEVER_VALUES'),
+  priceRange: {
+    minimum: buildPrice('WHATEVER_VALUES'),
+    maximum: buildPrice('WHATEVER_VALUES'),
+  },
+  retailPriceRange: null,
+  bulkPricing: [],
 }));
 
 const buildGetCartWith = builder<GetCart>(() => {
@@ -212,11 +296,131 @@ const buildGetCartWith = builder<GetCart>(() => {
   };
 });
 
+const buildValidateProductWith = builder<ValidateProduct>(() =>
+  faker.helpers.arrayElement([
+    {
+      responseType: 'SUCCESS',
+      message: faker.lorem.sentence(),
+    },
+    {
+      responseType: 'WARNING',
+      message: faker.lorem.sentence(),
+    },
+    {
+      responseType: 'ERROR',
+      message: faker.lorem.sentence(),
+      errorCode: faker.helpers.arrayElement(['NON_PURCHASABLE', 'OOS', 'INVALID_FIELDS', 'OTHER']),
+      product: {
+        availableToSell: 0,
+      },
+    },
+  ]),
+);
+
 const approvedB2BCompany = buildCompanyStateWith({
   permissions: [{ code: 'purchase_enable', permissionLevel: 1 }],
   companyInfo: { status: CompanyStatus.APPROVED },
   customer: { userType: UserTypes.MULTIPLE_B2C },
 });
+
+const buildVariantInfoWith = builder<VariantInfo>(() => ({
+  isStock: faker.helpers.arrayElement(['0', '1']),
+  stock: faker.number.int(),
+  calculatedPrice: faker.commerce.price(),
+  productId: faker.number.int().toString(),
+  variantId: faker.number.int().toString(),
+  baseSku: faker.string.uuid(),
+  productName: faker.commerce.productName(),
+  categories: Array.from({ length: faker.number.int({ min: 0, max: 3 }) }, () =>
+    faker.number.int().toString(),
+  ),
+  imageUrl: faker.image.url(),
+  option: [],
+  isVisible: faker.helpers.arrayElement(['0', '1']),
+  minQuantity: faker.number.int(),
+  maxQuantity: faker.number.int(),
+  modifiers: [],
+  purchasingDisabled: faker.helpers.arrayElement(['0', '1']),
+  variantSku: faker.string.uuid(),
+}));
+
+const buildVariantInfoResponseWith = builder<VariantInfoResponse>(() => ({
+  data: {
+    variantSku: [],
+  },
+}));
+
+const buildCSVProductWith = builder(() => ({
+  id: faker.string.uuid(),
+  products: {
+    baseSku: faker.string.uuid(),
+    calculatedPrice: faker.number.int(),
+    categories: [],
+    imageUrl: faker.image.url(),
+    isStock: '1',
+    isVisible: '1',
+    maxQuantity: 0,
+    minQuantity: 0,
+    modifiers: [],
+    option: [],
+    productId: faker.number.int().toString(),
+    productName: faker.commerce.productName(),
+    purchasingDisabled: false,
+    stock: 0,
+    variantId: faker.number.int(),
+    variantSku: faker.string.uuid(),
+  },
+  sku: faker.string.uuid(),
+  qty: faker.number.int({ min: 1, max: 10 }).toString(),
+  row: faker.number.int(),
+}));
+
+interface CSVErrorProduct {
+  products: {
+    name: string;
+    variantSku: string;
+  };
+  qty: string;
+  error: string;
+  sku: string;
+  row: number;
+}
+
+const buildCSVErrorProductWith = builder<CSVErrorProduct>(() => ({
+  products: {
+    name: faker.commerce.productName(),
+    variantSku: faker.string.uuid(),
+  },
+  qty: faker.number.int({ min: 1, max: 10 }).toString(),
+  error: faker.lorem.sentence(),
+  sku: faker.string.uuid(),
+  row: faker.number.int({ min: 0, max: 100 }),
+}));
+
+const buildCSVUploadWith = builder(() => ({
+  result: {
+    errorFile: '',
+    errorProduct: [] as CSVErrorProduct[],
+    validProduct: bulk(buildCSVProductWith, 'WHATEVER_VALUES').times(
+      faker.number.int({ min: 1, max: 5 }),
+    ),
+    stockErrorFile: '',
+    stockErrorSkus: [] as string[],
+  },
+}));
+
+const buildAddCartLineItemsResponseWith = builder(() => ({
+  data: {
+    cart: {
+      addCartLineItems: {
+        cart: {
+          entityId: faker.string.uuid(),
+        },
+      },
+    },
+  },
+  errors: undefined as Array<{ message: string }> | undefined,
+}));
 
 const storeInfoWithDateFormat = buildStoreInfoStateWith({ timeFormat: { display: 'j F Y' } });
 
@@ -1691,5 +1895,3059 @@ describe('when adding to quote', () => {
     await userEvent.click(screen.getByRole('menuitem', { name: /Add selected to quote/ }));
 
     expect(await screen.findByText('Products were added to your quote')).toBeInTheDocument();
+  });
+
+  it('calls validateProducts query when feature flag is enabled', async () => {
+    const featureFlags = {
+      'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
+    };
+    const backorderEnabled = true;
+
+    const getRecentlyOrderedProducts = vi.fn();
+    const searchProducts = vi.fn<(...arg: unknown[]) => SearchProductsResponse>();
+    const laughCanister = buildRecentlyOrderedProductNodeWith({
+      node: { productName: 'Laugh Canister' },
+    });
+
+    when(getRecentlyOrderedProducts)
+      .calledWith(stringContainingAll('first: 12', 'offset: 0', 'orderBy: "-lastOrderedAt"'))
+      .thenReturn(
+        buildGetRecentlyOrderedProductsWith({
+          data: { orderedProducts: { totalCount: 1, edges: [laughCanister] } },
+        }),
+      );
+
+    when(searchProducts)
+      .calledWith(stringContainingAll(`productIds: [${laughCanister.node.productId}]`))
+      .thenReturn({
+        data: {
+          productsSearch: [
+            buildSearchProductWith({
+              id: Number(laughCanister.node.productId),
+              sku: 'SKU-123',
+              orderQuantityMaximum: 5,
+              orderQuantityMinimum: 0,
+              inventoryTracking: 'none',
+              variants: [buildVariantWith({ sku: laughCanister.node.variantSku })],
+            }),
+          ],
+        },
+      });
+
+    const validateProduct = vi.fn<(...arg: unknown[]) => ValidateProductResponse>();
+    when(validateProduct)
+      .calledWith(
+        expect.objectContaining({
+          productId: Number(laughCanister.node.productId),
+          variantId: Number(laughCanister.node.variantId),
+          quantity: 4,
+          productOptions: [],
+        }),
+      )
+      .thenReturn({
+        data: {
+          validateProduct: buildValidateProductWith({
+            responseType: 'SUCCESS',
+            message: '',
+          }),
+        },
+      });
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', ({ query }) =>
+        HttpResponse.json(getRecentlyOrderedProducts(query)),
+      ),
+      graphql.query('SearchProducts', ({ query }) => HttpResponse.json(searchProducts(query))),
+      graphql.query('getCart', () => HttpResponse.json(buildGetCartWith('WHATEVER_VALUES'))),
+      graphql.query('ValidateProduct', ({ variables }) =>
+        HttpResponse.json(validateProduct(variables)),
+      ),
+    );
+
+    renderWithProviders(<QuickOrder />, {
+      preloadedState: {
+        ...preloadedState,
+        global: buildGlobalStateWith({ backorderEnabled, featureFlags }),
+      },
+      initialGlobalContext: { productQuoteEnabled: true, shoppingListEnabled: true },
+    });
+
+    const row = await screen.findByRole('row', { name: /Laugh Canister/ });
+
+    await userEvent.click(within(row).getByRole('checkbox'));
+
+    const input = within(row).getByRole('spinbutton');
+
+    await userEvent.clear(input);
+    await userEvent.type(input, '4');
+
+    const addButton = screen.getByRole('button', { name: 'Add selected to' });
+
+    await userEvent.click(addButton);
+
+    await userEvent.click(screen.getByRole('menuitem', { name: /Add selected to quote/ }));
+
+    expect(validateProduct).toHaveBeenCalled();
+    expect(await screen.findByText('Products were added to your quote')).toBeInTheDocument();
+  });
+
+  it('displays correct error messages when adding to quote with NON_PURCHASABLE errors', async () => {
+    const featureFlags = {
+      'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
+    };
+    const backorderEnabled = true;
+
+    const getRecentlyOrderedProducts = vi.fn();
+    const searchProducts = vi.fn<(...arg: unknown[]) => SearchProductsResponse>();
+
+    const nonPurchasableProduct = buildRecentlyOrderedProductNodeWith({
+      node: { productName: 'Non Purchasable Product' },
+    });
+
+    when(getRecentlyOrderedProducts)
+      .calledWith(stringContainingAll('first: 12', 'offset: 0', 'orderBy: "-lastOrderedAt"'))
+      .thenReturn(
+        buildGetRecentlyOrderedProductsWith({
+          data: { orderedProducts: { totalCount: 2, edges: [nonPurchasableProduct] } },
+        }),
+      );
+
+    when(searchProducts)
+      .calledWith(stringContainingAll(`productIds: [${nonPurchasableProduct.node.productId}]`))
+      .thenReturn({
+        data: {
+          productsSearch: [
+            buildSearchProductWith({
+              id: Number(nonPurchasableProduct.node.productId),
+              sku: nonPurchasableProduct.node.variantSku,
+              name: 'Non Purchasable Product',
+              inventoryTracking: 'none',
+              variants: [
+                buildVariantWith({
+                  product_id: Number(nonPurchasableProduct.node.productId),
+                  variant_id: Number(nonPurchasableProduct.node.variantId),
+                  sku: nonPurchasableProduct.node.variantSku,
+                }),
+              ],
+            }),
+          ],
+        },
+      });
+
+    const validateProduct = vi.fn<(...arg: unknown[]) => ValidateProductResponse>();
+
+    when(validateProduct)
+      .calledWith({
+        productId: Number(nonPurchasableProduct.node.productId),
+        variantId: Number(nonPurchasableProduct.node.variantId),
+        quantity: 1,
+        productOptions: [],
+      })
+      .thenReturn({
+        data: {
+          validateProduct: buildValidateProductWith({
+            responseType: 'ERROR',
+            message: 'Product is not purchasable',
+            errorCode: 'NON_PURCHASABLE',
+            product: { availableToSell: 0 },
+          }),
+        },
+      });
+
+    const priceProductsResponse = {
+      priceProducts: [
+        buildProductPriceWith({
+          productId: Number(nonPurchasableProduct.node.productId),
+          variantId: Number(nonPurchasableProduct.node.variantId),
+        }),
+      ],
+    };
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', ({ query }) =>
+        HttpResponse.json(getRecentlyOrderedProducts(query)),
+      ),
+      graphql.query('SearchProducts', ({ query }) => HttpResponse.json(searchProducts(query))),
+      graphql.query('getCart', () => HttpResponse.json(buildGetCartWith('WHATEVER_VALUES'))),
+      graphql.query('priceProducts', () => HttpResponse.json({ data: priceProductsResponse })),
+      graphql.query('ValidateProduct', ({ variables }) =>
+        HttpResponse.json(validateProduct(variables)),
+      ),
+    );
+
+    renderWithProviders(<QuickOrder />, {
+      preloadedState: {
+        ...preloadedState,
+        global: buildGlobalStateWith({ backorderEnabled, featureFlags }),
+      },
+      initialGlobalContext: { productQuoteEnabled: true, shoppingListEnabled: true },
+    });
+
+    const npRow = await screen.findByRole('row', { name: /Non Purchasable Product/ });
+
+    await userEvent.click(within(npRow).getByRole('checkbox'));
+
+    const addButton = screen.getByRole('button', { name: 'Add selected to' });
+
+    await userEvent.click(addButton);
+
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Add selected to quote' }));
+
+    expect(screen.getByText('SKU Non Purchasable Product no longer for sale')).toBeInTheDocument();
+  });
+
+  it('groups multiple products with the same error type into a single snackbar', async () => {
+    const featureFlags = {
+      'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
+    };
+    const backorderEnabled = true;
+
+    const getRecentlyOrderedProducts = vi.fn();
+    const searchProducts = vi.fn<(...arg: unknown[]) => SearchProductsResponse>();
+
+    const nonPurchasbleProduct1 = buildRecentlyOrderedProductNodeWith({
+      node: { productName: 'Non Purchasable 1' },
+    });
+
+    const nonPurchasableProduct2 = buildRecentlyOrderedProductNodeWith({
+      node: { productName: 'Non Purchasable 2' },
+    });
+
+    const nonPurchasableProduct3 = buildRecentlyOrderedProductNodeWith({
+      node: { productName: 'Non Purchasable 3' },
+    });
+
+    when(getRecentlyOrderedProducts)
+      .calledWith(stringContainingAll('first: 12', 'offset: 0', 'orderBy: "-lastOrderedAt"'))
+      .thenReturn(
+        buildGetRecentlyOrderedProductsWith({
+          data: {
+            orderedProducts: {
+              totalCount: 3,
+              edges: [nonPurchasbleProduct1, nonPurchasableProduct2, nonPurchasableProduct3],
+            },
+          },
+        }),
+      );
+
+    when(searchProducts)
+      .calledWith(
+        stringContainingAll(
+          `productIds: [${nonPurchasbleProduct1.node.productId},${nonPurchasableProduct2.node.productId},${nonPurchasableProduct3.node.productId}]`,
+        ),
+      )
+      .thenReturn({
+        data: {
+          productsSearch: [
+            buildSearchProductWith({
+              id: Number(nonPurchasbleProduct1.node.productId),
+              sku: nonPurchasbleProduct1.node.variantSku,
+              name: nonPurchasbleProduct1.node.productName,
+              inventoryTracking: 'none',
+              optionsV3: [],
+              variants: [
+                buildVariantWith({
+                  product_id: Number(nonPurchasbleProduct1.node.productId),
+                  variant_id: Number(nonPurchasbleProduct1.node.variantId),
+                  sku: nonPurchasbleProduct1.node.variantSku,
+                }),
+              ],
+            }),
+            buildSearchProductWith({
+              id: Number(nonPurchasableProduct2.node.productId),
+              sku: nonPurchasableProduct2.node.variantSku,
+              name: nonPurchasableProduct2.node.productName,
+              inventoryTracking: 'none',
+              optionsV3: [],
+              variants: [
+                buildVariantWith({
+                  product_id: Number(nonPurchasableProduct2.node.productId),
+                  variant_id: Number(nonPurchasableProduct2.node.variantId),
+                  sku: nonPurchasableProduct2.node.variantSku,
+                }),
+              ],
+            }),
+            buildSearchProductWith({
+              id: Number(nonPurchasableProduct3.node.productId),
+              sku: nonPurchasableProduct3.node.variantSku,
+              name: nonPurchasableProduct3.node.productName,
+              inventoryTracking: 'none',
+              optionsV3: [],
+              variants: [
+                buildVariantWith({
+                  product_id: Number(nonPurchasableProduct3.node.productId),
+                  variant_id: Number(nonPurchasableProduct3.node.variantId),
+                  sku: nonPurchasableProduct3.node.variantSku,
+                }),
+              ],
+            }),
+          ],
+        },
+      });
+
+    const validateProduct = vi.fn<(...arg: unknown[]) => ValidateProductResponse>();
+
+    when(validateProduct)
+      .calledWith(
+        expect.objectContaining({
+          productId: Number(nonPurchasbleProduct1.node.productId),
+          variantId: Number(nonPurchasbleProduct1.node.variantId),
+          quantity: 1,
+        }),
+      )
+      .thenReturn({
+        data: {
+          validateProduct: buildValidateProductWith({
+            responseType: 'ERROR',
+            message: 'Product is not purchasable',
+            errorCode: 'NON_PURCHASABLE',
+            product: {
+              availableToSell: 0,
+            },
+          }),
+        },
+      });
+
+    when(validateProduct)
+      .calledWith({
+        productId: Number(nonPurchasableProduct2.node.productId),
+        variantId: Number(nonPurchasableProduct2.node.variantId),
+        quantity: 1,
+        productOptions: [],
+      })
+      .thenReturn({
+        data: {
+          validateProduct: buildValidateProductWith({
+            responseType: 'ERROR',
+            message: 'Product is not purchasable',
+            errorCode: 'NON_PURCHASABLE',
+            product: {
+              availableToSell: 0,
+            },
+          }),
+        },
+      });
+
+    when(validateProduct)
+      .calledWith({
+        productId: Number(nonPurchasableProduct3.node.productId),
+        variantId: Number(nonPurchasableProduct3.node.variantId),
+        quantity: 1,
+        productOptions: [],
+      })
+      .thenReturn({
+        data: {
+          validateProduct: buildValidateProductWith({
+            responseType: 'ERROR',
+            message: 'Product is not purchasable',
+            errorCode: 'NON_PURCHASABLE',
+            product: {
+              availableToSell: 0,
+            },
+          }),
+        },
+      });
+
+    const priceProductsResponse = {
+      priceProducts: [
+        buildProductPriceWith({
+          productId: Number(nonPurchasbleProduct1.node.productId),
+          variantId: Number(nonPurchasbleProduct1.node.variantId),
+        }),
+        buildProductPriceWith({
+          productId: Number(nonPurchasableProduct2.node.productId),
+          variantId: Number(nonPurchasableProduct2.node.variantId),
+        }),
+        buildProductPriceWith({
+          productId: Number(nonPurchasableProduct3.node.productId),
+          variantId: Number(nonPurchasableProduct3.node.variantId),
+        }),
+      ],
+    };
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', ({ query }) =>
+        HttpResponse.json(getRecentlyOrderedProducts(query)),
+      ),
+      graphql.query('SearchProducts', ({ query }) => HttpResponse.json(searchProducts(query))),
+      graphql.query('getCart', () => HttpResponse.json(buildGetCartWith('WHATEVER_VALUES'))),
+      graphql.query('priceProducts', () => HttpResponse.json({ data: priceProductsResponse })),
+      graphql.query('ValidateProduct', ({ variables }) =>
+        HttpResponse.json(validateProduct(variables)),
+      ),
+    );
+
+    renderWithProviders(<QuickOrder />, {
+      preloadedState: {
+        ...preloadedState,
+        global: buildGlobalStateWith({ backorderEnabled, featureFlags }),
+      },
+      initialGlobalContext: { productQuoteEnabled: true, shoppingListEnabled: true },
+    });
+
+    const nonPurchasableRow1 = await screen.findByRole('row', { name: /Non Purchasable 1/ });
+    const nonPurchasableRow2 = await screen.findByRole('row', { name: /Non Purchasable 2/ });
+    const nonPurchasableRow3 = await screen.findByRole('row', { name: /Non Purchasable 3/ });
+
+    await userEvent.click(within(nonPurchasableRow1).getByRole('checkbox'));
+    await userEvent.click(within(nonPurchasableRow2).getByRole('checkbox'));
+    await userEvent.click(within(nonPurchasableRow3).getByRole('checkbox'));
+
+    const addButton = screen.getByRole('button', { name: 'Add selected to' });
+    await userEvent.click(addButton);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Add selected to quote' }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'SKU Non Purchasable 1, Non Purchasable 2, Non Purchasable 3 no longer for sale',
+        ),
+      ).toBeInTheDocument();
+    });
+
+    expect(validateProduct).toHaveBeenCalledTimes(3);
+  });
+
+  it('adds to quote when threshold error occurs and NP/OOS flag is enabled', async () => {
+    const featureFlags = {
+      'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
+    };
+
+    const laughCanister = buildRecentlyOrderedProductNodeWith({
+      node: { productName: 'Laugh Canister' },
+    });
+
+    const recentlyOrderedResponse = buildGetRecentlyOrderedProductsWith({
+      data: { orderedProducts: { totalCount: 1, edges: [laughCanister] } },
+    });
+
+    const searchProductsResponse: SearchProductsResponse = {
+      data: {
+        productsSearch: [
+          buildSearchProductWith({
+            id: Number(laughCanister.node.productId),
+            sku: laughCanister.node.variantSku,
+            name: 'Laugh Canister',
+            inventoryTracking: 'none',
+            variants: [
+              buildVariantWith({
+                product_id: Number(laughCanister.node.productId),
+                variant_id: Number(laughCanister.node.variantId),
+                sku: laughCanister.node.variantSku,
+              }),
+            ],
+          }),
+        ],
+      },
+    };
+
+    const validateProductResponse: ValidateProductResponse = {
+      data: {
+        validateProduct: buildValidateProductWith({
+          responseType: 'ERROR',
+          message: 'You need to purchase a minimum of 5 of the SKU-123 per order.',
+          errorCode: 'OTHER',
+          product: {
+            availableToSell: 0,
+          },
+        }),
+      },
+    };
+
+    const priceProductsResponse = {
+      priceProducts: [
+        buildProductPriceWith({
+          productId: Number(laughCanister.node.productId),
+          variantId: Number(laughCanister.node.variantId),
+        }),
+      ],
+    };
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', () => HttpResponse.json(recentlyOrderedResponse)),
+      graphql.query('SearchProducts', () => HttpResponse.json(searchProductsResponse)),
+      graphql.query('getCart', () => HttpResponse.json(buildGetCartWith('WHATEVER_VALUES'))),
+      graphql.query('priceProducts', () => HttpResponse.json({ data: priceProductsResponse })),
+      graphql.query('ValidateProduct', () => HttpResponse.json(validateProductResponse)),
+    );
+
+    renderWithProviders(<QuickOrder />, {
+      preloadedState: {
+        ...preloadedState,
+        global: buildGlobalStateWith({
+          featureFlags,
+          blockPendingQuoteNonPurchasableOOS: { isEnableProduct: true },
+        }),
+      },
+      initialGlobalContext: { productQuoteEnabled: true, shoppingListEnabled: true },
+    });
+
+    const row = await screen.findByRole('row', { name: /Laugh Canister/ });
+    await userEvent.click(within(row).getByRole('checkbox'));
+
+    const addButton = screen.getByRole('button', { name: 'Add selected to' });
+    await userEvent.click(addButton);
+    await userEvent.click(screen.getByRole('menuitem', { name: /Add selected to quote/ }));
+
+    expect(await screen.findByText('Products were added to your quote')).toBeInTheDocument();
+  });
+
+  it('adds to quote when threshold error occurs and NP/OOS flag is disabled', async () => {
+    const featureFlags = {
+      'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
+    };
+
+    const laughCanister = buildRecentlyOrderedProductNodeWith({
+      node: { productName: 'Laugh Canister' },
+    });
+
+    const recentlyOrderedResponse = buildGetRecentlyOrderedProductsWith({
+      data: { orderedProducts: { totalCount: 1, edges: [laughCanister] } },
+    });
+
+    const searchProductsResponse: SearchProductsResponse = {
+      data: {
+        productsSearch: [
+          buildSearchProductWith({
+            id: Number(laughCanister.node.productId),
+            sku: laughCanister.node.variantSku,
+            name: 'Laugh Canister',
+            inventoryTracking: 'none',
+            variants: [
+              buildVariantWith({
+                product_id: Number(laughCanister.node.productId),
+                variant_id: Number(laughCanister.node.variantId),
+                sku: laughCanister.node.variantSku,
+              }),
+            ],
+          }),
+        ],
+      },
+    };
+
+    const validateProductResponse: ValidateProductResponse = {
+      data: {
+        validateProduct: buildValidateProductWith({
+          responseType: 'ERROR',
+          message: 'You need to purchase a minimum of 5 of the SKU-123 per order.',
+          errorCode: 'OTHER',
+          product: {
+            availableToSell: 0,
+          },
+        }),
+      },
+    };
+
+    const priceProductsResponse = {
+      priceProducts: [
+        buildProductPriceWith({
+          productId: Number(laughCanister.node.productId),
+          variantId: Number(laughCanister.node.variantId),
+        }),
+      ],
+    };
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', () => HttpResponse.json(recentlyOrderedResponse)),
+      graphql.query('SearchProducts', () => HttpResponse.json(searchProductsResponse)),
+      graphql.query('getCart', () => HttpResponse.json(buildGetCartWith('WHATEVER_VALUES'))),
+      graphql.query('priceProducts', () => HttpResponse.json({ data: priceProductsResponse })),
+      graphql.query('ValidateProduct', () => HttpResponse.json(validateProductResponse)),
+    );
+
+    renderWithProviders(<QuickOrder />, {
+      preloadedState: {
+        ...preloadedState,
+        global: buildGlobalStateWith({
+          featureFlags,
+          blockPendingQuoteNonPurchasableOOS: { isEnableProduct: false },
+        }),
+      },
+      initialGlobalContext: { productQuoteEnabled: true, shoppingListEnabled: true },
+    });
+
+    const row = await screen.findByRole('row', { name: /Laugh Canister/ });
+    await userEvent.click(within(row).getByRole('checkbox'));
+
+    const addButton = screen.getByRole('button', { name: 'Add selected to' });
+    await userEvent.click(addButton);
+    await userEvent.click(screen.getByRole('menuitem', { name: /Add selected to quote/ }));
+
+    expect(await screen.findByText('Products were added to your quote')).toBeInTheDocument();
+  });
+});
+
+describe('When backend validation feature flag is on', () => {
+  const featureFlags = {
+    'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
+  };
+  const backorderEnabled = true;
+
+  const backendValidationEnabledState = {
+    ...preloadedState,
+    company: {
+      ...preloadedState.company,
+      customer: {
+        ...preloadedState.company.customer,
+        role: CustomerRole.SENIOR_BUYER, // Override to Senior Buyer (value 1)
+      },
+    },
+    global: buildGlobalStateWith({ backorderEnabled, featureFlags }),
+  };
+
+  it('displays an error message when adding to cart fails', async () => {
+    const preloadedStateWithFeatureFlag = {
+      ...preloadedState,
+      global: buildGlobalStateWith({
+        backorderEnabled: true,
+        featureFlags: {
+          'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
+        },
+      }),
+    };
+    const getRecentlyOrderedProducts = vi.fn();
+    const searchProducts = vi.fn<(...arg: unknown[]) => SearchProductsResponse>();
+    const laughCanister = buildRecentlyOrderedProductNodeWith({
+      node: { productName: 'Laugh Canister', variantSku: 'VARIANT-123' },
+    });
+
+    when(getRecentlyOrderedProducts)
+      .calledWith(stringContainingAll('first: 12', 'offset: 0', 'orderBy: "-lastOrderedAt"'))
+      .thenReturn(
+        buildGetRecentlyOrderedProductsWith({
+          data: { orderedProducts: { totalCount: 1, edges: [laughCanister] } },
+        }),
+      );
+
+    const variant = buildVariantWith({
+      product_id: Number(laughCanister.node.productId),
+      variant_id: Number(laughCanister.node.variantId),
+      sku: laughCanister.node.variantSku,
+      purchasing_disabled: false,
+      inventory_level: 100,
+    });
+
+    when(searchProducts)
+      .calledWith(stringContainingAll(`productIds: [${laughCanister.node.productId}]`))
+      .thenReturn({
+        data: {
+          productsSearch: [
+            buildSearchProductWith({
+              id: Number(laughCanister.node.productId),
+              name: laughCanister.node.productName,
+              sku: laughCanister.node.sku,
+              orderQuantityMaximum: 0,
+              orderQuantityMinimum: 0,
+              inventoryLevel: 2, // This product is out of stock
+              inventoryTracking: 'product',
+              variants: [variant],
+            }),
+          ],
+        },
+      });
+
+    const createCartSimple = vi.fn();
+
+    when(createCartSimple)
+      .calledWith({
+        createCartInput: {
+          lineItems: [
+            {
+              productEntityId: variant.product_id,
+              variantEntityId: variant.variant_id,
+              quantity: 10,
+              selectedOptions: { multipleChoices: [], textFields: [] },
+            },
+          ],
+        },
+      })
+      .thenReturn({
+        data: {
+          cart: {
+            createCart: null,
+          },
+        },
+        errors: [
+          {
+            message: 'VARIANT-123 does not have enough stock, please change the quantity',
+          },
+        ],
+      });
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', ({ query }) =>
+        HttpResponse.json(getRecentlyOrderedProducts(query)),
+      ),
+      graphql.query('SearchProducts', ({ query }) => HttpResponse.json(searchProducts(query))),
+      graphql.query('getCart', () =>
+        HttpResponse.json(buildGetCartWith({ data: { site: { cart: null } } })),
+      ),
+      graphql.mutation('createCartSimple', ({ variables }) =>
+        HttpResponse.json(createCartSimple(variables)),
+      ),
+    );
+
+    renderWithProviders(<QuickOrder />, { preloadedState: preloadedStateWithFeatureFlag });
+
+    const row = await screen.findByRole('row', { name: /Laugh Canister/ });
+
+    await userEvent.click(within(row).getByRole('checkbox'));
+
+    const input = within(row).getByRole('spinbutton');
+
+    await userEvent.clear(input);
+    await userEvent.type(input, '10');
+
+    const addButton = screen.getByRole('button', { name: 'Add selected to' });
+
+    await userEvent.click(addButton);
+
+    await userEvent.click(screen.getByRole('menuitem', { name: /Add selected to cart/ }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('VARIANT-123 does not have enough stock, please change the quantity'),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('displays out-of-stock error when adding to cart searched product', async () => {
+    const preloadedStateWithFeatureFlag = {
+      ...preloadedState,
+      global: buildGlobalStateWith({
+        backorderEnabled: true,
+        featureFlags: {
+          'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
+        },
+      }),
+    };
+
+    const getRecentlyOrderedProducts = vi.fn();
+    const searchProducts = vi.fn<(...arg: unknown[]) => SearchProductsResponse>();
+    const getCart = vi.fn().mockReturnValue(buildGetCartWith({ data: { site: { cart: null } } }));
+    const getPriceProducts = vi.fn<(...arg: unknown[]) => PriceProductsResponse>();
+
+    when(getRecentlyOrderedProducts)
+      .calledWith(stringContainingAll('first: 12', 'offset: 0', 'orderBy: "-lastOrderedAt"'))
+      .thenReturn(
+        buildGetRecentlyOrderedProductsWith({
+          data: { orderedProducts: { totalCount: 0, edges: [] } },
+        }),
+      );
+
+    const variant = buildVariantWith({
+      purchasing_disabled: false,
+      inventory_level: 0,
+      bc_calculated_price: {
+        tax_exclusive: 123,
+      },
+    });
+
+    when(searchProducts)
+      .calledWith(stringContainingAll('search: "Out of Stock Product"', 'currencyCode: "USD"'))
+      .thenReturn({
+        data: {
+          productsSearch: [
+            buildSearchProductWith({
+              id: variant.product_id,
+              name: 'Out of Stock Product',
+              sku: 'OOS-123',
+              orderQuantityMinimum: 0,
+              orderQuantityMaximum: 0,
+              inventoryLevel: 0,
+              optionsV3: [],
+              isPriceHidden: false,
+              variants: [variant],
+            }),
+          ],
+        },
+      });
+
+    when(getPriceProducts)
+      .calledWith({
+        storeHash: 'store-hash',
+        channelId: 1,
+        currencyCode: 'USD',
+        items: [{ productId: variant.product_id, variantId: variant.variant_id, options: [] }],
+        customerGroupId: 0,
+      })
+      .thenReturn({
+        data: {
+          priceProducts: [
+            buildProductPriceWith({
+              productId: variant.product_id,
+              variantId: variant.variant_id,
+              price: buildPrice({
+                asEntered: 123.0,
+                enteredInclusive: true,
+                taxExclusive: 123.0,
+                taxInclusive: 123.0,
+              }),
+              calculatedPrice: buildPrice({
+                asEntered: 123.0,
+                enteredInclusive: true,
+                taxExclusive: 123.0,
+                taxInclusive: 123.0,
+              }),
+            }),
+          ],
+        },
+      });
+
+    const createCartSimple = vi.fn();
+    when(createCartSimple)
+      .calledWith({
+        createCartInput: {
+          lineItems: [
+            {
+              productEntityId: variant.product_id,
+              variantEntityId: variant.variant_id,
+              quantity: 1,
+              selectedOptions: { multipleChoices: [], textFields: [] },
+            },
+          ],
+        },
+      })
+      .thenReturn({
+        data: {
+          cart: {
+            createCart: null,
+          },
+        },
+        errors: [
+          {
+            message: 'Product "Out of Stock Product" is out of stock.',
+          },
+        ],
+      });
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', ({ query }) =>
+        HttpResponse.json(getRecentlyOrderedProducts(query)),
+      ),
+      graphql.query('SearchProducts', ({ query }) => HttpResponse.json(searchProducts(query))),
+      graphql.query('getCart', () => HttpResponse.json(getCart())),
+      graphql.query('priceProducts', ({ variables }) =>
+        HttpResponse.json(getPriceProducts(variables)),
+      ),
+      graphql.mutation('createCartSimple', ({ variables }) =>
+        HttpResponse.json(createCartSimple(variables)),
+      ),
+    );
+
+    renderWithProviders(<QuickOrder />, { preloadedState: preloadedStateWithFeatureFlag });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    expect(screen.getByText('Quick order pad')).toBeInTheDocument();
+
+    const searchInput = screen.getByPlaceholderText('Search products');
+    await userEvent.type(searchInput, 'Out of Stock Product');
+    await userEvent.click(screen.getByRole('button', { name: 'Search product' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Quick order pad' });
+
+    expect(within(dialog).getByText('Out of Stock Product')).toBeInTheDocument();
+    expect(within(dialog).getByText('OOS-123')).toBeInTheDocument();
+
+    const addToCartButton = within(dialog).getByRole('button', { name: 'Add to cart' });
+    await userEvent.click(addToCartButton);
+
+    const errorMessage = await screen.findByText('Product "Out of Stock Product" is out of stock.');
+    expect(errorMessage).toBeInTheDocument();
+
+    expect(Cookies.get('cartId')).toBeUndefined();
+  });
+
+  it('displays an error message when trying to add to an existing cart and fails', async () => {
+    const preloadedStateWithFeatureFlag = {
+      ...preloadedState,
+      global: buildGlobalStateWith({
+        backorderEnabled: true,
+        featureFlags: {
+          'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
+        },
+      }),
+    };
+    const getRecentlyOrderedProducts = vi.fn();
+    const searchProducts = vi.fn<(...arg: unknown[]) => SearchProductsResponse>();
+    const laughCanister = buildRecentlyOrderedProductNodeWith({
+      node: { productName: 'Laugh Canister', variantSku: 'VARIANT-123' },
+    });
+
+    when(getRecentlyOrderedProducts)
+      .calledWith(stringContainingAll('first: 12', 'offset: 0', 'orderBy: "-lastOrderedAt"'))
+      .thenReturn(
+        buildGetRecentlyOrderedProductsWith({
+          data: { orderedProducts: { totalCount: 1, edges: [laughCanister] } },
+        }),
+      );
+
+    const variant = buildVariantWith({
+      product_id: Number(laughCanister.node.productId),
+      variant_id: Number(laughCanister.node.variantId),
+      sku: laughCanister.node.variantSku,
+      purchasing_disabled: false,
+      inventory_level: 100,
+    });
+
+    when(searchProducts)
+      .calledWith(stringContainingAll(`productIds: [${laughCanister.node.productId}]`))
+      .thenReturn({
+        data: {
+          productsSearch: [
+            buildSearchProductWith({
+              id: Number(laughCanister.node.productId),
+              name: laughCanister.node.productName,
+              sku: laughCanister.node.sku,
+              orderQuantityMaximum: 0,
+              orderQuantityMinimum: 0,
+              inventoryLevel: 2,
+              inventoryTracking: 'product',
+              variants: [variant],
+            }),
+          ],
+        },
+      });
+
+    const addCartLineItemsTwo = vi.fn();
+
+    when(addCartLineItemsTwo)
+      .calledWith({
+        addCartLineItemsInput: {
+          cartEntityId: 'foo-bar-ca-fe-ca-fe',
+          data: {
+            lineItems: [
+              {
+                productEntityId: variant.product_id,
+                variantEntityId: variant.variant_id,
+                quantity: 10,
+                selectedOptions: { multipleChoices: [], textFields: [] },
+              },
+            ],
+          },
+        },
+      })
+      .thenReturn({
+        data: {
+          cart: {
+            addCartLineItems: null,
+          },
+        },
+        errors: [
+          {
+            message: 'VARIANT-123 does not have enough stock, please change the quantity',
+          },
+        ],
+      });
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', ({ query }) =>
+        HttpResponse.json(getRecentlyOrderedProducts(query)),
+      ),
+      graphql.query('SearchProducts', ({ query }) => HttpResponse.json(searchProducts(query))),
+      graphql.query('getCart', () =>
+        HttpResponse.json(
+          buildGetCartWith({
+            data: {
+              site: {
+                cart: {
+                  entityId: 'foo-bar-ca-fe-ca-fe',
+                  lineItems: {
+                    physicalItems: [
+                      buildCartItemWith({
+                        productEntityId: Number(laughCanister.node.productId),
+                        variantEntityId: Number(laughCanister.node.variantId),
+                        sku: laughCanister.node.sku,
+                        quantity: 1,
+                      }),
+                    ],
+                  },
+                },
+              },
+            },
+          }),
+        ),
+      ),
+      graphql.mutation('addCartLineItemsTwo', ({ variables }) =>
+        HttpResponse.json(addCartLineItemsTwo(variables)),
+      ),
+    );
+
+    renderWithProviders(<QuickOrder />, { preloadedState: preloadedStateWithFeatureFlag });
+
+    const row = await screen.findByRole('row', { name: /Laugh Canister/ });
+
+    await userEvent.click(within(row).getByRole('checkbox'));
+
+    const input = within(row).getByRole('spinbutton');
+
+    await userEvent.clear(input);
+    await userEvent.type(input, '10');
+
+    const addButton = screen.getByRole('button', { name: 'Add selected to' });
+
+    await userEvent.click(addButton);
+
+    await userEvent.click(screen.getByRole('menuitem', { name: /Add selected to cart/ }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('VARIANT-123 does not have enough stock, please change the quantity'),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('displays an error message when searching for a product and adding to cart with wrong min quantity', async () => {
+    const preloadedStateWithFeatureFlag = {
+      ...preloadedState,
+      global: buildGlobalStateWith({
+        backorderEnabled: true,
+        featureFlags: {
+          'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
+        },
+      }),
+    };
+
+    const getRecentlyOrderedProducts = vi.fn();
+    const searchProducts = vi.fn<(...arg: unknown[]) => SearchProductsResponse>();
+    const getCart = vi.fn().mockReturnValue(buildGetCartWith({ data: { site: { cart: null } } }));
+    const getPriceProducts = vi.fn<(...arg: unknown[]) => PriceProductsResponse>();
+
+    when(getRecentlyOrderedProducts)
+      .calledWith(stringContainingAll('first: 12', 'offset: 0', 'orderBy: "-lastOrderedAt"'))
+      .thenReturn(
+        buildGetRecentlyOrderedProductsWith({
+          data: { orderedProducts: { totalCount: 0, edges: [] } },
+        }),
+      );
+
+    const variant = buildVariantWith({
+      purchasing_disabled: false,
+      inventory_level: 100,
+    });
+
+    when(searchProducts)
+      .calledWith(stringContainingAll('search: "Min Quantity Product"', 'currencyCode: "USD"'))
+      .thenReturn({
+        data: {
+          productsSearch: [
+            buildSearchProductWith({
+              id: variant.product_id,
+              name: 'Min Quantity Product',
+              sku: 'MIN-QTY-123',
+              orderQuantityMinimum: 5,
+              orderQuantityMaximum: 0,
+              inventoryLevel: 100,
+              optionsV3: [],
+              isPriceHidden: false,
+              variants: [variant],
+            }),
+          ],
+        },
+      });
+
+    when(getPriceProducts)
+      .calledWith({
+        storeHash: 'store-hash',
+        channelId: 1,
+        currencyCode: 'USD',
+        items: [{ productId: variant.product_id, variantId: variant.variant_id, options: [] }],
+        customerGroupId: 0,
+      })
+      .thenReturn({
+        data: {
+          priceProducts: [
+            buildProductPriceWith({
+              productId: variant.product_id,
+              variantId: variant.variant_id,
+              price: buildPrice({
+                asEntered: 50.0,
+                enteredInclusive: true,
+                taxExclusive: 50.0,
+                taxInclusive: 50.0,
+              }),
+              calculatedPrice: buildPrice({
+                asEntered: 50.0,
+                enteredInclusive: true,
+                taxExclusive: 50.0,
+                taxInclusive: 50.0,
+              }),
+            }),
+          ],
+        },
+      });
+
+    const createCartSimple = vi.fn();
+    when(createCartSimple)
+      .calledWith({
+        createCartInput: {
+          lineItems: [
+            {
+              productEntityId: variant.product_id,
+              variantEntityId: variant.variant_id,
+              quantity: 1,
+              selectedOptions: { multipleChoices: [], textFields: [] },
+            },
+          ],
+        },
+      })
+      .thenReturn({
+        data: {
+          cart: {
+            createCart: null,
+          },
+        },
+        errors: [
+          {
+            message: 'You need to purchase a minimum of 5 of the MIN-QTY-123 per order.',
+          },
+        ],
+      });
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', ({ query }) =>
+        HttpResponse.json(getRecentlyOrderedProducts(query)),
+      ),
+      graphql.query('SearchProducts', ({ query }) => HttpResponse.json(searchProducts(query))),
+      graphql.query('getCart', () => HttpResponse.json(getCart())),
+      graphql.query('priceProducts', ({ variables }) =>
+        HttpResponse.json(getPriceProducts(variables)),
+      ),
+      graphql.mutation('createCartSimple', ({ variables }) =>
+        HttpResponse.json(createCartSimple(variables)),
+      ),
+    );
+
+    renderWithProviders(<QuickOrder />, { preloadedState: preloadedStateWithFeatureFlag });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    expect(screen.getByText('Quick order pad')).toBeInTheDocument();
+
+    const searchInput = screen.getByPlaceholderText('Search products');
+    await userEvent.type(searchInput, 'Min Quantity Product');
+    await userEvent.click(screen.getByRole('button', { name: 'Search product' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Quick order pad' });
+
+    expect(within(dialog).getByText('Min Quantity Product')).toBeInTheDocument();
+    expect(within(dialog).getByText('MIN-QTY-123')).toBeInTheDocument();
+
+    const addToCartButton = within(dialog).getByRole('button', { name: 'Add to cart' });
+    await userEvent.click(addToCartButton);
+
+    const errorMessage = await screen.findByText(
+      'You need to purchase a minimum of 5 of the MIN-QTY-123 per order.',
+    );
+    expect(errorMessage).toBeInTheDocument();
+
+    expect(Cookies.get('cartId')).toBeUndefined();
+  });
+
+  it('displays an error message when searching for a product and adding to cart with wrong max quantity', async () => {
+    const preloadedStateWithFeatureFlag = {
+      ...preloadedState,
+      global: buildGlobalStateWith({
+        backorderEnabled: true,
+        featureFlags: {
+          'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
+        },
+      }),
+    };
+
+    const getRecentlyOrderedProducts = vi.fn();
+    const searchProducts = vi.fn<(...arg: unknown[]) => SearchProductsResponse>();
+    const getCart = vi.fn().mockReturnValue(buildGetCartWith({ data: { site: { cart: null } } }));
+    const getPriceProducts = vi.fn<(...arg: unknown[]) => PriceProductsResponse>();
+
+    when(getRecentlyOrderedProducts)
+      .calledWith(stringContainingAll('first: 12', 'offset: 0', 'orderBy: "-lastOrderedAt"'))
+      .thenReturn(
+        buildGetRecentlyOrderedProductsWith({
+          data: { orderedProducts: { totalCount: 0, edges: [] } },
+        }),
+      );
+
+    const variant = buildVariantWith({
+      purchasing_disabled: false,
+      inventory_level: 100,
+    });
+
+    when(searchProducts)
+      .calledWith(stringContainingAll('search: "Max Quantity Product"', 'currencyCode: "USD"'))
+      .thenReturn({
+        data: {
+          productsSearch: [
+            buildSearchProductWith({
+              id: variant.product_id,
+              name: 'Max Quantity Product',
+              sku: 'MAX-QTY-123',
+              orderQuantityMinimum: 0,
+              orderQuantityMaximum: 3,
+              inventoryLevel: 100,
+              optionsV3: [],
+              isPriceHidden: false,
+              variants: [variant],
+            }),
+          ],
+        },
+      });
+
+    when(getPriceProducts)
+      .calledWith({
+        storeHash: 'store-hash',
+        channelId: 1,
+        currencyCode: 'USD',
+        items: [{ productId: variant.product_id, variantId: variant.variant_id, options: [] }],
+        customerGroupId: 0,
+      })
+      .thenReturn({
+        data: {
+          priceProducts: [
+            buildProductPriceWith({
+              productId: variant.product_id,
+              variantId: variant.variant_id,
+              price: buildPrice({
+                asEntered: 25.0,
+                enteredInclusive: true,
+                taxExclusive: 25.0,
+                taxInclusive: 25.0,
+              }),
+              calculatedPrice: buildPrice({
+                asEntered: 25.0,
+                enteredInclusive: true,
+                taxExclusive: 25.0,
+                taxInclusive: 25.0,
+              }),
+            }),
+          ],
+        },
+      });
+
+    const createCartSimple = vi.fn().mockReturnValue({
+      data: {
+        cart: {
+          createCart: null,
+        },
+      },
+      errors: [
+        {
+          message: 'You need to purchase a maximum of 3 of the MAX-QTY-123 per order.',
+        },
+      ],
+    });
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', ({ query }) =>
+        HttpResponse.json(getRecentlyOrderedProducts(query)),
+      ),
+      graphql.query('SearchProducts', ({ query }) => HttpResponse.json(searchProducts(query))),
+      graphql.query('getCart', () => HttpResponse.json(getCart())),
+      graphql.query('priceProducts', ({ variables }) =>
+        HttpResponse.json(getPriceProducts(variables)),
+      ),
+      graphql.mutation('createCartSimple', ({ variables }) =>
+        HttpResponse.json(createCartSimple(variables)),
+      ),
+    );
+
+    renderWithProviders(<QuickOrder />, { preloadedState: preloadedStateWithFeatureFlag });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    expect(screen.getByText('Quick order pad')).toBeInTheDocument();
+
+    const searchInput = screen.getByPlaceholderText('Search products');
+    await userEvent.type(searchInput, 'Max Quantity Product');
+    await userEvent.click(screen.getByRole('button', { name: 'Search product' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Quick order pad' });
+
+    expect(within(dialog).getByText('Max Quantity Product')).toBeInTheDocument();
+    expect(within(dialog).getByText('MAX-QTY-123')).toBeInTheDocument();
+
+    const quantityInput = within(dialog).getByRole('spinbutton');
+    await userEvent.clear(quantityInput);
+    await userEvent.type(quantityInput, '5');
+
+    const addToCartButton = within(dialog).getByRole('button', { name: 'Add to cart' });
+    await userEvent.click(addToCartButton);
+
+    const errorMessage = await screen.findByText(
+      'You need to purchase a maximum of 3 of the MAX-QTY-123 per order.',
+    );
+    expect(errorMessage).toBeInTheDocument();
+
+    expect(Cookies.get('cartId')).toBeUndefined();
+  });
+
+  it('quick add displays an error message when trying to add out of stock product to new cart', async () => {
+    const getVariantInfoBySkus = vi.fn();
+    const getCart = vi.fn().mockReturnValue(buildGetCartWith({ data: { site: { cart: null } } }));
+    const validateProduct = vi.fn<(...arg: unknown[]) => ValidateProductResponse>();
+
+    const getRecentlyOrderedProducts = vi.fn().mockReturnValue({
+      data: {
+        orderedProducts: {
+          totalCount: 0,
+          edges: [],
+        },
+      },
+    });
+
+    const searchProducts = vi.fn().mockReturnValue({ data: { productsSearch: [] } });
+
+    const variantInfo = buildVariantInfoWith({
+      productId: '123',
+      variantId: '456',
+      variantSku: 'OOS-123',
+      option: [],
+    });
+
+    when(getVariantInfoBySkus)
+      .calledWith(expect.stringContaining('variantSkus: ["OOS-123"]'))
+      .thenDo(() => buildVariantInfoResponseWith({ data: { variantSku: [variantInfo] } }));
+
+    when(validateProduct)
+      .calledWith(
+        expect.objectContaining({
+          productId: 123,
+          variantId: 456,
+          quantity: 2,
+          productOptions: [],
+        }),
+      )
+      .thenReturn({
+        data: {
+          validateProduct: buildValidateProductWith({
+            responseType: 'ERROR',
+            message: 'SKU OOS-123 is out of stock',
+            errorCode: 'OOS',
+            product: { availableToSell: 1 },
+          }),
+        },
+      });
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', ({ query }) =>
+        HttpResponse.json(getRecentlyOrderedProducts(query)),
+      ),
+      graphql.query('SearchProducts', ({ query }) => HttpResponse.json(searchProducts(query))),
+      graphql.query('GetVariantInfoBySkus', ({ query }) =>
+        HttpResponse.json(getVariantInfoBySkus(query)),
+      ),
+      graphql.query('getCart', () => HttpResponse.json(getCart())),
+      graphql.query('ValidateProduct', ({ variables }) =>
+        HttpResponse.json(validateProduct(variables)),
+      ),
+    );
+
+    renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    const skuInputs = screen.getAllByLabelText(/SKU#/);
+    const qtyInputs = screen.getAllByLabelText(/Qty/);
+    const skuInput = skuInputs[0];
+    const qtyInput = qtyInputs[0];
+
+    await userEvent.type(skuInput, 'OOS-123');
+    await userEvent.type(qtyInput, '2');
+
+    const addButton = screen.getByRole('button', { name: /Add products to cart/i });
+    await userEvent.click(addButton);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('OOS-123 does not have enough stock, please change the quantity'),
+      ).toBeVisible();
+    });
+
+    expect(screen.getByText('1 available')).toBeVisible();
+  });
+
+  it('quick add displays an error message when trying to add out of stock product to existing cart', async () => {
+    const getVariantInfoBySkus = vi.fn();
+    const validateProduct = vi.fn<(...arg: unknown[]) => ValidateProductResponse>();
+
+    const getRecentlyOrderedProducts = vi.fn().mockReturnValue({
+      data: {
+        orderedProducts: {
+          totalCount: 0,
+          edges: [],
+        },
+      },
+    });
+
+    const searchProducts = vi.fn().mockReturnValue({ data: { productsSearch: [] } });
+
+    const existingCart = buildGetCartWith({
+      data: {
+        site: {
+          cart: {
+            entityId: '12345',
+            lineItems: {
+              physicalItems: [buildCartItemWith({ sku: 'EXISTING-SKU', quantity: 1 })],
+              digitalItems: [],
+              customItems: [],
+              giftCertificates: [],
+            },
+          },
+        },
+      },
+    });
+
+    const variantInfo = buildVariantInfoWith({
+      productId: '123',
+      variantId: '456',
+      variantSku: 'OOS-123',
+      option: [],
+    });
+
+    when(getVariantInfoBySkus)
+      .calledWith(expect.stringContaining('variantSkus: ["OOS-123"]'))
+      .thenDo(() => buildVariantInfoResponseWith({ data: { variantSku: [variantInfo] } }));
+
+    when(validateProduct)
+      .calledWith(
+        expect.objectContaining({
+          productId: 123,
+          variantId: 456,
+          quantity: 3,
+          productOptions: [],
+        }),
+      )
+      .thenReturn({
+        data: {
+          validateProduct: buildValidateProductWith({
+            responseType: 'ERROR',
+            message: 'Product OOS-123 has insufficient stock',
+            errorCode: 'OOS',
+            product: { availableToSell: 1 },
+          }),
+        },
+      });
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', ({ query }) =>
+        HttpResponse.json(getRecentlyOrderedProducts(query)),
+      ),
+      graphql.query('SearchProducts', ({ query }) => HttpResponse.json(searchProducts(query))),
+      graphql.query('GetVariantInfoBySkus', ({ query }) =>
+        HttpResponse.json(getVariantInfoBySkus(query)),
+      ),
+      graphql.query('getCart', () => HttpResponse.json(existingCart)),
+      graphql.query('ValidateProduct', ({ variables }) =>
+        HttpResponse.json(validateProduct(variables)),
+      ),
+    );
+
+    renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    const skuInputs = screen.getAllByLabelText(/SKU#/);
+    const qtyInputs = screen.getAllByLabelText(/Qty/);
+    const skuInput = skuInputs[0];
+    const qtyInput = qtyInputs[0];
+
+    await userEvent.type(skuInput, 'OOS-123');
+    await userEvent.type(qtyInput, '3');
+
+    const addButton = screen.getByRole('button', { name: /Add products to cart/i });
+    await userEvent.click(addButton);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('OOS-123 does not have enough stock, please change the quantity'),
+      ).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('1 available')).toBeVisible();
+  });
+
+  it('quick add displays an error message when trying to add non-existent SKU', async () => {
+    const getVariantInfoBySkus = vi.fn();
+    const getCart = vi.fn().mockReturnValue(buildGetCartWith({ data: { site: { cart: null } } }));
+
+    const getRecentlyOrderedProducts = vi.fn().mockReturnValue({
+      data: {
+        orderedProducts: {
+          totalCount: 0,
+          edges: [],
+        },
+      },
+    });
+
+    const searchProducts = vi.fn().mockReturnValue({ data: { productsSearch: [] } });
+
+    when(getVariantInfoBySkus)
+      .calledWith(expect.stringContaining('variantSkus: ["NON-EXISTENT-SKU"]'))
+      .thenDo(() => buildVariantInfoResponseWith({ data: { variantSku: [] } }));
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', ({ query }) =>
+        HttpResponse.json(getRecentlyOrderedProducts(query)),
+      ),
+      graphql.query('SearchProducts', ({ query }) => HttpResponse.json(searchProducts(query))),
+      graphql.query('GetVariantInfoBySkus', ({ query }) =>
+        HttpResponse.json(getVariantInfoBySkus(query)),
+      ),
+      graphql.query('getCart', () => HttpResponse.json(getCart())),
+    );
+
+    renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    const skuInputs = screen.getAllByLabelText(/SKU#/);
+    const qtyInputs = screen.getAllByLabelText(/Qty/);
+    const skuInput = skuInputs[0];
+    const qtyInput = qtyInputs[0];
+
+    await userEvent.type(skuInput, 'NON-EXISTENT-SKU');
+    await userEvent.type(qtyInput, '1');
+
+    const addButton = screen.getByRole('button', { name: /Add products to cart/i });
+    await userEvent.click(addButton);
+
+    const error = await screen.findByText(
+      'SKU NON-EXISTENT-SKU was not found, please check entered values',
+    );
+
+    expect(error).toBeInTheDocument();
+
+    expect(screen.getByText('SKU not found')).toBeVisible();
+  });
+
+  it('quick add shows not-found SKU error after adding valid products to cart', async () => {
+    const getVariantInfoBySkus = vi.fn();
+    const getCart = vi.fn().mockReturnValue(buildGetCartWith({ data: { site: { cart: null } } }));
+
+    const getRecentlyOrderedProducts = vi.fn().mockReturnValue({
+      data: {
+        orderedProducts: {
+          totalCount: 0,
+          edges: [],
+        },
+      },
+    });
+
+    const searchProducts = vi.fn().mockReturnValue({ data: { productsSearch: [] } });
+
+    const validVariant = buildVariantInfoWith({
+      variantSku: 'VALID-SKU',
+      productId: '123',
+      variantId: '456',
+      minQuantity: 0,
+      purchasingDisabled: '0',
+      isStock: '1',
+      stock: 100,
+    });
+
+    when(getVariantInfoBySkus)
+      .calledWith(expect.stringContaining('variantSkus: ["VALID-SKU","NOT-FOUND-SKU"]'))
+      .thenDo(() => buildVariantInfoResponseWith({ data: { variantSku: [validVariant] } }));
+
+    const validateProduct = vi.fn().mockReturnValue({
+      data: {
+        validateProduct: buildValidateProductWith({
+          responseType: 'SUCCESS',
+          message: '',
+        }),
+      },
+    });
+
+    const createCartSimple = vi.fn();
+
+    when(createCartSimple)
+      .calledWith(
+        expect.objectContaining({
+          createCartInput: expect.objectContaining({
+            lineItems: expect.arrayContaining([
+              expect.objectContaining({
+                quantity: 2,
+                productEntityId: Number(validVariant.productId),
+                variantEntityId: Number(validVariant.variantId),
+              }),
+            ]),
+          }),
+        }),
+      )
+      .thenReturn({
+        data: {
+          cart: { createCart: { cart: { entityId: 'test-cart-id' } } },
+        },
+      });
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', ({ query }) =>
+        HttpResponse.json(getRecentlyOrderedProducts(query)),
+      ),
+      graphql.query('SearchProducts', ({ query }) => HttpResponse.json(searchProducts(query))),
+      graphql.query('GetVariantInfoBySkus', ({ query }) =>
+        HttpResponse.json(getVariantInfoBySkus(query)),
+      ),
+      graphql.query('ValidateProduct', ({ variables }) =>
+        HttpResponse.json(validateProduct(variables)),
+      ),
+      graphql.query('getCart', () => HttpResponse.json(getCart())),
+      graphql.mutation('createCartSimple', ({ variables }) =>
+        HttpResponse.json(createCartSimple(variables)),
+      ),
+    );
+
+    renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    const skuInputs = screen.getAllByLabelText(/SKU#/);
+    const qtyInputs = screen.getAllByLabelText(/Qty/);
+
+    await userEvent.type(skuInputs[0], 'VALID-SKU');
+    await userEvent.type(qtyInputs[0], '2');
+
+    await userEvent.type(skuInputs[1], 'NOT-FOUND-SKU');
+    await userEvent.type(qtyInputs[1], '3');
+
+    const addButton = screen.getByRole('button', { name: /Add products to cart/i });
+    await userEvent.click(addButton);
+
+    expect(await screen.findByText('Products were added to cart')).toBeVisible();
+
+    expect(
+      await screen.findByText('SKU NOT-FOUND-SKU was not found, please check entered values'),
+    ).toBeVisible();
+
+    expect(screen.getByText('SKU not found')).toBeVisible();
+  });
+
+  it('quick add shows not-found SKU error with validation errors for mixed scenario', async () => {
+    const getVariantInfoBySkus = vi.fn();
+    const getCart = vi.fn().mockReturnValue(buildGetCartWith({ data: { site: { cart: null } } }));
+
+    const getRecentlyOrderedProducts = vi.fn().mockReturnValue({
+      data: {
+        orderedProducts: {
+          totalCount: 0,
+          edges: [],
+        },
+      },
+    });
+
+    const searchProducts = vi.fn().mockReturnValue({ data: { productsSearch: [] } });
+
+    const validVariant = buildVariantInfoWith({
+      variantSku: 'VALID-SKU',
+      productId: '123',
+      variantId: '456',
+      minQuantity: 0,
+      purchasingDisabled: '0',
+      isStock: '1',
+      stock: 100,
+    });
+
+    const outOfStockVariant = buildVariantInfoWith({
+      variantSku: 'OUT-OF-STOCK-SKU',
+      productId: '789',
+      variantId: '012',
+      minQuantity: 0,
+      purchasingDisabled: '0',
+      isStock: '1',
+      stock: 5,
+    });
+
+    when(getVariantInfoBySkus)
+      .calledWith(
+        expect.stringContaining('variantSkus: ["VALID-SKU","OUT-OF-STOCK-SKU","NOT-FOUND-SKU"]'),
+      )
+      .thenDo(() =>
+        buildVariantInfoResponseWith({ data: { variantSku: [validVariant, outOfStockVariant] } }),
+      );
+
+    const validateProduct = vi.fn();
+
+    when(validateProduct)
+      .calledWith(
+        expect.objectContaining({
+          productId: Number(validVariant.productId),
+        }),
+      )
+      .thenReturn({
+        data: {
+          validateProduct: buildValidateProductWith({
+            responseType: 'SUCCESS',
+            message: '',
+          }),
+        },
+      });
+
+    when(validateProduct)
+      .calledWith(
+        expect.objectContaining({
+          productId: Number(outOfStockVariant.productId),
+        }),
+      )
+      .thenReturn({
+        data: {
+          validateProduct: buildValidateProductWith({
+            responseType: 'ERROR',
+            message: 'OUT-OF-STOCK-SKU does not have enough stock, please change the quantity',
+            errorCode: 'OOS',
+            product: { availableToSell: 0 },
+          }),
+        },
+      });
+
+    const createCartSimple = vi.fn();
+
+    when(createCartSimple)
+      .calledWith(
+        expect.objectContaining({
+          createCartInput: expect.objectContaining({
+            lineItems: expect.arrayContaining([
+              expect.objectContaining({
+                quantity: 2,
+                productEntityId: Number(validVariant.productId),
+                variantEntityId: Number(validVariant.variantId),
+              }),
+            ]),
+          }),
+        }),
+      )
+      .thenReturn({
+        data: {
+          cart: { createCart: { cart: { entityId: 'test-cart-id' } } },
+        },
+      });
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', ({ query }) =>
+        HttpResponse.json(getRecentlyOrderedProducts(query)),
+      ),
+      graphql.query('SearchProducts', ({ query }) => HttpResponse.json(searchProducts(query))),
+      graphql.query('GetVariantInfoBySkus', ({ query }) =>
+        HttpResponse.json(getVariantInfoBySkus(query)),
+      ),
+      graphql.query('ValidateProduct', ({ variables }) =>
+        HttpResponse.json(validateProduct(variables)),
+      ),
+      graphql.query('getCart', () => HttpResponse.json(getCart())),
+      graphql.mutation('createCartSimple', ({ variables }) =>
+        HttpResponse.json(createCartSimple(variables)),
+      ),
+    );
+
+    renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    const skuInputs = screen.getAllByLabelText(/SKU#/);
+    const qtyInputs = screen.getAllByLabelText(/Qty/);
+
+    await userEvent.type(skuInputs[0], 'VALID-SKU');
+    await userEvent.type(qtyInputs[0], '2');
+
+    await userEvent.type(skuInputs[1], 'OUT-OF-STOCK-SKU');
+    await userEvent.type(qtyInputs[1], '10');
+
+    await userEvent.type(skuInputs[2], 'NOT-FOUND-SKU');
+    await userEvent.type(qtyInputs[2], '3');
+
+    const addButton = screen.getByRole('button', { name: /Add products to cart/i });
+    await userEvent.click(addButton);
+
+    expect(
+      await screen.findByText(
+        'OUT-OF-STOCK-SKU does not have enough stock, please change the quantity',
+      ),
+    ).toBeInTheDocument();
+
+    expect(await screen.findByText('Products were added to cart')).toBeInTheDocument();
+
+    expect(
+      await screen.findByText('SKU NOT-FOUND-SKU was not found, please check entered values'),
+    ).toBeInTheDocument();
+
+    expect(screen.getByText('SKU not found')).toBeVisible();
+  });
+
+  it('quick add clears the input values when adding valid products to cart', async () => {
+    const validVariant = buildVariantInfoWith({
+      variantSku: 'VALID-SKU', // Backend will return the sku in uppercase
+      productId: '123',
+      variantId: '456',
+      minQuantity: 0,
+      purchasingDisabled: '0',
+      isStock: '1',
+      stock: 100,
+    });
+
+    const getVariantInfoBySkus = when(vi.fn())
+      .calledWith(expect.stringContaining('variantSkus: ["valid-sku"]'))
+      .thenReturn(buildVariantInfoResponseWith({ data: { variantSku: [validVariant] } }));
+
+    const validateProduct = when(vi.fn())
+      .calledWith(
+        expect.objectContaining({
+          productId: 123,
+        }),
+      )
+      .thenReturn({
+        data: {
+          validateProduct: buildValidateProductWith({
+            responseType: 'SUCCESS',
+            message: '',
+          }),
+        },
+      });
+
+    const createCartSimple = when(vi.fn())
+      .calledWith({
+        createCartInput: {
+          lineItems: [
+            {
+              quantity: 2,
+              productEntityId: 123,
+              variantEntityId: 456,
+              selectedOptions: { multipleChoices: [], textFields: [] },
+            },
+          ],
+        },
+      })
+      .thenReturn({ data: { cart: { createCart: { cart: { entityId: 'test-cart-id' } } } } });
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', () =>
+        HttpResponse.json({ data: { orderedProducts: { totalCount: 0, edges: [] } } }),
+      ),
+      graphql.query('SearchProducts', () => HttpResponse.json({ data: { productsSearch: [] } })),
+      graphql.query('GetVariantInfoBySkus', ({ query }) =>
+        HttpResponse.json(getVariantInfoBySkus(query)),
+      ),
+      graphql.query('ValidateProduct', ({ variables }) =>
+        HttpResponse.json(validateProduct(variables)),
+      ),
+      graphql.query('getCart', () =>
+        HttpResponse.json(buildGetCartWith({ data: { site: { cart: null } } })),
+      ),
+      graphql.mutation('createCartSimple', ({ variables }) =>
+        HttpResponse.json(createCartSimple(variables)),
+      ),
+    );
+
+    renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    const skuInputs = screen.getAllByLabelText(/SKU#/);
+    const qtyInputs = screen.getAllByLabelText(/Qty/);
+
+    await userEvent.type(skuInputs[0], 'valid-sku'); // ensure sku cleaning is case-insensitive
+    await userEvent.type(qtyInputs[0], '2');
+
+    const addButton = screen.getByRole('button', { name: /Add products to cart/i });
+    await userEvent.click(addButton);
+
+    expect(await screen.findByText('Products were added to cart')).toBeInTheDocument();
+
+    expect(skuInputs[0]).toHaveValue('');
+    expect(qtyInputs[0]).toHaveValue(null);
+  });
+
+  it('adds a product to the cart successfully', async () => {
+    const getRecentlyOrderedProducts = vi.fn();
+    const searchProducts = vi.fn<(...arg: unknown[]) => SearchProductsResponse>();
+    const getCart = vi.fn().mockReturnValue(buildGetCartWith({ data: { site: { cart: null } } }));
+
+    const createCartSimple = vi.fn();
+
+    const laughCanister = buildRecentlyOrderedProductNodeWith({
+      node: {
+        productName: 'Laugh Canister',
+        basePrice: '122.33',
+        optionList: [
+          buildRecentlyOrderedProductNodeOptionListWith({ product_option_id: 111, value: '8' }),
+        ],
+        optionSelections: [
+          {
+            option_id: 111,
+            value_id: 8,
+          },
+        ],
+      },
+    });
+
+    when(getRecentlyOrderedProducts)
+      .calledWith(stringContainingAll('first: 12', 'offset: 0', 'orderBy: "-lastOrderedAt"'))
+      .thenReturn(
+        buildGetRecentlyOrderedProductsWith({
+          data: { orderedProducts: { totalCount: 1, edges: [laughCanister] } },
+        }),
+      );
+
+    when(searchProducts)
+      .calledWith(stringContainingAll(`productIds: [${laughCanister.node.productId}]`))
+      .thenReturn({
+        data: {
+          productsSearch: [
+            buildSearchProductWith({
+              id: Number(laughCanister.node.productId),
+              name: laughCanister.node.productName,
+              sku: laughCanister.node.sku,
+              orderQuantityMaximum: 10,
+              orderQuantityMinimum: 5,
+              inventoryLevel: 100,
+              variants: [
+                buildVariantWith({
+                  product_id: Number(laughCanister.node.productId),
+                  variant_id: Number(laughCanister.node.variantId),
+                  sku: laughCanister.node.variantSku,
+                  purchasing_disabled: false,
+                }),
+              ],
+            }),
+          ],
+        },
+      });
+
+    when(createCartSimple)
+      .calledWith({
+        createCartInput: {
+          lineItems: [
+            {
+              productEntityId: Number(laughCanister.node.productId),
+              variantEntityId: Number(laughCanister.node.variantId),
+              quantity: 1,
+              selectedOptions: {
+                multipleChoices: [{ optionEntityId: 111, optionValueEntityId: 8 }],
+                textFields: [],
+              },
+            },
+          ],
+        },
+      })
+      .thenReturn({
+        data: {
+          cart: {
+            createCart: {
+              cart: {
+                entityId: '12345',
+              },
+            },
+          },
+        },
+      });
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', ({ query }) =>
+        HttpResponse.json(getRecentlyOrderedProducts(query)),
+      ),
+      graphql.query('SearchProducts', ({ query }) => HttpResponse.json(searchProducts(query))),
+      graphql.query('getCart', () => HttpResponse.json(getCart())),
+      graphql.mutation('createCartSimple', ({ variables }) =>
+        HttpResponse.json(createCartSimple(variables)),
+      ),
+    );
+
+    renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+
+    const row = await screen.findByRole('row', { name: /Laugh Canister/ });
+
+    await userEvent.click(within(row).getByRole('checkbox'));
+
+    const addButton = screen.getByRole('button', { name: 'Add selected to' });
+
+    await userEvent.click(addButton);
+
+    await userEvent.click(screen.getByRole('menuitem', { name: /Add selected to cart/ }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Products were added to cart')).toBeInTheDocument();
+    });
+
+    expect(Cookies.get('cartId')).toBe('12345');
+    expect(window.b2b.callbacks.dispatchEvent).toHaveBeenCalledWith('on-cart-created', {
+      cartId: '12345',
+    });
+  });
+
+  describe('CSV bulk upload with backend validation', () => {
+    it('handles successful CSV upload and adds products to cart', async () => {
+      const getRecentlyOrderedProducts = vi.fn().mockReturnValue({
+        data: { orderedProducts: { totalCount: 0, edges: [] } },
+      });
+
+      const searchProducts = vi.fn().mockReturnValue({ data: { productsSearch: [] } });
+
+      const csvUpload = vi.fn().mockReturnValue({
+        data: {
+          productUpload: buildCSVUploadWith({
+            result: {
+              validProduct: [
+                buildCSVProductWith({
+                  products: {
+                    productId: '1',
+                    variantId: 2,
+                    productName: 'Test Product 1',
+                    variantSku: 'TEST-SKU-123',
+                    option: [],
+                  },
+                  qty: '2',
+                  row: 1,
+                  sku: 'TEST-SKU-123',
+                }),
+              ],
+              errorProduct: [],
+              stockErrorFile: '',
+              stockErrorSkus: [],
+            },
+          }),
+        },
+      });
+
+      const productsValidation = vi.fn();
+
+      when(productsValidation)
+        .calledWith({
+          products: expect.arrayContaining([
+            expect.objectContaining({
+              productId: 1,
+              variantId: 2,
+              quantity: 2,
+            }),
+          ]),
+        })
+        .thenReturn({
+          data: {
+            validateProducts: {
+              isValid: true,
+              products: [
+                {
+                  errorCode: 'SUCCESS',
+                  responseType: 'SUCCESS',
+                  message: '',
+                  product: {
+                    productId: 1,
+                    variantId: 2,
+                    quantity: 2,
+                    sku: 'TEST-SKU-123',
+                    availableToSell: 100,
+                    unlimitedBackorder: false,
+                  },
+                },
+              ],
+            },
+          },
+        });
+
+      const getCart = vi.fn().mockReturnValue(buildGetCartWith({}));
+      const createCartSimple = vi.fn().mockReturnValue({
+        data: { cart: { createCart: { cart: { entityId: '12345' } } } },
+      });
+
+      server.use(
+        graphql.query('RecentlyOrderedProducts', () =>
+          HttpResponse.json(getRecentlyOrderedProducts()),
+        ),
+        graphql.query('SearchProducts', () => HttpResponse.json(searchProducts())),
+        graphql.mutation('ProductUpload', () => HttpResponse.json(csvUpload())),
+        graphql.query('getCart', () => HttpResponse.json(getCart())),
+        graphql.query('ValidateProducts', ({ variables }) =>
+          HttpResponse.json(productsValidation(variables)),
+        ),
+        graphql.mutation('createCartSimple', () => HttpResponse.json(createCartSimple())),
+        graphql.mutation('addCartLineItemsTwo', () =>
+          HttpResponse.json(
+            buildAddCartLineItemsResponseWith({
+              data: {
+                cart: {
+                  addCartLineItems: {
+                    cart: {
+                      entityId: '12345',
+                    },
+                  },
+                },
+              },
+            }),
+          ),
+        ),
+      );
+
+      renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+
+      await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+      const bulkUploadButton = screen.getByRole('button', { name: /bulk upload csv/i });
+      await userEvent.click(bulkUploadButton);
+
+      const dialog = await screen.findByRole('dialog', { name: /bulk upload/i });
+
+      const csvContent = 'variant_sku,qty\nTEST-SKU-123,2';
+      const file = new File([csvContent], 'products.csv', { type: 'text/csv' });
+
+      const dropzoneInput = dialog.querySelector<HTMLInputElement>('input[type="file"]');
+      if (!dropzoneInput) {
+        throw new Error('File input not found');
+      }
+
+      await userEvent.upload(dropzoneInput, [file]);
+
+      await waitFor(() => {
+        expect(csvUpload).toHaveBeenCalled();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('TEST-SKU-123')).toBeInTheDocument();
+      });
+
+      const addToCartButton = await screen.findByRole('button', {
+        name: /Add 1 products to cart/i,
+      });
+      await userEvent.click(addToCartButton);
+
+      await waitFor(
+        () => {
+          expect(screen.getByText(/Products were added to cart/i)).toBeInTheDocument();
+        },
+        { timeout: 8000 },
+      );
+    });
+
+    it(
+      'handles successful CSV upload and creates new cart when no existing cart',
+      { timeout: 10000 },
+      async () => {
+        const getRecentlyOrderedProducts = vi.fn().mockReturnValue({
+          data: { orderedProducts: { totalCount: 0, edges: [] } },
+        });
+
+        const searchProducts = vi.fn().mockReturnValue({ data: { productsSearch: [] } });
+
+        const csvUpload = vi.fn().mockReturnValue({
+          data: {
+            productUpload: buildCSVUploadWith({
+              result: {
+                validProduct: [
+                  buildCSVProductWith({
+                    products: {
+                      productId: '1',
+                      variantId: 2,
+                      productName: 'New Cart Product',
+                      variantSku: 'NEW-CART-SKU-123',
+                    },
+                    qty: '3',
+                    row: 1,
+                    sku: 'NEW-CART-SKU-123',
+                  }),
+                ],
+                errorProduct: [],
+                stockErrorFile: '',
+                stockErrorSkus: [],
+              },
+            }),
+          },
+        });
+
+        const getCart = vi.fn().mockReturnValue({
+          data: { site: { cart: null } },
+        });
+
+        const createCartSimple = vi.fn().mockReturnValue({
+          data: { cart: { createCart: { cart: { entityId: '67890' } } } },
+        });
+
+        const addCartLineItemsTwo = vi.fn().mockReturnValue(
+          buildAddCartLineItemsResponseWith({
+            data: {
+              cart: {
+                addCartLineItems: {
+                  cart: { entityId: '67890' },
+                },
+              },
+            },
+            errors: undefined,
+          }),
+        );
+
+        const productsValidation = vi.fn();
+
+        when(productsValidation)
+          .calledWith({
+            products: expect.arrayContaining([
+              expect.objectContaining({
+                productId: 1,
+                variantId: 2,
+                quantity: 3,
+              }),
+            ]),
+          })
+          .thenReturn({
+            data: {
+              validateProducts: {
+                isValid: true,
+                products: [
+                  {
+                    errorCode: 'SUCCESS',
+                    responseType: 'SUCCESS',
+                    message: '',
+                    product: {
+                      productId: 1,
+                      variantId: 2,
+                      sku: 'NEW-CART-SKU-123',
+                      availableToSell: 100,
+                      unlimitedBackorder: false,
+                    },
+                  },
+                ],
+              },
+            },
+          });
+        server.use(
+          graphql.query('RecentlyOrderedProducts', () =>
+            HttpResponse.json(getRecentlyOrderedProducts()),
+          ),
+          graphql.query('SearchProducts', () => HttpResponse.json(searchProducts())),
+          graphql.mutation('ProductUpload', () => HttpResponse.json(csvUpload())),
+          graphql.query('getCart', () => HttpResponse.json(getCart())),
+          graphql.query('ValidateProducts', ({ variables }) =>
+            HttpResponse.json(productsValidation(variables)),
+          ),
+          graphql.mutation('createCartSimple', () => HttpResponse.json(createCartSimple())),
+          graphql.mutation('addCartLineItemsTwo', () => HttpResponse.json(addCartLineItemsTwo())),
+        );
+
+        renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+
+        await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+        const bulkUploadButton = screen.getByRole('button', { name: /bulk upload csv/i });
+        await userEvent.click(bulkUploadButton);
+
+        const dialog = await screen.findByRole('dialog', { name: /bulk upload/i });
+
+        const csvContent = 'variant_sku,qty\nNEW-CART-SKU-123,3';
+        const file = new File([csvContent], 'new-cart.csv', { type: 'text/csv' });
+
+        const dropzoneInput = dialog.querySelector<HTMLInputElement>('input[type="file"]');
+        if (!dropzoneInput) {
+          throw new Error('File input not found');
+        }
+
+        await userEvent.upload(dropzoneInput, [file]);
+
+        await waitFor(() => {
+          expect(screen.getByText('NEW-CART-SKU-123')).toBeInTheDocument();
+        });
+
+        const addToCartButton = await screen.findByRole('button', {
+          name: /Add 1 products to cart/i,
+        });
+        await userEvent.click(addToCartButton);
+
+        await waitFor(
+          () => {
+            expect(screen.getByText(/Products were added to cart/i)).toBeInTheDocument();
+          },
+          { timeout: 8000 },
+        );
+
+        await waitFor(
+          () => {
+            expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+          },
+          { timeout: 8000 },
+        );
+
+        expect(createCartSimple).toHaveBeenCalled();
+      },
+    );
+
+    it('displays error when new cart creation fails', async () => {
+      const getRecentlyOrderedProducts = vi.fn().mockReturnValue({
+        data: { orderedProducts: { totalCount: 0, edges: [] } },
+      });
+
+      const searchProducts = vi.fn().mockReturnValue({ data: { productsSearch: [] } });
+
+      const csvUpload = vi.fn().mockReturnValue({
+        data: {
+          productUpload: buildCSVUploadWith({
+            result: {
+              validProduct: [
+                buildCSVProductWith({
+                  products: {
+                    productName: 'Failed Cart Product',
+                    variantSku: 'FAIL-CART-SKU-123',
+                    productId: '1',
+                    variantId: 2,
+                  },
+                  qty: '2',
+                  row: 1,
+                  sku: 'FAIL-CART-SKU-123',
+                }),
+              ],
+              errorProduct: [],
+              stockErrorFile: '',
+              stockErrorSkus: [],
+            },
+          }),
+        },
+      });
+
+      // Mock getCart to return null (no existing cart)
+      const getCart = vi.fn().mockReturnValue({
+        data: { site: { cart: null } },
+      });
+
+      const createCartSimple = vi.fn().mockReturnValue({
+        data: null,
+        errors: [{ message: 'Failed to create cart due to server error' }],
+      });
+
+      const productsValidation = vi.fn().mockReturnValue({
+        data: {
+          validateProducts: {
+            isValid: true,
+            products: [
+              {
+                errorCode: 'SUCCESS',
+                responseType: 'SUCCESS',
+                message: '',
+                product: {
+                  productId: 1,
+                  variantId: 2,
+                  sku: 'FAIL-CART-SKU-123',
+                  availableToSell: 100,
+                  unlimitedBackorder: false,
+                },
+              },
+            ],
+          },
+        },
+      });
+      server.use(
+        graphql.query('RecentlyOrderedProducts', () =>
+          HttpResponse.json(getRecentlyOrderedProducts()),
+        ),
+        graphql.query('SearchProducts', () => HttpResponse.json(searchProducts())),
+        graphql.mutation('ProductUpload', () => HttpResponse.json(csvUpload())),
+        graphql.query('getCart', () => HttpResponse.json(getCart())),
+        graphql.query('ValidateProducts', ({ variables }) =>
+          HttpResponse.json(productsValidation(variables)),
+        ),
+        graphql.mutation('createCartSimple', () => HttpResponse.json(createCartSimple())),
+      );
+
+      renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+
+      await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+      const bulkUploadButton = screen.getByRole('button', { name: /bulk upload csv/i });
+      await userEvent.click(bulkUploadButton);
+
+      const dialog = await screen.findByRole('dialog', { name: /bulk upload/i });
+
+      const csvContent = 'variant_sku,qty\nFAIL-CART-SKU-123,2';
+      const file = new File([csvContent], 'fail-cart.csv', { type: 'text/csv' });
+
+      const dropzoneInput = dialog.querySelector<HTMLInputElement>('input[type="file"]');
+      if (!dropzoneInput) {
+        throw new Error('File input not found');
+      }
+
+      await userEvent.upload(dropzoneInput, [file]);
+
+      await waitFor(() => {
+        expect(screen.getByText('FAIL-CART-SKU-123')).toBeInTheDocument();
+      });
+
+      const addToCartButton = await screen.findByRole('button', {
+        name: /Add 1 products to cart/i,
+      });
+      await userEvent.click(addToCartButton);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Failed to create cart due to server error/i)).toBeInTheDocument();
+      });
+
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    it('displays CSV upload errors in the modal when products have validation errors', async () => {
+      const getRecentlyOrderedProducts = vi.fn().mockReturnValue({
+        data: { orderedProducts: { totalCount: 0, edges: [] } },
+      });
+
+      const searchProducts = vi.fn().mockReturnValue({ data: { productsSearch: [] } });
+
+      const csvUpload = vi.fn().mockReturnValue({
+        data: {
+          productUpload: buildCSVUploadWith({
+            result: {
+              validProduct: [
+                buildCSVProductWith({
+                  products: {
+                    productName: 'Valid Product',
+                    variantSku: 'VALID-SKU-123',
+                  },
+                  qty: '1',
+                  row: 1,
+                  sku: 'VALID-SKU-123',
+                }),
+              ],
+              errorProduct: [
+                buildCSVErrorProductWith({
+                  products: {
+                    name: 'Invalid Product',
+                    variantSku: 'INVALID-SKU-456',
+                  },
+                  qty: '1',
+                  error: 'Product not found',
+                  sku: 'INVALID-SKU-456',
+                  row: 2,
+                }),
+              ],
+              stockErrorFile: 'https://example.com/errors.csv',
+              stockErrorSkus: ['INVALID-SKU-456'],
+            },
+          }),
+        },
+      });
+
+      const productsValidation = vi.fn();
+
+      when(productsValidation)
+        .calledWith({
+          products: expect.arrayContaining([
+            expect.objectContaining({
+              productId: 1,
+              variantId: 2,
+              quantity: 1,
+            }),
+          ]),
+        })
+        .thenReturn({
+          data: {
+            validateProducts: {
+              isValid: true,
+              products: [
+                {
+                  errorCode: 'OOS',
+                  responseType: 'ERROR',
+                  message: '',
+                  product: {
+                    productId: 1,
+                    variantId: 2,
+                    quantity: 1,
+                    sku: 'INVALID-SKU-456',
+                    availableToSell: 0,
+                    unlimitedBackorder: false,
+                  },
+                },
+              ],
+            },
+          },
+        });
+
+      server.use(
+        graphql.query('RecentlyOrderedProducts', () =>
+          HttpResponse.json(getRecentlyOrderedProducts()),
+        ),
+        graphql.query('SearchProducts', () => HttpResponse.json(searchProducts())),
+        graphql.mutation('ProductUpload', () => HttpResponse.json(csvUpload())),
+        graphql.query('getCart', () => HttpResponse.json(buildGetCartWith({}))),
+        graphql.query('ValidateProducts', ({ variables }) =>
+          HttpResponse.json(productsValidation(variables)),
+        ),
+        graphql.mutation('addCartLineItemsTwo', () =>
+          HttpResponse.json(
+            buildAddCartLineItemsResponseWith({
+              data: {
+                cart: {
+                  addCartLineItems: {
+                    cart: {
+                      entityId: '12345',
+                    },
+                  },
+                },
+              },
+            }),
+          ),
+        ),
+      );
+
+      renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+
+      await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+      const bulkUploadButton = screen.getByRole('button', { name: /bulk upload csv/i });
+      await userEvent.click(bulkUploadButton);
+
+      const file = new File(['variant_sku,qty\nVALID-SKU-123,1\nINVALID-SKU-456,1'], 'test.csv', {
+        type: 'text/csv',
+      });
+      const uploadButton = screen.getByRole('button', { name: /upload file/i });
+      await userEvent.click(uploadButton);
+
+      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+      expect(fileInput).toBeTruthy();
+
+      Object.defineProperty(fileInput, 'files', {
+        value: [file],
+        writable: false,
+      });
+
+      fireEvent.change(fileInput);
+
+      await waitFor(() => {
+        expect(screen.getByText('Valid (1)')).toBeInTheDocument();
+      });
+
+      expect(screen.getByText('Product not found')).toBeInTheDocument();
+
+      expect(screen.getByText('Download error results')).toBeInTheDocument();
+
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    it('displays out of stock error when cart API returns stock error', async () => {
+      const getRecentlyOrderedProducts = vi.fn().mockReturnValue({
+        data: { orderedProducts: { totalCount: 0, edges: [] } },
+      });
+
+      const searchProducts = vi.fn().mockReturnValue({ data: { productsSearch: [] } });
+
+      const csvUpload = vi.fn().mockReturnValue({
+        data: {
+          productUpload: buildCSVUploadWith({
+            result: {
+              validProduct: [
+                buildCSVProductWith({
+                  products: {
+                    productName: 'Out of Stock Product',
+                    variantSku: 'OOS-SKU-123',
+                    productId: '1',
+                    variantId: 2,
+                  },
+                  qty: '5',
+                  row: 1,
+                  sku: 'OOS-SKU-123',
+                }),
+              ],
+              errorProduct: [],
+              stockErrorFile: 'https://example.com/stock-errors.csv',
+              stockErrorSkus: [],
+            },
+          }),
+        },
+      });
+
+      const getCart = vi.fn().mockReturnValue(buildGetCartWith({}));
+
+      const addCartLineItemsTwo = vi.fn().mockReturnValue({
+        data: {
+          cart: {
+            addCartLineItems: null,
+          },
+        },
+        errors: [
+          {
+            message:
+              "Not enough stock: Item (OOS-SKU-123) out of stock is out of stock and can't be added to the cart.",
+            path: ['cart', 'addCartLineItems'],
+            locations: [{ line: 3, column: 7 }],
+          },
+        ],
+      });
+
+      const productsValidation = vi.fn();
+
+      when(productsValidation)
+        .calledWith({
+          products: expect.arrayContaining([
+            expect.objectContaining({
+              productId: 1,
+              variantId: 2,
+              quantity: 5,
+            }),
+          ]),
+        })
+        .thenReturn({
+          data: {
+            validateProducts: {
+              isValid: true,
+              products: [
+                {
+                  errorCode: 'OOS',
+                  responseType: 'ERROR',
+                  message: '',
+                  product: {
+                    productId: 1,
+                    variantId: 2,
+                    sku: 'OOS-SKU-123',
+                    availableToSell: 0,
+                    unlimitedBackorder: false,
+                  },
+                },
+              ],
+            },
+          },
+        });
+
+      server.use(
+        graphql.query('RecentlyOrderedProducts', () =>
+          HttpResponse.json(getRecentlyOrderedProducts()),
+        ),
+        graphql.query('SearchProducts', () => HttpResponse.json(searchProducts())),
+        graphql.mutation('ProductUpload', () => HttpResponse.json(csvUpload())),
+        graphql.query('getCart', () => HttpResponse.json(getCart())),
+        graphql.query('ValidateProducts', ({ variables }) =>
+          HttpResponse.json(productsValidation(variables)),
+        ),
+        graphql.mutation('createCartSimple', () =>
+          HttpResponse.json({
+            data: { cart: { createCart: { cart: { entityId: '12345' } } } },
+          }),
+        ),
+        graphql.mutation('addCartLineItemsTwo', () => HttpResponse.json(addCartLineItemsTwo())),
+      );
+
+      renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+
+      await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+      const bulkUploadButton = screen.getByRole('button', { name: /bulk upload csv/i });
+      await userEvent.click(bulkUploadButton);
+
+      const file = new File(['variant_sku,qty\nOOS-SKU-123,5'], 'test.csv', { type: 'text/csv' });
+      const uploadButton = screen.getByRole('button', { name: /upload file/i });
+      await userEvent.click(uploadButton);
+
+      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+      expect(fileInput).toBeTruthy();
+
+      Object.defineProperty(fileInput, 'files', {
+        value: [file],
+        writable: false,
+      });
+
+      fireEvent.change(fileInput);
+
+      await waitFor(() => {
+        expect(screen.getByText('OOS-SKU-123')).toBeInTheDocument();
+      });
+
+      const addToCartButton = await screen.findByRole('button', {
+        name: /Add 1 products to cart/i,
+      });
+      await userEvent.click(addToCartButton);
+
+      await waitFor(() => {
+        expect(screen.getByText(/out of stock/i)).toBeInTheDocument();
+      });
+
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    it('displays quantity limit error when cart API returns min quantity error', async () => {
+      const getRecentlyOrderedProducts = vi.fn().mockReturnValue({
+        data: { orderedProducts: { totalCount: 0, edges: [] } },
+      });
+
+      const searchProducts = vi.fn().mockReturnValue({ data: { productsSearch: [] } });
+
+      const csvUpload = vi.fn().mockReturnValue({
+        data: {
+          productUpload: buildCSVUploadWith({
+            result: {
+              validProduct: [
+                buildCSVProductWith({
+                  products: {
+                    productName: 'Min Quantity Product',
+                    variantSku: 'MIN-QTY-SKU-123',
+                    productId: '1',
+                    variantId: 2,
+                  },
+                  qty: '1',
+                  row: 1,
+                  sku: 'MIN-QTY-SKU-123',
+                }),
+              ],
+              errorProduct: [],
+              stockErrorFile: '',
+              stockErrorSkus: [],
+            },
+          }),
+        },
+      });
+
+      const getCart = vi.fn().mockReturnValue(buildGetCartWith({}));
+
+      const addCartLineItemsTwo = vi.fn().mockReturnValue({
+        data: {
+          cart: {
+            addCartLineItems: null,
+          },
+        },
+        errors: [
+          {
+            message: 'You need to purchase a minimum of 5 of the MIN-QTY-SKU-123 per order.',
+            path: ['cart', 'addCartLineItems'],
+            locations: [{ line: 3, column: 7 }],
+          },
+        ],
+      });
+
+      const productsValidation = vi.fn().mockReturnValue({
+        data: {
+          validateProducts: {
+            isValid: true,
+            products: [
+              {
+                errorCode: 'SUCCESS',
+                responseType: 'SUCCESS',
+                message: '',
+                product: {
+                  productId: 1,
+                  variantId: 2,
+                  quantity: 1,
+                  sku: 'MIN-QTY-SKU-123',
+                  availableToSell: 100,
+                  unlimitedBackorder: false,
+                },
+              },
+            ],
+          },
+        },
+      });
+      server.use(
+        graphql.query('RecentlyOrderedProducts', () =>
+          HttpResponse.json(getRecentlyOrderedProducts()),
+        ),
+        graphql.query('SearchProducts', () => HttpResponse.json(searchProducts())),
+        graphql.mutation('ProductUpload', () => HttpResponse.json(csvUpload())),
+        graphql.query('getCart', () => HttpResponse.json(getCart())),
+        graphql.query('ValidateProducts', ({ variables }) =>
+          HttpResponse.json(productsValidation(variables)),
+        ),
+        graphql.mutation('createCartSimple', () =>
+          HttpResponse.json({
+            data: { cart: { createCart: { cart: { entityId: '12345' } } } },
+          }),
+        ),
+        graphql.mutation('addCartLineItemsTwo', () => HttpResponse.json(addCartLineItemsTwo())),
+      );
+
+      renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+
+      await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+      const bulkUploadButton = screen.getByRole('button', { name: /bulk upload csv/i });
+      await userEvent.click(bulkUploadButton);
+
+      const file = new File(['variant_sku,qty\nMIN-QTY-SKU-123,1'], 'test.csv', {
+        type: 'text/csv',
+      });
+      const uploadButton = screen.getByRole('button', { name: /upload file/i });
+      await userEvent.click(uploadButton);
+
+      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+      expect(fileInput).toBeTruthy();
+
+      Object.defineProperty(fileInput, 'files', {
+        value: [file],
+        writable: false,
+      });
+
+      fireEvent.change(fileInput);
+
+      await waitFor(() => {
+        expect(screen.getByText('MIN-QTY-SKU-123')).toBeInTheDocument();
+      });
+
+      const addToCartButton = await screen.findByRole('button', {
+        name: /Add 1 products to cart/i,
+      });
+      await userEvent.click(addToCartButton);
+
+      await waitFor(() => {
+        expect(
+          screen.getByText('You need to purchase a minimum of 5 of the MIN-QTY-SKU-123 per order.'),
+        ).toBeInTheDocument();
+      });
+
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    it('displays generic error message for other cart API errors', async () => {
+      const getRecentlyOrderedProducts = vi.fn().mockReturnValue({
+        data: { orderedProducts: { totalCount: 0, edges: [] } },
+      });
+
+      const searchProducts = vi.fn().mockReturnValue({ data: { productsSearch: [] } });
+
+      const csvUpload = vi.fn().mockReturnValue({
+        data: {
+          productUpload: buildCSVUploadWith({
+            result: {
+              validProduct: [
+                buildCSVProductWith({
+                  products: {
+                    productName: 'Error Product',
+                    variantSku: 'ERROR-SKU-123',
+                    productId: '1',
+                    variantId: 2,
+                  },
+                  qty: '1',
+                  row: 1,
+                  sku: 'ERROR-SKU-123',
+                }),
+              ],
+              errorProduct: [],
+              stockErrorFile: 'https://example.com/errors.csv',
+              stockErrorSkus: [],
+            },
+          }),
+        },
+      });
+
+      const getCart = vi.fn().mockReturnValue(buildGetCartWith({}));
+
+      const addCartLineItemsTwo = vi.fn().mockReturnValue({
+        data: {
+          cart: {
+            addCartLineItems: null,
+          },
+        },
+        errors: [
+          {
+            message: 'Product is discontinued and cannot be purchased',
+            path: ['cart', 'addCartLineItems'],
+            locations: [{ line: 3, column: 7 }],
+          },
+        ],
+      });
+
+      // return a successful validation response
+      // to test the cart api error message
+      const productsValidation = vi.fn().mockReturnValue({
+        data: {
+          validateProducts: {
+            isValid: true,
+            products: [
+              {
+                errorCode: 'SUCCESS',
+                responseType: 'SUCCESS',
+                message: '',
+                product: {
+                  productId: 1,
+                  variantId: 2,
+                  quantity: 1,
+                  sku: 'ERROR-SKU-123',
+                  availableToSell: 100,
+                  unlimitedBackorder: false,
+                },
+              },
+            ],
+          },
+        },
+      });
+
+      server.use(
+        graphql.query('RecentlyOrderedProducts', () =>
+          HttpResponse.json(getRecentlyOrderedProducts()),
+        ),
+        graphql.query('SearchProducts', () => HttpResponse.json(searchProducts())),
+        graphql.mutation('ProductUpload', () => HttpResponse.json(csvUpload())),
+        graphql.query('getCart', () => HttpResponse.json(getCart())),
+        graphql.query('ValidateProducts', ({ variables }) =>
+          HttpResponse.json(productsValidation(variables)),
+        ),
+        graphql.mutation('createCartSimple', () =>
+          HttpResponse.json({
+            data: { cart: { createCart: { cart: { entityId: '12345' } } } },
+          }),
+        ),
+        graphql.mutation('addCartLineItemsTwo', () => HttpResponse.json(addCartLineItemsTwo())),
+      );
+
+      renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+
+      await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+      const bulkUploadButton = screen.getByRole('button', { name: /bulk upload csv/i });
+      await userEvent.click(bulkUploadButton);
+
+      const file = new File(['variant_sku,qty\nERROR-SKU-123,1'], 'test.csv', { type: 'text/csv' });
+      const uploadButton = screen.getByRole('button', { name: /upload file/i });
+      await userEvent.click(uploadButton);
+
+      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+      expect(fileInput).toBeTruthy();
+
+      Object.defineProperty(fileInput, 'files', {
+        value: [file],
+        writable: false,
+      });
+
+      fireEvent.change(fileInput);
+
+      await waitFor(() => {
+        expect(screen.getByText('ERROR-SKU-123')).toBeInTheDocument();
+      });
+
+      const addToCartButton = await screen.findByRole('button', {
+        name: /Add 1 products to cart/i,
+      });
+      await userEvent.click(addToCartButton);
+
+      await waitFor(() => {
+        expect(
+          screen.getByText('Product is discontinued and cannot be purchased'),
+        ).toBeInTheDocument();
+      });
+    });
+
+    it('handles successful CSV upload when pass_with_modifiers feature flag is enabled', async () => {
+      const preloadedStateWithBothFlags = {
+        ...backendValidationEnabledState,
+        global: buildGlobalStateWith({
+          backorderEnabled,
+          featureFlags: {
+            'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
+            'B2B-3978.pass_with_modifiers_to_product_upload': true,
+          },
+        }),
+      };
+
+      const getRecentlyOrderedProducts = vi.fn().mockReturnValue({
+        data: { orderedProducts: { totalCount: 0, edges: [] } },
+      });
+
+      const searchProducts = vi.fn().mockReturnValue({ data: { productsSearch: [] } });
+
+      const csvUpload = vi.fn().mockReturnValue({
+        data: {
+          productUpload: buildCSVUploadWith({
+            result: {
+              validProduct: [
+                buildCSVProductWith({
+                  products: {
+                    productName: 'Test Product With Modifiers',
+                    variantSku: 'MODIFIER-SKU-123',
+                    productId: '1',
+                    variantId: 2,
+                  },
+                  qty: '3',
+                  row: 1,
+                  sku: 'MODIFIER-SKU-123',
+                }),
+              ],
+              errorProduct: [],
+              stockErrorFile: '',
+              stockErrorSkus: [],
+            },
+          }),
+        },
+      });
+
+      const getCart = vi.fn().mockReturnValue(buildGetCartWith({}));
+      const createCartSimple = vi.fn().mockReturnValue({
+        data: { cart: { createCart: { cart: { entityId: '12345' } } } },
+      });
+      const productsValidation = vi.fn().mockReturnValue({
+        data: {
+          validateProducts: {
+            isValid: true,
+            products: [
+              {
+                errorCode: 'SUCCESS',
+                responseType: 'SUCCESS',
+                message: '',
+                product: {
+                  productId: 1,
+                  variantId: 2,
+                  quantity: 3,
+                  sku: 'MODIFIER-SKU-123',
+                  availableToSell: 100,
+                  unlimitedBackorder: false,
+                },
+              },
+            ],
+          },
+        },
+      });
+
+      const productUpload = vi.fn();
+      when(productUpload)
+        .calledWith(expect.stringContaining('withModifiers: true'))
+        .thenReturn(csvUpload());
+
+      server.use(
+        graphql.query('RecentlyOrderedProducts', () =>
+          HttpResponse.json(getRecentlyOrderedProducts()),
+        ),
+        graphql.query('SearchProducts', () => HttpResponse.json(searchProducts())),
+        graphql.mutation('ProductUpload', ({ query }) => HttpResponse.json(productUpload(query))),
+        graphql.query('getCart', () => HttpResponse.json(getCart())),
+        graphql.query('ValidateProducts', ({ variables }) =>
+          HttpResponse.json(productsValidation(variables)),
+        ),
+        graphql.mutation('createCartSimple', () => HttpResponse.json(createCartSimple())),
+        graphql.mutation('addCartLineItemsTwo', () =>
+          HttpResponse.json(
+            buildAddCartLineItemsResponseWith({
+              data: {
+                cart: {
+                  addCartLineItems: {
+                    cart: {
+                      entityId: '12345',
+                    },
+                  },
+                },
+              },
+            }),
+          ),
+        ),
+      );
+
+      renderWithProviders(<QuickOrder />, { preloadedState: preloadedStateWithBothFlags });
+
+      await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+      const bulkUploadButton = screen.getByRole('button', { name: /bulk upload csv/i });
+      await userEvent.click(bulkUploadButton);
+
+      const dialog = await screen.findByRole('dialog', { name: /bulk upload/i });
+
+      const csvContent = 'variant_sku,qty\nMODIFIER-SKU-123,3';
+      const file = new File([csvContent], 'products.csv', { type: 'text/csv' });
+
+      const dropzoneInput = dialog.querySelector<HTMLInputElement>('input[type="file"]');
+      if (!dropzoneInput) {
+        throw new Error('File input not found');
+      }
+
+      await userEvent.upload(dropzoneInput, [file]);
+
+      await waitFor(() => {
+        expect(csvUpload).toHaveBeenCalled();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('MODIFIER-SKU-123')).toBeInTheDocument();
+      });
+
+      const addToCartButton = await screen.findByRole('button', {
+        name: /Add 1 products to cart/i,
+      });
+      await userEvent.click(addToCartButton);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Products were added to cart/i)).toBeInTheDocument();
+      });
+    });
   });
 });

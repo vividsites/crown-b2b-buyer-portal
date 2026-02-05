@@ -1,33 +1,35 @@
-import { lazy, useContext, useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
 import { HashRouter } from 'react-router-dom';
 
-import { usePageMask } from '@/components';
+import B3GlobalTip from '@/components/B3GlobalTip';
 import GlobalDialog from '@/components/extraTip/GlobalDialog';
 import B3RenderRouter from '@/components/layout/B3RenderRouter';
-import { useB3AppOpen, useSetOpen } from '@/hooks';
+import { usePageMask } from '@/components/loading';
+import B3CompanyHierarchyExternalButton from '@/components/outSideComponents/B3CompanyHierarchyExternalButton';
+import B3HoverButton from '@/components/outSideComponents/B3HoverButton';
+import B3MasqueradeGlobalTip from '@/components/outSideComponents/B3MasqueradeGlobalTip';
+import { ThemeFrame } from '@/components/ThemeFrame';
+import HeadlessController from '@/HeadlessController';
 import useDomHooks from '@/hooks/dom/useDomHooks';
+import { useB3AppOpen } from '@/hooks/useB3AppOpen';
+import { useSetOpen } from '@/hooks/useSetOpen';
 import { CustomStyleContext } from '@/shared/customStyleButton';
 import { GlobalContext } from '@/shared/global';
 import { gotoAllowedAppPage } from '@/shared/routes';
 import { setChannelStoreType } from '@/shared/service/b2b';
-import {
-  b2bJumpPath,
-  getQuoteEnabled,
-  handleHideRegisterPage,
-  hideStorefrontElement,
-  openPageByClick,
-  removeBCMenus,
-} from '@/utils';
+import { openPageByClick, removeBCMenus } from '@/utils/b3AccountItem';
+import { handleHideRegisterPage } from '@/utils/b3HideRegister';
+import { hideStorefrontElement } from '@/utils/b3HideStorefrontElement';
+import { getQuoteEnabled } from '@/utils/b3Init';
 
+import { b2bJumpPath } from './utils/b3CheckPermissions/b2bPermissionPath';
 import clearInvoiceCart from './utils/b3ClearCart';
+import setDayjsLocale from './utils/b3DateFormat/setDayjsLocale';
 import b2bLogger from './utils/b3Logger';
 import { isUserGotoLogin } from './utils/b3logout';
+import { isCompanyError } from './utils/companyUtils';
 import { getCompanyInfo, getCurrentCustomerInfo, loginInfo } from './utils/loginInfo';
-import {
-  getStoreTaxZoneRates,
-  getTemPlateConfig,
-  setStorefrontConfig,
-} from './utils/storefrontConfig';
+import { getGlobalStoreTax, getStoreConfigs, setStorefrontConfig } from './utils/storefrontConfig';
 import { CHECKOUT_URL, PATH_ROUTES } from './constants';
 import {
   isB2BUserSelector,
@@ -38,28 +40,12 @@ import {
   useAppSelector,
 } from './store';
 
-const B3GlobalTip = lazy(() => import('@/components/B3GlobalTip'));
-
-const B3HoverButton = lazy(() => import('@/components/outSideComponents/B3HoverButton'));
-
-const B3MasqueradeGlobalTip = lazy(
-  () => import('@/components/outSideComponents/B3MasqueradeGlobalTip'),
-);
-
-const B3CompanyHierarchyExternalButton = lazy(
-  () => import('@/components/outSideComponents/B3CompanyHierarchyExternalButton'),
-);
-
-const HeadlessController = lazy(() => import('@/HeadlessController'));
-
-const ThemeFrame = lazy(() => import('@/components/ThemeFrame'));
-
 const FONT_URL = 'https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap';
 
 export default function App() {
   const showPageMask = usePageMask();
   const {
-    state: { quoteConfig, storefrontConfig, productQuoteEnabled, registerEnabled },
+    state: { quoteConfig, storefrontConfig, productQuoteEnabled, registerEnabled, bcLanguage },
     dispatch,
   } = useContext(GlobalContext);
 
@@ -81,6 +67,10 @@ export default function App() {
   const authorizedPages = useMemo(() => {
     return isB2BUser ? b2bJumpPath(role) : PATH_ROUTES.ORDERS;
   }, [role, isB2BUser]);
+
+  useEffect(() => {
+    setDayjsLocale(bcLanguage);
+  }, [bcLanguage]);
 
   const handleAccountClick = (href: string, isRegisterAndLogin: boolean) => {
     showPageMask(true);
@@ -120,7 +110,7 @@ export default function App() {
   // open storefront
   useSetOpen(isOpen, openUrl, params);
 
-  const { pathname, href, search } = window.location;
+  const { pathname, search } = window.location;
 
   const loginAndRegister = () => {
     dispatch({
@@ -130,7 +120,7 @@ export default function App() {
       },
     });
 
-    if (pathname.includes('login.php') && !href.includes('change_password')) {
+    if (pathname.includes('login.php') && !search.includes('change_password')) {
       dispatch({
         type: 'common',
         payload: {
@@ -178,11 +168,14 @@ export default function App() {
       }
       setChannelStoreType();
 
+      // load the store config before fetching other data
+      // as some fetches depend on the store config or feature flags being present
+      await getStoreConfigs(styleDispatch, dispatch);
+
       try {
         await Promise.allSettled([
-          getStoreTaxZoneRates(),
+          getGlobalStoreTax(),
           setStorefrontConfig(dispatch),
-          getTemPlateConfig(styleDispatch, dispatch),
           getCompanyInfo(role, b2bId),
         ]);
       } catch (e) {
@@ -195,14 +188,18 @@ export default function App() {
       };
 
       if (!customerId) {
-        const info = await getCurrentCustomerInfo();
+        const info = await getCurrentCustomerInfo().catch((error) => {
+          if (isCompanyError(error)) {
+            gotoPage(`/login?loginFlag=${error.reason}`);
+          }
+        });
         if (info) {
           userInfo.role = info?.role;
         }
       }
 
       // background login enter judgment and refresh
-      if (!href.includes('checkout') && !(customerId && !window.location.hash)) {
+      if (!pathname.includes('checkout') && !(customerId && !window.location.hash)) {
         await gotoAllowedAppPage(Number(userInfo.role), gotoPage);
       } else {
         showPageMask(false);
@@ -335,9 +332,12 @@ export default function App() {
   }, [isOpen]);
 
   useEffect(() => {
-    const { hash = '' } = window.location;
-
-    const handleHashChange = () => (!hash || hash === '#/') && setOpenPage({ isOpen: false });
+    const handleHashChange = () => {
+      const { hash } = window.location;
+      if (!hash || hash === '#/') {
+        setOpenPage({ isOpen: false });
+      }
+    };
 
     window.addEventListener('hashchange', handleHashChange);
 

@@ -1,28 +1,6 @@
 import { store } from '@/store';
-import { getActiveCurrencyInfo } from '@/utils';
 import { getBCPrice } from '@/utils/b3Product/b3Product';
-
-export interface ProductInfoProps {
-  basePrice: number | string;
-  baseSku: string;
-  createdAt: number;
-  discount: number | string;
-  offeredPrice: number | string;
-  enteredInclusive: boolean;
-  id: number | string;
-  itemId: number;
-  optionList: string;
-  primaryImage: string;
-  productId: number;
-  productName: string;
-  productUrl: string;
-  quantity: number | string;
-  tax: number | string;
-  updatedAt: number;
-  variantId: number;
-  variantSku: string;
-  productsSearch: CustomFieldItems;
-}
+import { getActiveCurrencyInfo } from '@/utils/currencyUtils';
 
 interface Summary {
   subtotal: number;

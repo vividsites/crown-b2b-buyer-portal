@@ -2,7 +2,10 @@ import { useParams } from 'react-router-dom';
 import {
   buildCompanyStateWith,
   builder,
+  buildGlobalStateWith,
+  buildQuoteWith,
   buildStoreInfoStateWith,
+  delay,
   faker,
   getUnixTime,
   graphql,
@@ -10,10 +13,13 @@ import {
   renderWithProviders,
   screen,
   startMockServer,
+  userEvent,
+  waitForElementToBeRemoved,
   within,
 } from 'tests/test-utils';
+import { when } from 'vitest-when';
 
-import { B2BProducts } from '@/shared/service/b2b/graphql/product';
+import { B2BProducts, ProductSearch } from '@/shared/service/b2b/graphql/product';
 import { B2BQuoteDetail, QuoteExtraFieldsConfig } from '@/shared/service/b2b/graphql/quote';
 import { CompanyStatus, UserTypes } from '@/types';
 
@@ -54,212 +60,75 @@ const buildQuoteProductWith = builder<QuoteProduct>(() => ({
   inventoryLevel: faker.number.int(),
 }));
 
-type Address =
-  | B2BQuoteDetail['data']['quote']['billingAddress']
-  | B2BQuoteDetail['data']['quote']['shippingAddress'];
-
-const buildAddressWith = builder<Address>(() => ({
-  city: faker.location.city(),
-  label: faker.lorem.word(),
-  state: faker.location.state(),
-  address: faker.location.streetAddress(),
-  country: faker.location.country(),
-  zipCode: faker.location.zipCode(),
-  lastName: faker.person.lastName(),
-  addressId: faker.number.int().toString(),
-  apartment: faker.location.secondaryAddress(),
-  firstName: faker.person.firstName(),
-  phoneNumber: faker.phone.number(),
-  addressLabel: faker.lorem.word(),
-}));
-
-const buildQuoteWith = builder<B2BQuoteDetail>(() => ({
-  data: {
-    quote: {
-      id: faker.string.uuid(),
-      createdAt: getUnixTime(faker.date.past().getTime()),
-      updatedAt: getUnixTime(faker.date.recent().getTime()),
-      quoteNumber: faker.string.uuid(),
-      quoteTitle: faker.lorem.words(),
-      referenceNumber: faker.string.uuid(),
-      userEmail: faker.internet.email(),
-      bcCustomerId: faker.number.int(),
-      createdBy: faker.person.fullName(),
-      expiredAt: getUnixTime(faker.date.future().getTime()),
-      companyId: {
-        id: faker.string.uuid(),
-        companyName: faker.company.name(),
-        bcGroupName: faker.company.buzzPhrase(),
-        description: faker.lorem.sentence(),
-        catalogId: null,
-        companyStatus: faker.number.int(),
-        addressLine1: faker.location.streetAddress(),
-        addressLine2: faker.location.secondaryAddress(),
-        city: faker.location.city(),
-        state: faker.location.state(),
-        zipCode: faker.location.zipCode(),
-        country: faker.location.country(),
-        extraFields: [],
-      },
-      salesRepStatus: faker.number.int(),
-      customerStatus: faker.number.int(),
-      subtotal: faker.commerce.price(),
-      discount: faker.commerce.price(),
-      grandTotal: faker.commerce.price(),
-      cartId: faker.string.uuid(),
-      cartUrl: faker.internet.url(),
-      checkoutUrl: faker.internet.url(),
-      bcOrderId: faker.string.uuid(),
-      currency: {
-        token: faker.finance.currencySymbol(),
-        location: faker.location.country(),
-        currencyCode: faker.finance.currencyCode(),
-        decimalToken: '.',
-        decimalPlaces: faker.number.int({ min: 0, max: 100 }),
-        thousandsToken: ',',
-        currencyExchangeRate: faker.finance.amount(),
-      },
-      contactInfo: {
-        name: faker.person.fullName(),
-        email: faker.internet.email(),
-        companyName: faker.company.name(),
-        phoneNumber: faker.phone.number(),
-      },
-      trackingHistory: Array.from({ length: faker.number.int({ min: 0, max: 10 }) }, () => ({
-        date: getUnixTime(faker.date.recent().getTime()),
-        read: faker.datatype.boolean(),
-        role: faker.person.jobTitle(),
-        message: faker.lorem.sentence(),
-      })),
-      extraFields: [],
-      notes: faker.lorem.paragraph(),
-      legalTerms: faker.lorem.paragraph(),
-      shippingTotal: faker.commerce.price(),
-      taxTotal: faker.commerce.price(),
-      totalAmount: faker.commerce.price(),
-      shippingMethod: {
-        id: faker.number.int().toString(),
-        cost: parseFloat(faker.commerce.price()),
-        type: faker.lorem.word(),
-        imageUrl: faker.image.url(),
-        description: faker.lorem.sentence(),
-        transitTime: faker.lorem.words(),
-        additionalDescription: faker.lorem.sentence(),
-      },
-      billingAddress: buildAddressWith('WHATEVER_VALUES'),
-      oldSalesRepStatus: null,
-      oldCustomerStatus: null,
-      recipients: [],
-      discountType: faker.number.int(),
-      discountValue: faker.commerce.price(),
-      status: faker.number.int(),
-      company: faker.company.name(),
-      salesRep: faker.person.fullName(),
-      salesRepEmail: faker.internet.email(),
-      orderId: faker.number.int().toString(),
-      shippingAddress: buildAddressWith('WHATEVER_VALUES'),
-      productsList: Array.from({ length: faker.number.int({ min: 1, max: 10 }) }, () =>
-        buildQuoteProductWith('WHATEVER_VALUES'),
-      ),
-      storefrontAttachFiles: [],
-      backendAttachFiles: [],
-      storeInfo: {
-        storeName: faker.company.name(),
-        storeAddress: faker.location.streetAddress(),
-        storeCountry: faker.location.country(),
-        storeLogo: faker.image.url(),
-        storeUrl: faker.internet.url(),
-      },
-      companyInfo: {
-        companyId: faker.number.int().toString(),
-        companyName: faker.company.name(),
-        companyAddress: faker.location.streetAddress(),
-        companyCountry: faker.location.country(),
-        companyState: faker.location.state(),
-        companyCity: faker.location.city(),
-        companyZipCode: faker.location.zipCode(),
-        phoneNumber: faker.phone.number(),
-      },
-      salesRepInfo: {
-        salesRepName: faker.person.fullName(),
-        salesRepEmail: faker.internet.email(),
-        salesRepPhoneNumber: faker.phone.number(),
-      },
-      quoteLogo: faker.image.url(),
-      quoteUrl: faker.internet.url(),
-      channelId: faker.number.int(),
-      channelName: faker.company.name(),
-      allowCheckout: faker.datatype.boolean(),
-      displayDiscount: faker.datatype.boolean(),
+const buildProductSearchWith = builder<ProductSearch>(() => ({
+  id: faker.number.int(),
+  name: faker.commerce.productName(),
+  sku: faker.string.uuid(),
+  costPrice: faker.commerce.price(),
+  inventoryLevel: faker.number.int(),
+  inventoryTracking: faker.helpers.arrayElement(['none', 'simple', 'complex']),
+  availability: faker.helpers.arrayElement(['available', 'unavailable']),
+  orderQuantityMinimum: faker.number.int(),
+  orderQuantityMaximum: faker.number.int(),
+  variants: Array.from({ length: faker.number.int({ min: 0, max: 10 }) }, () => ({
+    variant_id: faker.number.int(),
+    product_id: faker.number.int(),
+    sku: faker.string.uuid(),
+    option_values: Array.from({ length: faker.number.int({ min: 0, max: 10 }) }, () => ({
+      id: faker.number.int(),
+      label: faker.commerce.productAdjective(),
+      option_id: faker.number.int(),
+      option_display_name: faker.commerce.productAdjective(),
+    })),
+    calculated_price: parseFloat(faker.commerce.price()),
+    image_url: faker.image.url(),
+    has_price_list: faker.datatype.boolean(),
+    bulk_prices: [],
+    purchasing_disabled: faker.datatype.boolean(),
+    cost_price: parseFloat(faker.commerce.price()),
+    inventory_level: faker.number.int(),
+    bc_calculated_price: {
+      as_entered: parseFloat(faker.commerce.price()),
+      tax_inclusive: parseFloat(faker.commerce.price()),
+      tax_exclusive: parseFloat(faker.commerce.price()),
+      entered_inclusive: faker.datatype.boolean(),
     },
-  },
+  })),
+  currencyCode: faker.finance.currencyCode(),
+  imageUrl: faker.image.url(),
+  modifiers: [],
+  options: Array.from({ length: faker.number.int({ min: 0, max: 10 }) }, () => ({
+    option_id: faker.number.int(),
+    display_name: faker.commerce.productAdjective(),
+    sort_order: faker.number.int(),
+    is_required: faker.datatype.boolean(),
+  })),
+  optionsV3: Array.from({ length: faker.number.int({ min: 0, max: 10 }) }, () => ({
+    id: faker.number.int(),
+    product_id: faker.number.int(),
+    name: faker.commerce.productAdjective(),
+    display_name: faker.commerce.productAdjective(),
+    type: faker.helpers.arrayElement(['rectangles', 'swatch', 'dropdown']),
+    sort_order: faker.number.int(),
+    option_values: Array.from({ length: faker.number.int({ min: 0, max: 10 }) }, () => ({
+      id: faker.number.int(),
+      label: faker.commerce.productAdjective(),
+      sort_order: faker.number.int(),
+      value_data: null,
+      is_default: faker.datatype.boolean(),
+    })),
+    config: [],
+  })),
+  channelId: [],
+  productUrl: faker.internet.url(),
+  taxClassId: faker.number.int(),
+  isPriceHidden: faker.datatype.boolean(),
 }));
 
-const buildProductSearchWith = builder<B2BProducts>(() => ({
+const buildProductSearchResponseWith = builder<B2BProducts>(() => ({
   data: {
     productsSearch: Array.from({ length: faker.number.int({ min: 0, max: 10 }) }, () => ({
-      id: faker.number.int(),
-      name: faker.commerce.productName(),
-      sku: faker.string.uuid(),
-      costPrice: faker.commerce.price(),
-      inventoryLevel: faker.number.int(),
-      inventoryTracking: faker.helpers.arrayElement(['none', 'simple', 'complex']),
-      availability: faker.helpers.arrayElement(['available', 'unavailable']),
-      orderQuantityMinimum: faker.number.int(),
-      orderQuantityMaximum: faker.number.int(),
-      variants: Array.from({ length: faker.number.int({ min: 0, max: 10 }) }, () => ({
-        variant_id: faker.number.int(),
-        product_id: faker.number.int(),
-        sku: faker.string.uuid(),
-        option_values: Array.from({ length: faker.number.int({ min: 0, max: 10 }) }, () => ({
-          id: faker.number.int(),
-          label: faker.commerce.productAdjective(),
-          option_id: faker.number.int(),
-          option_display_name: faker.commerce.productAdjective(),
-        })),
-        calculated_price: parseFloat(faker.commerce.price()),
-        image_url: faker.image.url(),
-        has_price_list: faker.datatype.boolean(),
-        bulk_prices: [],
-        purchasing_disabled: faker.datatype.boolean(),
-        cost_price: parseFloat(faker.commerce.price()),
-        inventory_level: faker.number.int(),
-        bc_calculated_price: {
-          as_entered: parseFloat(faker.commerce.price()),
-          tax_inclusive: parseFloat(faker.commerce.price()),
-          tax_exclusive: parseFloat(faker.commerce.price()),
-          entered_inclusive: faker.datatype.boolean(),
-        },
-      })),
-      currencyCode: faker.finance.currencyCode(),
-      imageUrl: faker.image.url(),
-      modifiers: [],
-      options: Array.from({ length: faker.number.int({ min: 0, max: 10 }) }, () => ({
-        option_id: faker.number.int(),
-        display_name: faker.commerce.productAdjective(),
-        sort_order: faker.number.int(),
-        is_required: faker.datatype.boolean(),
-      })),
-      optionsV3: Array.from({ length: faker.number.int({ min: 0, max: 10 }) }, () => ({
-        id: faker.number.int(),
-        product_id: faker.number.int(),
-        name: faker.commerce.productAdjective(),
-        display_name: faker.commerce.productAdjective(),
-        type: faker.helpers.arrayElement(['rectangles', 'swatch', 'dropdown']),
-        sort_order: faker.number.int(),
-        option_values: Array.from({ length: faker.number.int({ min: 0, max: 10 }) }, () => ({
-          id: faker.number.int(),
-          label: faker.commerce.productAdjective(),
-          sort_order: faker.number.int(),
-          value_data: null,
-          is_default: faker.datatype.boolean(),
-        })),
-        config: [],
-      })),
-      channelId: [],
-      productUrl: faker.internet.url(),
-      taxClassId: faker.number.int(),
-      isPriceHidden: faker.datatype.boolean(),
+      ...buildProductSearchWith('WHATEVER_VALUES'),
     })),
   },
 }));
@@ -276,7 +145,11 @@ describe('when the user is a B2B customer', () => {
 
   const storeInfoWithDateFormat = buildStoreInfoStateWith({ timeFormat: { display: 'j F Y' } });
 
-  const preloadedState = { company: approvedB2BCompany, storeInfo: storeInfoWithDateFormat };
+  const preloadedState = {
+    company: approvedB2BCompany,
+    storeInfo: storeInfoWithDateFormat,
+    global: buildGlobalStateWith('WHATEVER_VALUES'),
+  };
 
   it('displays the quote number as the page "title"', async () => {
     const quote = buildQuoteWith({ data: { quote: { id: '272989', quoteNumber: '911911' } } });
@@ -284,7 +157,7 @@ describe('when the user is a B2B customer', () => {
     server.use(
       graphql.query('GetQuoteInfoB2B', () => HttpResponse.json(quote)),
       graphql.query('SearchProducts', () =>
-        HttpResponse.json(buildProductSearchWith('WHATEVER_VALUES')),
+        HttpResponse.json(buildProductSearchResponseWith('WHATEVER_VALUES')),
       ),
       graphql.query('getQuoteExtraFields', () =>
         HttpResponse.json(buildQuoteExtraFieldsWith('WHATEVER_VALUES')),
@@ -313,7 +186,7 @@ describe('when the user is a B2B customer', () => {
     server.use(
       graphql.query('GetQuoteInfoB2B', () => HttpResponse.json(quote)),
       graphql.query('SearchProducts', () =>
-        HttpResponse.json(buildProductSearchWith('WHATEVER_VALUES')),
+        HttpResponse.json(buildProductSearchResponseWith('WHATEVER_VALUES')),
       ),
       graphql.query('getQuoteExtraFields', () =>
         HttpResponse.json(buildQuoteExtraFieldsWith('WHATEVER_VALUES')),
@@ -361,7 +234,7 @@ describe('when the user is a B2B customer', () => {
     server.use(
       graphql.query('GetQuoteInfoB2B', () => HttpResponse.json(quote)),
       graphql.query('SearchProducts', () =>
-        HttpResponse.json(buildProductSearchWith('WHATEVER_VALUES')),
+        HttpResponse.json(buildProductSearchResponseWith('WHATEVER_VALUES')),
       ),
       graphql.query('getQuoteExtraFields', () =>
         HttpResponse.json(buildQuoteExtraFieldsWith('WHATEVER_VALUES')),
@@ -407,7 +280,7 @@ describe('when the user is a B2B customer', () => {
     server.use(
       graphql.query('GetQuoteInfoB2B', () => HttpResponse.json(quote)),
       graphql.query('SearchProducts', () =>
-        HttpResponse.json(buildProductSearchWith('WHATEVER_VALUES')),
+        HttpResponse.json(buildProductSearchResponseWith('WHATEVER_VALUES')),
       ),
       graphql.query('getQuoteExtraFields', () =>
         HttpResponse.json(buildQuoteExtraFieldsWith('WHATEVER_VALUES')),
@@ -437,5 +310,946 @@ describe('when the user is a B2B customer', () => {
 
     expect(screen.getByText('Grand total')).toBeInTheDocument();
     expect(screen.getByText('$1,025.00')).toBeInTheDocument();
+  });
+
+  it('displays snackbar error on load if a product in the quote has validation errors', async () => {
+    const quote = buildQuoteWith({
+      data: {
+        quote: {
+          id: '272989',
+          quoteNumber: '911911',
+          status: 2,
+          allowCheckout: true,
+          productsList: [buildQuoteProductWith({ productId: '123' })],
+        },
+      },
+    });
+
+    server.use(
+      graphql.query('GetQuoteInfoB2B', () => HttpResponse.json(quote)),
+      graphql.query('SearchProducts', () =>
+        HttpResponse.json(
+          buildProductSearchResponseWith({
+            data: {
+              productsSearch: [buildProductSearchWith({ id: 123 })],
+            },
+          }),
+        ),
+      ),
+      graphql.query('getQuoteExtraFields', () =>
+        HttpResponse.json(buildQuoteExtraFieldsWith('WHATEVER_VALUES')),
+      ),
+      graphql.query('ValidateProduct', () =>
+        HttpResponse.json({
+          data: {
+            validateProduct: {
+              responseType: 'ERROR',
+              message: 'A product with the id of 123 does not have sufficient stock',
+              product: {
+                availableToSell: faker.number.int(),
+              },
+            },
+          },
+        }),
+      ),
+    );
+
+    vitest.mocked(useParams).mockReturnValue({ id: '272989' });
+
+    renderWithProviders(<QuoteDetail />, {
+      preloadedState: {
+        ...preloadedState,
+        company: {
+          ...preloadedState.company,
+          permissions: [
+            { code: 'purchase_enable', permissionLevel: 1 },
+            { code: 'checkout_with_quote', permissionLevel: 1 },
+          ],
+        },
+        global: {
+          ...preloadedState.global,
+          backorderEnabled: true,
+          featureFlags: {
+            'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
+          },
+        },
+      },
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    expect(
+      await screen.findByText('A product with the id of 123 does not have sufficient stock'),
+    ).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /PROCEED TO CHECKOUT/i })).toBeInTheDocument();
+  });
+
+  it('does not render any message for product that has a validation warning', async () => {
+    const quote = buildQuoteWith({
+      data: {
+        quote: {
+          id: '272989',
+          quoteNumber: '911911',
+          productsList: [buildQuoteProductWith({ productId: '123' })],
+        },
+      },
+    });
+
+    server.use(
+      graphql.query('GetQuoteInfoB2B', () => HttpResponse.json(quote)),
+      graphql.query('SearchProducts', () =>
+        HttpResponse.json(
+          buildProductSearchResponseWith({
+            data: {
+              productsSearch: [buildProductSearchWith({ id: 123 })],
+            },
+          }),
+        ),
+      ),
+      graphql.query('getQuoteExtraFields', () =>
+        HttpResponse.json(buildQuoteExtraFieldsWith('WHATEVER_VALUES')),
+      ),
+      graphql.query('ValidateProduct', () =>
+        HttpResponse.json({
+          data: {
+            validateProduct: {
+              responseType: 'WARNING',
+              message: 'A product with the id of 123 does not have sufficient stock',
+            },
+          },
+        }),
+      ),
+    );
+
+    vitest.mocked(useParams).mockReturnValue({ id: '272989' });
+
+    renderWithProviders(<QuoteDetail />, {
+      preloadedState: {
+        ...preloadedState,
+        global: {
+          ...preloadedState.global,
+          backorderEnabled: true,
+          featureFlags: {
+            'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
+          },
+        },
+      },
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    expect(
+      screen.queryByText('A product with the id of 123 does not have sufficient stock'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('checkout throws an error if validateProduct endpoint returns a product with error', async () => {
+    const quote = buildQuoteWith({
+      data: {
+        quote: {
+          id: '272989',
+          quoteNumber: '911911',
+          status: 2,
+          allowCheckout: true,
+          productsList: [buildQuoteProductWith({ productId: '123' })],
+        },
+      },
+    });
+
+    server.use(
+      graphql.query('GetQuoteInfoB2B', () => HttpResponse.json(quote)),
+      graphql.query('SearchProducts', () =>
+        HttpResponse.json(
+          buildProductSearchResponseWith({
+            data: {
+              productsSearch: [buildProductSearchWith({ id: 123 })],
+            },
+          }),
+        ),
+      ),
+      graphql.query('getQuoteExtraFields', () =>
+        HttpResponse.json(buildQuoteExtraFieldsWith('WHATEVER_VALUES')),
+      ),
+      graphql.query('ValidateProduct', () =>
+        HttpResponse.json({
+          data: {
+            validateProduct: {
+              responseType: 'ERROR',
+              message: 'A product with the id of 123 does not have sufficient stock',
+              product: {
+                availableToSell: faker.number.int(),
+              },
+            },
+          },
+        }),
+      ),
+    );
+
+    vitest.mocked(useParams).mockReturnValue({ id: '272989' });
+
+    renderWithProviders(<QuoteDetail />, {
+      preloadedState: {
+        ...preloadedState,
+        company: {
+          ...preloadedState.company,
+          permissions: [
+            { code: 'purchase_enable', permissionLevel: 1 },
+            { code: 'checkout_with_quote', permissionLevel: 1 },
+          ],
+        },
+        global: {
+          ...preloadedState.global,
+          backorderEnabled: true,
+          featureFlags: {
+            'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
+          },
+        },
+      },
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    const checkoutButton = await screen.findByRole('button', { name: /PROCEED TO CHECKOUT/i });
+    await userEvent.click(checkoutButton);
+
+    // the error message is shown in a snackbar when loading the page and when user tries clicking the checkout button
+    // and a product has an error
+    expect(
+      await screen.findAllByText('A product with the id of 123 does not have sufficient stock'),
+    ).toHaveLength(2);
+  });
+
+  it('allows proceeding to checkout if all products are valid', async () => {
+    const quote = buildQuoteWith({
+      data: {
+        quote: {
+          id: '123',
+          quoteNumber: '123',
+          status: 2,
+          allowCheckout: true,
+          productsList: [buildQuoteProductWith({ productId: '123' })],
+        },
+      },
+    });
+
+    server.use(
+      graphql.query('GetQuoteInfoB2B', () => HttpResponse.json(quote)),
+      graphql.query('SearchProducts', () =>
+        HttpResponse.json(
+          buildProductSearchResponseWith({
+            data: {
+              productsSearch: [buildProductSearchWith({ id: 123 })],
+            },
+          }),
+        ),
+      ),
+      graphql.query('getQuoteExtraFields', () =>
+        HttpResponse.json(buildQuoteExtraFieldsWith('WHATEVER_VALUES')),
+      ),
+      graphql.query('ValidateProduct', () =>
+        HttpResponse.json({
+          data: {
+            validateProduct: {
+              responseType: 'SUCCESS',
+              message: 'Product is valid',
+            },
+          },
+        }),
+      ),
+      graphql.query('getStorefrontProductSettings', () =>
+        HttpResponse.json({
+          data: {
+            storefrontProductSettings: {
+              hidePriceFromGuests: false,
+            },
+          },
+        }),
+      ),
+      graphql.mutation('CheckoutQuote', () =>
+        HttpResponse.json({
+          data: {
+            quoteCheckout: {
+              quoteCheckout: {
+                checkoutUrl:
+                  'https://my-store/cart.php?action=loadInCheckout&id=123&token=1234567889&isFromQuote=Y',
+                cartId: '123',
+                cartUrl: 'https://my-store/cart.php?action=load&id=123&token=1234567889',
+              },
+            },
+          },
+        }),
+      ),
+    );
+
+    vitest.mocked(useParams).mockReturnValue({ id: '123' });
+
+    renderWithProviders(<QuoteDetail />, {
+      preloadedState: {
+        ...preloadedState,
+        company: {
+          ...preloadedState.company,
+          permissions: [
+            { code: 'purchase_enable', permissionLevel: 1 },
+            { code: 'checkout_with_quote', permissionLevel: 1 },
+          ],
+        },
+        global: {
+          ...preloadedState.global,
+          backorderEnabled: true,
+          featureFlags: {
+            'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
+          },
+        },
+      },
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    const checkoutButton = await screen.findByRole('button', { name: /PROCEED TO CHECKOUT/i });
+    await userEvent.click(checkoutButton);
+
+    expect(window.location.href).toBe(
+      'https://my-store/cart.php?action=loadInCheckout&id=123&token=1234567889&isFromQuote=Y',
+    );
+  });
+
+  it('renders TBD instead of price in quote summary if product has an error', async () => {
+    const quote = buildQuoteWith({
+      data: {
+        quote: {
+          id: '272989',
+          quoteNumber: '911911',
+          status: 1,
+          grandTotal: '1000.00',
+          allowCheckout: true,
+          discount: '0.00',
+          displayDiscount: true,
+          shippingMethod: {
+            description: 'Flat rate',
+          },
+          taxTotal: '0.0000',
+          subtotal: '1000.00',
+          shippingTotal: '0.0000',
+          salesRep: '',
+          salesRepEmail: '',
+          productsList: [
+            buildQuoteProductWith({
+              productId: '123',
+              offeredPrice: '1000.00',
+              basePrice: '1000.00',
+            }),
+          ],
+        },
+      },
+    });
+
+    server.use(
+      graphql.query('GetQuoteInfoB2B', () => HttpResponse.json(quote)),
+      graphql.query('SearchProducts', () =>
+        HttpResponse.json({
+          data: {
+            productsSearch: [buildProductSearchWith({ id: 123 })],
+          },
+        }),
+      ),
+      graphql.query('getQuoteExtraFields', () =>
+        HttpResponse.json(buildQuoteExtraFieldsWith('WHATEVER_VALUES')),
+      ),
+      graphql.query('ValidateProduct', async () => {
+        /* 
+          adding a delay to make sure we are mimicking the scenario where validateProduct api takes time
+          and product error is visible immediately after loading
+        */
+        await delay(200);
+
+        return HttpResponse.json({
+          data: {
+            validateProduct: {
+              responseType: 'ERROR',
+              message: 'A product with the id of 123 does not have sufficient stock',
+              product: {
+                availableToSell: faker.number.int(),
+              },
+            },
+          },
+        });
+      }),
+    );
+
+    vitest.mocked(useParams).mockReturnValue({ id: '272989' });
+
+    renderWithProviders(<QuoteDetail />, {
+      preloadedState: {
+        ...preloadedState,
+        global: {
+          ...preloadedState.global,
+          blockPendingQuoteNonPurchasableOOS: {
+            isEnableProduct: false,
+          },
+          backorderEnabled: true,
+          featureFlags: {
+            'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
+          },
+        },
+      },
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+    expect(
+      screen.getByText('A product with the id of 123 does not have sufficient stock'),
+    ).toBeInTheDocument();
+    const summaryElement = screen.getByTestId('quote-summary');
+    const withinSummary = within(summaryElement);
+    expect(withinSummary.getByRole('row', { name: /Original subtotal/ })).toHaveTextContent(/TBD/);
+    expect(withinSummary.getByRole('row', { name: /Quoted subtotal/ })).toHaveTextContent(/TBD/);
+    expect(withinSummary.getByRole('row', { name: /Shipping/ })).toHaveTextContent(/TBD/);
+    expect(withinSummary.getByRole('row', { name: /Grand total/ })).toHaveTextContent(/TBD/);
+  });
+
+  it('renders prices immediately after loading in quote summary if product has no errors', async () => {
+    const quote = buildQuoteWith({
+      data: {
+        quote: {
+          id: '272989',
+          quoteNumber: '911911',
+          status: 2,
+          grandTotal: '1000.00',
+          subtotal: '1000.00',
+          discount: '0.00',
+          allowCheckout: true,
+          taxTotal: '0.0000',
+          totalAmount: '1000.00',
+          shippingTotal: '0.00',
+          currency: {
+            token: '$',
+            location: 'left',
+            currencyCode: 'USD',
+            decimalToken: '.',
+            decimalPlaces: 2,
+            thousandsToken: ',',
+            currencyExchangeRate: '1.0000000000',
+          },
+          shippingMethod: {
+            id: '4dcbf24f457dd67d5f89bcf374e0bc9b',
+            cost: 0.0,
+            description: 'Flat rate',
+          },
+          productsList: [
+            buildQuoteProductWith({
+              productId: '123',
+              offeredPrice: '1000.00',
+              basePrice: '1000.00',
+            }),
+          ],
+          salesRep: 'john',
+          salesRepEmail: 'john@email.com',
+          displayDiscount: true,
+        },
+      },
+    });
+
+    server.use(
+      graphql.query('GetQuoteInfoB2B', () => HttpResponse.json(quote)),
+      graphql.query('SearchProducts', () =>
+        HttpResponse.json({
+          data: {
+            productsSearch: [
+              buildProductSearchWith({
+                id: 123,
+                costPrice: '1000',
+                variants: [
+                  {
+                    variant_id: 132,
+                    product_id: 123,
+                    sku: 'test',
+                    option_values: [],
+                    calculated_price: 1000,
+                    image_url: '',
+                    has_price_list: false,
+                    bulk_prices: [],
+                    purchasing_disabled: false,
+                    cost_price: 0,
+                    inventory_level: 2,
+                    bc_calculated_price: {
+                      as_entered: 1000,
+                      tax_inclusive: 1000,
+                      tax_exclusive: 1000,
+                      entered_inclusive: false,
+                    },
+                  },
+                ],
+              }),
+            ],
+          },
+        }),
+      ),
+      graphql.query('getQuoteExtraFields', () =>
+        HttpResponse.json(buildQuoteExtraFieldsWith('WHATEVER_VALUES')),
+      ),
+      graphql.query('ValidateProduct', async () => {
+        /* 
+          adding a delay to make sure we are mimicking the scenario where validateProduct api takes time
+          and still no TBD shows 
+        */
+        await delay(200);
+        return HttpResponse.json({
+          data: {
+            validateProduct: {
+              responseType: 'SUCCESS',
+              message: 'Product is valid',
+            },
+          },
+        });
+      }),
+    );
+
+    vitest.mocked(useParams).mockReturnValue({ id: '272989' });
+
+    renderWithProviders(<QuoteDetail />, {
+      preloadedState: {
+        ...preloadedState,
+        global: {
+          ...preloadedState.global,
+          backorderEnabled: true,
+          featureFlags: {
+            'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
+          },
+        },
+      },
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+    const summaryElement = screen.getByTestId('quote-summary');
+    const withinSummary = within(summaryElement);
+    expect(withinSummary.getByRole('row', { name: /Original subtotal/ })).toHaveTextContent(
+      /\$1,000.00/,
+    );
+    expect(withinSummary.getByRole('row', { name: /Discount/ })).toHaveTextContent(/\$0.00/);
+    expect(withinSummary.getByRole('row', { name: /Quoted subtotal/ })).toHaveTextContent(
+      /\$1,000.00/,
+    );
+    expect(withinSummary.getByRole('row', { name: /Shipping/ })).toHaveTextContent(/\$0.00/);
+    expect(withinSummary.getByRole('row', { name: /Tax/ })).toHaveTextContent(/\$0.00/);
+    expect(withinSummary.getByRole('row', { name: /Grand total/ })).toHaveTextContent(/\$1,000.00/);
+  });
+
+  it('renders proceed to checkout button when isAutoQuoteEnable is enabled and quote has sales rep revision', async () => {
+    const quote = buildQuoteWith({
+      data: {
+        quote: {
+          id: '123',
+          quoteNumber: '123',
+          status: 2,
+          allowCheckout: true,
+          salesRep: 'John Sales', // sales rep already revised the quote
+          salesRepEmail: 'john.sales@company.com',
+          productsList: [buildQuoteProductWith({ productId: '123' })],
+        },
+      },
+    });
+
+    server.use(
+      graphql.query('GetQuoteInfoB2B', () => HttpResponse.json(quote)),
+      graphql.query('SearchProducts', () =>
+        HttpResponse.json(
+          buildProductSearchResponseWith({
+            data: {
+              productsSearch: [buildProductSearchWith({ id: 123 })],
+            },
+          }),
+        ),
+      ),
+      graphql.query('getQuoteExtraFields', () =>
+        HttpResponse.json(buildQuoteExtraFieldsWith('WHATEVER_VALUES')),
+      ),
+      graphql.query('ValidateProduct', () =>
+        HttpResponse.json({
+          data: {
+            validateProduct: {
+              responseType: 'SUCCESS',
+              message: 'Product is valid',
+            },
+          },
+        }),
+      ),
+    );
+
+    vitest.mocked(useParams).mockReturnValue({ id: '123' });
+
+    const stateWithAutoQuoteDisabled = {
+      ...preloadedState,
+      company: {
+        ...preloadedState.company,
+        permissions: [
+          { code: 'purchase_enable', permissionLevel: 1 },
+          { code: 'checkout_with_quote', permissionLevel: 1 },
+        ],
+      },
+      global: {
+        ...preloadedState.global,
+        backorderEnabled: true,
+        featureFlags: {
+          'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
+        },
+        quoteConfig: [
+          {
+            key: 'quote_auto_quoting',
+            value: '1',
+            extraFields: {},
+          },
+        ],
+      },
+    };
+
+    renderWithProviders(<QuoteDetail />, {
+      preloadedState: stateWithAutoQuoteDisabled,
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    expect(await screen.findByRole('button', { name: /PROCEED TO CHECKOUT/i })).toBeVisible();
+  });
+
+  it('does not render Proceed to Checkout button when auto quoting is disabled and no sales rep info', async () => {
+    const quote = buildQuoteWith({
+      data: {
+        quote: {
+          id: '14234',
+          quoteNumber: '2342',
+          status: 2,
+          allowCheckout: true,
+          salesRep: '', // No sales rep
+          salesRepEmail: '', // No sales rep email
+          productsList: [buildQuoteProductWith({ productId: '123' })],
+        },
+      },
+    });
+
+    server.use(
+      graphql.query('GetQuoteInfoB2B', () => HttpResponse.json(quote)),
+      graphql.query('SearchProducts', () =>
+        HttpResponse.json(
+          buildProductSearchResponseWith({
+            data: {
+              productsSearch: [buildProductSearchWith({ id: 123 })],
+            },
+          }),
+        ),
+      ),
+      graphql.query('getQuoteExtraFields', () =>
+        HttpResponse.json(buildQuoteExtraFieldsWith('WHATEVER_VALUES')),
+      ),
+      graphql.query('ValidateProduct', () =>
+        HttpResponse.json({
+          data: {
+            validateProduct: {
+              responseType: 'WARNING',
+              message: 'A product with the id of 123 does not have sufficient stock',
+            },
+          },
+        }),
+      ),
+    );
+
+    vitest.mocked(useParams).mockReturnValue({ id: '123' });
+
+    const stateWithAutoQuoteDisabled = {
+      ...preloadedState,
+      global: {
+        ...preloadedState.global,
+        backorderEnabled: true,
+        featureFlags: {
+          'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
+        },
+        quoteConfig: [
+          {
+            key: 'quote_auto_quoting',
+            value: '0', // Disable auto quoting
+            extraFields: {},
+          },
+        ],
+      },
+    };
+
+    renderWithProviders(<QuoteDetail />, {
+      preloadedState: stateWithAutoQuoteDisabled,
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    expect(screen.queryByRole('button', { name: /PROCEED TO CHECKOUT/i })).not.toBeInTheDocument();
+  });
+
+  it('validates products with required modifiers correctly', async () => {
+    const productWithModifiers = buildQuoteProductWith({
+      productId: '112',
+      variantId: 77,
+      productName: 'Product with Required Modifiers',
+      options: [
+        {
+          type: 'text',
+          optionId: 113,
+          optionName: 'Custom Message',
+          optionLabel: 'Test Message',
+          optionValue: 'Test Message',
+        },
+        {
+          type: 'dropdown',
+          optionId: 114,
+          optionName: 'Size',
+          optionLabel: 'Large',
+          optionValue: '42',
+        },
+      ],
+    });
+
+    const quote = buildQuoteWith({
+      data: {
+        quote: {
+          id: '99999',
+          productsList: [productWithModifiers],
+        },
+      },
+    });
+
+    const productSearchResult = buildProductSearchWith({
+      id: 112,
+      name: 'Product with Required Modifiers',
+      variants: [
+        {
+          variant_id: 77,
+          product_id: 112,
+          sku: 'BACK10',
+          option_values: [],
+          calculated_price: 10,
+          image_url: '',
+          has_price_list: false,
+          bulk_prices: [],
+          purchasing_disabled: false,
+          cost_price: 0,
+          inventory_level: 0,
+          bc_calculated_price: {
+            as_entered: 10,
+            tax_inclusive: 10,
+            tax_exclusive: 10,
+            entered_inclusive: false,
+          },
+        },
+      ],
+    });
+
+    const validateProduct = vi.fn();
+    when(validateProduct)
+      .calledWith(
+        expect.objectContaining({
+          productId: 112,
+          variantId: 77,
+          quantity: expect.any(Number),
+          productOptions: [
+            {
+              optionId: 113,
+              optionValue: 'Test Message',
+            },
+            {
+              optionId: 114,
+              optionValue: '42',
+            },
+          ],
+        }),
+      )
+      .thenReturn({
+        data: {
+          validateProduct: {
+            responseType: 'SUCCESS',
+            message: '',
+            errorCode: '',
+          },
+        },
+      });
+
+    server.use(
+      graphql.query('GetQuoteInfoB2B', () => HttpResponse.json(quote)),
+      graphql.query('SearchProducts', () =>
+        HttpResponse.json({
+          data: {
+            productsSearch: [productSearchResult],
+          },
+        }),
+      ),
+      graphql.query('getQuoteExtraFields', () =>
+        HttpResponse.json(buildQuoteExtraFieldsWith('WHATEVER_VALUES')),
+      ),
+      graphql.query('ValidateProduct', ({ variables }) =>
+        HttpResponse.json(validateProduct(variables)),
+      ),
+    );
+
+    vitest.mocked(useParams).mockReturnValue({ id: '99999' });
+
+    renderWithProviders(<QuoteDetail />, {
+      preloadedState: {
+        ...preloadedState,
+        global: buildGlobalStateWith({
+          backorderEnabled: true,
+          featureFlags: {
+            'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
+          },
+        }),
+      },
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    expect(screen.getByText('Product with Required Modifiers')).toBeVisible();
+    expect(screen.getByText('Custom Message: Test Message')).toBeVisible();
+    expect(screen.getByText('Size: Large')).toBeVisible();
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  describe('when "Proceed to checkout" button is clicked', () => {
+    beforeEach(() => {
+      server.use(
+        graphql.query('SearchProducts', () =>
+          HttpResponse.json(
+            buildProductSearchResponseWith({
+              data: {
+                productsSearch: [buildProductSearchWith({ id: 123 })],
+              },
+            }),
+          ),
+        ),
+        graphql.query('getQuoteExtraFields', () =>
+          HttpResponse.json(buildQuoteExtraFieldsWith('WHATEVER_VALUES')),
+        ),
+        graphql.query('ValidateProduct', () =>
+          HttpResponse.json({
+            data: {
+              validateProduct: {
+                responseType: 'SUCCESS',
+                message: 'Product is valid',
+              },
+            },
+          }),
+        ),
+        graphql.query('getStorefrontProductSettings', () =>
+          HttpResponse.json({
+            data: {
+              storefrontProductSettings: {
+                hidePriceFromGuests: false,
+              },
+            },
+          }),
+        ),
+        graphql.mutation('CheckoutQuote', () =>
+          HttpResponse.json({
+            data: {
+              quoteCheckout: {
+                quoteCheckout: {
+                  checkoutUrl:
+                    'https://my-store/cart.php?action=loadInCheckout&id=123&token=1234567889&isFromQuote=Y',
+                  cartId: '123',
+                  cartUrl: 'https://my-store/cart.php?action=load&id=123&token=1234567889',
+                },
+              },
+            },
+          }),
+        ),
+      );
+
+      vitest.mocked(useParams).mockReturnValue({ id: '272989' });
+    });
+    describe('given the quote has uuid', () => {
+      it('sets all the session storage for checkout', async () => {
+        const id = '272989';
+        const uuid = 'lsd-g';
+        const dateString = Date.now().toString();
+        const quote = buildQuoteWith({
+          data: {
+            quote: {
+              id,
+              uuid,
+              quoteNumber: '911911',
+              status: 2,
+              allowCheckout: true,
+              productsList: [buildQuoteProductWith({ productId: '123' })],
+            },
+          },
+        });
+        server.use(graphql.query('GetQuoteInfoB2B', () => HttpResponse.json(quote)));
+        renderWithProviders(<QuoteDetail />, {
+          preloadedState: {
+            ...preloadedState,
+            company: {
+              ...preloadedState.company,
+              permissions: [
+                { code: 'purchase_enable', permissionLevel: 1 },
+                { code: 'checkout_with_quote', permissionLevel: 1 },
+              ],
+            },
+            global: {
+              ...preloadedState.global,
+              featureFlags: {
+                'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
+              },
+            },
+          },
+          initialEntries: [`/272989?uuid=${uuid}&date=${dateString}`],
+        });
+        await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+        const checkoutButton = screen.getByRole('button', { name: 'Proceed to checkout' });
+        await userEvent.click(checkoutButton);
+        expect(sessionStorage.getItem('quoteCheckoutUuid')).toEqual(uuid);
+        expect(sessionStorage.getItem('isNewStorefront')).toEqual(JSON.stringify(true));
+        expect(sessionStorage.getItem('quoteCheckoutId')).toEqual(id);
+        expect(sessionStorage.getItem('quoteDate')).toEqual(dateString);
+      });
+    });
+
+    describe("given the legacy quote which doesn't have uuid", () => {
+      it('sets all the session storage for checkout', async () => {
+        const id = '272989';
+        const dateString = Date.now().toString();
+        const quote = buildQuoteWith({
+          data: {
+            quote: {
+              id,
+              quoteNumber: '911911',
+              status: 2,
+              allowCheckout: true,
+              productsList: [buildQuoteProductWith({ productId: '123' })],
+            },
+          },
+        });
+        server.use(graphql.query('GetQuoteInfoB2B', () => HttpResponse.json(quote)));
+        renderWithProviders(<QuoteDetail />, {
+          preloadedState: {
+            ...preloadedState,
+            company: {
+              ...preloadedState.company,
+              permissions: [
+                { code: 'purchase_enable', permissionLevel: 1 },
+                { code: 'checkout_with_quote', permissionLevel: 1 },
+              ],
+            },
+            global: {
+              ...preloadedState.global,
+              featureFlags: {
+                'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
+              },
+            },
+          },
+          initialEntries: [`/272989?date=${dateString}`],
+        });
+        await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+        const checkoutButton = screen.getByRole('button', { name: 'Proceed to checkout' });
+        await userEvent.click(checkoutButton);
+        expect(sessionStorage.getItem('quoteCheckoutUuid')).toEqual('');
+        expect(sessionStorage.getItem('isNewStorefront')).toEqual(JSON.stringify(true));
+        expect(sessionStorage.getItem('quoteCheckoutId')).toEqual(id);
+        expect(sessionStorage.getItem('quoteDate')).toEqual(dateString);
+      });
+    });
   });
 });

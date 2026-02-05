@@ -2,8 +2,8 @@ import { MouseEvent, useContext, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Alert, Box, Typography } from '@mui/material';
 
-import { B3CustomForm } from '@/components';
-import { Captcha } from '@/components/form';
+import { B3CustomForm } from '@/components/B3CustomForm';
+import { Captcha } from '@/components/captcha/Captcha';
 import { getContrastColor } from '@/components/outSideComponents/utils/b3CustomStyles';
 import { useB3Lang } from '@/lib/lang';
 import { CustomStyleContext } from '@/shared/customStyleButton/context';
@@ -15,8 +15,8 @@ import {
   uploadB2BFile,
 } from '@/shared/service/b2b';
 import { getStorefrontToken } from '@/shared/service/b2b/graphql/recaptcha';
-import { channelId, storeHash } from '@/utils';
 import b2bLogger from '@/utils/b3Logger';
+import { channelId, storeHash } from '@/utils/basicConfig';
 
 import { RegisteredContext } from './context/RegisteredContext';
 import { deCodeField, toHump } from './config';
@@ -207,17 +207,22 @@ export default function RegisterComplete(props: RegisterCompleteProps) {
       ...bcFields,
     };
 
-    return createBCCompanyUser(userItem, captchaKey);
+    return createBCCompanyUser(userItem, captchaKey).then((res) => ({
+      customerId: res.customerCreate.customer.id,
+      customerEmail: res.customerCreate.customer.email,
+    }));
   };
 
   const getB2BFieldsValue = async (
     _: CustomFieldItems,
     customerId: number | string,
+    customerEmail: string,
     fileList: any,
   ) => {
     try {
       const b2bFields: CustomFieldItems = {};
       b2bFields.customerId = customerId || '';
+      b2bFields.customerEmail = customerEmail || '';
       b2bFields.storeHash = storeHash;
 
       // company user extra field
@@ -428,13 +433,14 @@ export default function RegisterComplete(props: RegisterCompleteProps) {
           } else {
             const attachmentsList = companyInformation.filter((list) => list.fieldType === 'files');
             const fileList = await getFileUrl(attachmentsList || []);
-            const res = await getBCFieldsValue({ password, confirmPassword });
-            const {
-              customerCreate: { customer: data },
-            } = res;
+            const { customerId, customerEmail } = await getBCFieldsValue({
+              password,
+              confirmPassword,
+            });
             const accountInfo = await getB2BFieldsValue(
               { password, confirmPassword },
-              data.id,
+              customerId,
+              customerEmail,
               fileList,
             );
 

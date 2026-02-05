@@ -3,14 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { Box } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 
-import { B2BAutoCompleteCheckbox } from '@/components';
 import B3Filter from '@/components/filter/B3Filter';
 import B3Spin from '@/components/spin/B3Spin';
-import { useMobile } from '@/hooks';
+import { B2BAutoCompleteCheckbox } from '@/components/ui/B2BAutoCompleteCheckbox';
+import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { isB2BUserSelector, useAppSelector } from '@/store';
 import { CustomerRole } from '@/types';
-import { currencyFormat, displayFormat, ordersCurrencyFormat } from '@/utils';
+import { currencyFormat, ordersCurrencyFormat } from '@/utils/b3CurrencyFormat';
+import { displayFormat } from '@/utils/b3DateFormat';
 
 import OrderStatus from './components/OrderStatus';
 import { orderStatusTranslationVariables } from './shared/getOrderStatus';

@@ -1,27 +1,31 @@
 import { useContext, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Box, ImageListItem } from '@mui/material';
 
 import b2bLogo from '@/assets/b2bLogo.png';
-import { B3Card } from '@/components';
+import { B3Card } from '@/components/B3Card';
 import B3Spin from '@/components/spin/B3Spin';
 import { LOGIN_LANDING_LOCATIONS } from '@/constants';
-import { useMobile, useScrollBar } from '@/hooks';
+import { useMobile } from '@/hooks/useMobile';
+import { useScrollBar } from '@/hooks/useScrollBar';
 import { useB3Lang } from '@/lib/lang';
 import { CustomStyleContext } from '@/shared/customStyleButton';
 import { GlobalContext } from '@/shared/global';
 import { getB2BAccountFormFields, getB2BCountries } from '@/shared/service/b2b';
 import { bcLogin } from '@/shared/service/bc';
 import { themeFrameSelector, useAppSelector } from '@/store';
-import { B3SStorage, loginJump, platform } from '@/utils';
 import b2bLogger from '@/utils/b3Logger';
+import { loginJump } from '@/utils/b3Login';
+import { B3SStorage } from '@/utils/b3Storage';
+import { platform } from '@/utils/basicConfig';
 import { getAssetUrl } from '@/utils/getAssetUrl';
 import { getCurrentCustomerInfo } from '@/utils/loginInfo';
+import { getStoreConfigs } from '@/utils/storefrontConfig';
 
 import { loginCheckout, LoginConfig } from '../Login/config';
 import { type PageProps } from '../PageProps';
 
-import { RegisteredContext } from './context/RegisteredContext';
+import { RegisteredContext, RegisteredProvider } from './context/RegisteredContext';
 import {
   AccountFormFieldsItems,
   b2bAddressRequiredFields,
@@ -46,8 +50,13 @@ function Registered(props: PageProps) {
   const navigate = useNavigate();
 
   const IframeDocument = useAppSelector(themeFrameSelector);
+  const loginLandingLocation = useAppSelector(({ global }) => global.loginLandingLocation);
+  const [params] = useSearchParams();
 
-  const { isCheckout, isCloseGotoBCHome, logo, registerEnabled } = useContext(GlobalContext).state;
+  const {
+    state: { isCheckout, isCloseGotoBCHome, logo, registerEnabled },
+    dispatch: globalDispatch,
+  } = useContext(GlobalContext);
 
   const {
     state: { isLoading },
@@ -55,9 +64,12 @@ function Registered(props: PageProps) {
   } = useContext(RegisteredContext);
 
   const {
-    accountLoginRegistration,
-    portalStyle: { backgroundColor = '#FEF9F5' },
-  } = useContext(CustomStyleContext).state;
+    state: {
+      accountLoginRegistration,
+      portalStyle: { backgroundColor = '#FEF9F5' },
+    },
+    dispatch: styleDispatch,
+  } = useContext(CustomStyleContext);
 
   useEffect(() => {
     if (!registerEnabled) {
@@ -82,6 +94,9 @@ function Registered(props: PageProps) {
             },
           });
         }
+
+        // update the storefront config in the context
+        getStoreConfigs(styleDispatch, globalDispatch);
 
         const accountFormAllFields = formType.map((item: number) => getB2BAccountFormFields(item));
 
@@ -236,21 +251,24 @@ function Registered(props: PageProps) {
 
         clearRegisterInfo();
 
-        const isLoginLandLocation = loginJump(navigate);
-
         if (platform === 'catalyst') {
-          const landingLoginLocation = isLoginLandLocation
-            ? LOGIN_LANDING_LOCATIONS.HOME
-            : LOGIN_LANDING_LOCATIONS.BUYER_PORTAL;
+          const landingLoginLocation =
+            params.get('redirectTo') === 'check-out'
+              ? LOGIN_LANDING_LOCATIONS.CHECKOUT
+              : loginLandingLocation;
 
           window.b2b.callbacks.dispatchEvent('on-registered', {
             email,
             password,
             landingLoginLocation,
           });
+
           window.location.hash = '';
+
           return;
         }
+
+        const isLoginLandLocation = loginJump(navigate);
 
         if (!isLoginLandLocation) return;
 
@@ -323,4 +341,10 @@ function Registered(props: PageProps) {
   );
 }
 
-export default Registered;
+export default function RegisterPage(props: PageProps) {
+  return (
+    <RegisteredProvider>
+      <Registered {...props} />
+    </RegisteredProvider>
+  );
+}

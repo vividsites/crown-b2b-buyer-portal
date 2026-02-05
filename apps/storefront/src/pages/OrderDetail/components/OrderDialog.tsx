@@ -4,10 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import { Box, Typography } from '@mui/material';
 import Cookies from 'js-cookie';
 
-import { B3CustomForm } from '@/components';
+import { B3CustomForm } from '@/components/B3CustomForm';
 import B3Dialog from '@/components/B3Dialog';
 import { CART_URL } from '@/constants';
-import { useMobile } from '@/hooks';
+import { useIsBackorderValidationEnabled } from '@/hooks/useIsBackorderValidationEnabled';
+import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import {
   addProductToBcShoppingList,
@@ -15,10 +16,12 @@ import {
   getVariantInfoBySkus,
 } from '@/shared/service/b2b';
 import { isB2BUserSelector, useAppSelector } from '@/store';
-import { BigCommerceStorefrontAPIBaseURL, snackbar } from '@/utils';
 import b2bLogger from '@/utils/b3Logger';
+import { snackbar } from '@/utils/b3Tip';
 import b3TriggerCartNumber from '@/utils/b3TriggerCartNumber';
-import { callCart } from '@/utils/cartUtils';
+import { BigCommerceStorefrontAPIBaseURL } from '@/utils/basicConfig';
+import { createOrUpdateExistingCart } from '@/utils/cartUtils';
+import { validateProductsLegacy as rawValidateProducts } from '@/utils/validateProducts';
 
 import { EditableProductItem, OrderProductItem } from '../../../types';
 import getReturnFormFields from '../shared/config';
@@ -64,6 +67,24 @@ const getXsrfToken = (): string | undefined => {
   return decodeURIComponent(token);
 };
 
+const validateProducts = async (products: EditableProductItem[]) => {
+  return rawValidateProducts(
+    products.map((product) => ({
+      ...product,
+      quantity: parseInt(`${product.editQuantity}`, 10) || 1,
+      productId: product.product_id,
+      variantId: product.variant_id,
+
+      productOptions: (product.product_options || []).map((option) => ({
+        optionId: option.product_option_id,
+        optionValue: option.value,
+      })),
+
+      allOptions: product.product_options,
+    })),
+  );
+};
+
 export default function OrderDialog({
   open,
   products = [],
@@ -74,6 +95,7 @@ export default function OrderDialog({
   orderId,
 }: OrderDialogProps) {
   const navigate = useNavigate();
+  const backendValidationEnabled = useIsBackorderValidationEnabled();
   const isB2BUser = useAppSelector(isB2BUserSelector);
   const [isOpenCreateShopping, setOpenCreateShopping] = useState(false);
   const [openShoppingList, setOpenShoppingList] = useState(false);
@@ -100,6 +122,19 @@ export default function OrderDialog({
 
   const handleClose = () => {
     setOpen(false);
+  };
+
+  const showSuccessSnackbarWithCartLink = (message: string): void => {
+    snackbar.success(message, {
+      action: {
+        label: b3Lang('orderDetail.viewCart'),
+        onClick: () => {
+          if (window.b2b.callbacks.dispatchEvent('on-click-cart-button')) {
+            window.location.href = CART_URL;
+          }
+        },
+      },
+    });
   };
 
   const sendReturnRequest = async (
@@ -197,56 +232,130 @@ export default function OrderDialog({
     return isValid;
   };
 
-  const handleReorder = async () => {
-    setIsRequestLoading(true);
-
-    try {
-      const items: CustomFieldItems[] = [];
-      const skus: string[] = [];
-      editableProducts.forEach((product) => {
-        if (checkedArr.includes(product.variant_id)) {
-          items.push({
-            quantity: parseInt(`${product.editQuantity}`, 10) || 1,
-            productId: product.product_id,
-            variantId: product.variant_id,
-            optionSelections: (product.product_options || []).map((option) => ({
-              optionId: option.product_option_id,
-              optionValue: option.value,
-            })),
-            allOptions: product.product_options,
-          });
-
-          skus.push(product.sku);
-        }
-      });
-
-      if (skus.length <= 0) {
-        return;
-      }
-
-      if (!validateProductNumber(variantInfoList, skus)) {
-        snackbar.error(b3Lang('purchasedProducts.error.fillCorrectQuantity'));
-        return;
-      }
-      const res = await callCart(items);
-
-      const status = res && (res.data.cart.createCart || res.data.cart.addCartLineItems);
-
-      if (status) {
-        setOpen(false);
-        snackbar.success(b3Lang('orderDetail.reorder.productsAdded'), {
-          action: {
-            label: b3Lang('orderDetail.reorder.viewCart'),
-            onClick: () => {
-              if (window.b2b.callbacks.dispatchEvent('on-click-cart-button')) {
-                window.location.href = CART_URL;
-              }
-            },
-          },
+  const handleReorderOnFrontend = async () => {
+    const items: CustomFieldItems[] = [];
+    const skus: string[] = [];
+    editableProducts.forEach((product) => {
+      if (checkedArr.includes(product.variant_id)) {
+        items.push({
+          quantity: parseInt(`${product.editQuantity}`, 10) || 1,
+          productId: product.product_id,
+          variantId: product.variant_id,
+          optionSelections: (product.product_options || []).map((option) => ({
+            optionId: option.product_option_id,
+            optionValue: option.value,
+          })),
+          allOptions: product.product_options,
         });
-        b3TriggerCartNumber();
-      } else if (res.errors) {
-        snackbar.error(res.errors[0].message);
+
+        skus.push(product.sku);
+      }
+    });
+
+    if (skus.length <= 0) {
+      return;
+    }
+
+    if (!validateProductNumber(variantInfoList, skus)) {
+      snackbar.error(b3Lang('purchasedProducts.error.fillCorrectQuantity'));
+      return;
+    }
+
+    // This will throw if there are errors, no need to check the response
+    await createOrUpdateExistingCart(items);
+
+    setOpen(false);
+    snackbar.success(b3Lang('orderDetail.reorder.productsAdded'), {
+      action: {
+        label: b3Lang('orderDetail.viewCart'),
+        onClick: () => {
+          if (window.b2b.callbacks.dispatchEvent('on-click-cart-button')) {
+            window.location.href = CART_URL;
+          }
+        },
+      },
+    });
+  };
+
+  const handleReorderBackend = async () => {
+    const items = editableProducts.filter((product) => checkedArr.includes(product.variant_id));
+
+    if (items.length <= 0) {
+      return;
+    }
+
+    const validationResult = await validateProducts(items);
+
+    const helperTextMap = new Map<number, string>();
+
+    validationResult.warning.forEach(({ product, message }) => {
+      helperTextMap.set(product.variantId, message);
+    });
+
+    validationResult.error.forEach(({ product, error }) => {
+      if (error.type === 'network') {
+        helperTextMap.set(product.variantId, b3Lang('orderDetail.reorder.failedToAdd.helperText'));
+      } else {
+        helperTextMap.set(product.variantId, error.message || '');
+      }
+    });
+
+    const successVariantIds = validationResult.success.map(({ product }) => product.variantId);
+
+    setEditableProducts((prevProducts) =>
+      prevProducts.map((product) => {
+        if (helperTextMap.has(product.variant_id)) {
+          return {
+            ...product,
+            helperText: helperTextMap.get(product.variant_id) || '',
+          };
+        }
+
+        if (successVariantIds.includes(product.variant_id)) {
+          return { ...product, helperText: '' };
+        }
+
+        return product;
+      }),
+    );
+
+    if (validationResult.success.length === 0) {
+      snackbar.error(b3Lang('orderDetail.reorder.addToCartError'));
+      return;
+    }
+
+    const validItems = validationResult.success.map(({ product }) => ({
+      ...product,
+      optionSelections: product.productOptions,
+    }));
+
+    // This will throw if there are errors, no need to check the response
+    await createOrUpdateExistingCart(validItems);
+
+    const successfulVariantIds = validItems.map((item) => item.variantId);
+
+    if (successfulVariantIds.length === checkedArr.length) {
+      setOpen(false);
+      showSuccessSnackbarWithCartLink(b3Lang('orderDetail.reorder.productsAdded'));
+    } else {
+      snackbar.error(b3Lang('orderDetail.reorder.addToCartError'));
+      showSuccessSnackbarWithCartLink(
+        b3Lang('orderDetail.reorder.partialSuccess', { count: validItems.length }),
+      );
+      setCheckedArr((prev) =>
+        prev.filter((variantId) => !successfulVariantIds.includes(variantId)),
+      );
+    }
+  };
+
+  const handleReorder = async () => {
+    try {
+      setIsRequestLoading(true);
+
+      if (backendValidationEnabled) {
+        await handleReorderBackend();
+      } else {
+        await handleReorderOnFrontend();
       }
     } catch (err) {
       if (err instanceof Error) {
@@ -257,6 +366,7 @@ export default function OrderDialog({
       }
     } finally {
       setIsRequestLoading(false);
+      b3TriggerCartNumber();
     }
   };
 
@@ -358,6 +468,7 @@ export default function OrderDialog({
         editQuantity: item.quantity,
       })),
     );
+    setCheckedArr([]);
 
     const getVariantInfoByList = async () => {
       const visibleProducts = products.filter((item: OrderProductItem) => item?.isVisible);
@@ -407,6 +518,7 @@ export default function OrderDialog({
           <OrderCheckboxProduct
             products={editableProducts}
             onProductChange={handleProductChange}
+            checkedArr={checkedArr}
             setCheckedArr={setCheckedArr}
             setReturnArr={setReturnArr}
             textAlign={isMobile ? 'left' : 'right'}

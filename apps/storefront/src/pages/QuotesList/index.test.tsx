@@ -60,6 +60,7 @@ const buildQuoteEdgeWith = builder<QuoteEdge>(() => ({
     subtotal: faker.commerce.price(),
     totalAmount: faker.commerce.price(),
     taxTotal: faker.commerce.price(),
+    uuid: undefined,
   },
 }));
 
@@ -102,6 +103,8 @@ const productSearchItem = builder<QuoteItem['node']['productsSearch']>(() => ({
   productUrl: faker.internet.url(),
   quantity: faker.number.int(),
   product_options: [],
+  availableToSell: faker.number.int(),
+  unlimitedBackorder: faker.datatype.boolean(),
 }));
 
 const buildDraftQuoteItemWith = builder<QuoteItem>(() => ({
@@ -279,6 +282,7 @@ describe('when the user is a B2B customer', () => {
           id: '939232',
           createdAt: getUnixTime(new Date('1 January 2025')),
           status: QuoteStatus.OPEN,
+          uuid: undefined,
         },
       });
       const someQuote = buildQuoteEdgeWith('WHATEVER_VALUES');
@@ -301,8 +305,72 @@ describe('when the user is a B2B customer', () => {
 
       await userEvent.click(within(table).getByRole('row', { name: /Many Socks/ }));
 
+      expect(navigation).toHaveBeenCalledWith(`/quoteDetail/939232?date=1735689600`);
+    });
+
+    it('navigates with UUID parameter when quote has a UUID', async () => {
+      const quoteWithUuid = buildQuoteEdgeWith({
+        node: {
+          quoteTitle: 'Quote with UUID',
+          id: '123456',
+          createdAt: getUnixTime(new Date('1 January 2025')),
+          uuid: 'abc-123-def-456',
+          status: QuoteStatus.OPEN,
+        },
+      });
+
+      const quotesListB2B = buildQuotesListB2BWith({
+        data: { quotes: { totalCount: 1, edges: [quoteWithUuid] } },
+      });
+
+      server.use(
+        graphql.query('GetQuotesList', () => HttpResponse.json(quotesListB2B)),
+        graphql.query('GetShoppingListsCreatedByUser', () =>
+          HttpResponse.json(buildShoppingListsCreatedByUserWith('WHATEVER_VALUES')),
+        ),
+      );
+
+      const { navigation } = renderWithProviders(<QuotesList />, { preloadedState });
+
+      const table = await screen.findByRole('table');
+
+      await userEvent.click(within(table).getByRole('row', { name: /Quote with UUID/ }));
+
       expect(navigation).toHaveBeenCalledWith(
-        `/quoteDetail/939232?date=${getUnixTime(new Date('1 January 2025'))}`,
+        `/quoteDetail/123456?date=1735689600&uuid=abc-123-def-456`,
+      );
+    });
+
+    it('navigates without UUID parameter when quote has no UUID (backward compatibility)', async () => {
+      const quoteWithoutUuid = buildQuoteEdgeWith({
+        node: {
+          quoteTitle: 'Quote without UUID',
+          id: '789012',
+          createdAt: getUnixTime(new Date('2 January 2025')),
+          status: QuoteStatus.OPEN,
+          uuid: undefined,
+        },
+      });
+
+      const quotesListB2B = buildQuotesListB2BWith({
+        data: { quotes: { totalCount: 1, edges: [quoteWithoutUuid] } },
+      });
+
+      server.use(
+        graphql.query('GetQuotesList', () => HttpResponse.json(quotesListB2B)),
+        graphql.query('GetShoppingListsCreatedByUser', () =>
+          HttpResponse.json(buildShoppingListsCreatedByUserWith('WHATEVER_VALUES')),
+        ),
+      );
+
+      const { navigation } = renderWithProviders(<QuotesList />, { preloadedState });
+
+      const table = await screen.findByRole('table');
+
+      await userEvent.click(within(table).getByRole('row', { name: /Quote without UUID/ }));
+
+      expect(navigation).toHaveBeenCalledWith(
+        `/quoteDetail/789012?date=${getUnixTime(new Date('2 January 2025'))}`,
       );
     });
   });
@@ -868,6 +936,7 @@ describe('when the user is a B2C customer', () => {
           id: '939232',
           createdAt: getUnixTime(new Date('1 January 2025')),
           status: QuoteStatus.OPEN,
+          uuid: undefined,
         },
       });
       const someQuote = buildQuoteEdgeWith('WHATEVER_VALUES');
@@ -885,8 +954,62 @@ describe('when the user is a B2C customer', () => {
 
       await userEvent.click(within(table).getByRole('row', { name: /Many Socks/ }));
 
+      expect(navigation).toHaveBeenCalledWith(`/quoteDetail/939232?date=1735689600`);
+    });
+
+    it('navigates with UUID parameter when quote has a UUID', async () => {
+      const quoteWithUuid = buildQuoteEdgeWith({
+        node: {
+          quoteTitle: 'Quote with UUID',
+          id: '123456',
+          createdAt: getUnixTime(new Date('1 January 2025')),
+          uuid: 'abc-123-def-456',
+          status: QuoteStatus.OPEN,
+        },
+      });
+
+      const quotesListBC = buildQuotesListBCWith({
+        data: { customerQuotes: { totalCount: 1, edges: [quoteWithUuid] } },
+      });
+
+      server.use(graphql.query('GetQuotesList', () => HttpResponse.json(quotesListBC)));
+
+      const { navigation } = renderWithProviders(<QuotesList />, { preloadedState });
+
+      const table = await screen.findByRole('table');
+
+      await userEvent.click(within(table).getByRole('row', { name: /Quote with UUID/ }));
+
       expect(navigation).toHaveBeenCalledWith(
-        `/quoteDetail/939232?date=${getUnixTime(new Date('1 January 2025'))}`,
+        `/quoteDetail/123456?date=1735689600&uuid=abc-123-def-456`,
+      );
+    });
+
+    it('navigates without UUID parameter when quote has no UUID (backward compatibility)', async () => {
+      const quoteWithoutUuid = buildQuoteEdgeWith({
+        node: {
+          quoteTitle: 'Quote without UUID',
+          id: '789012',
+          createdAt: getUnixTime(new Date('2 January 2025')),
+          status: QuoteStatus.OPEN,
+          uuid: undefined,
+        },
+      });
+
+      const quotesListBC = buildQuotesListBCWith({
+        data: { customerQuotes: { totalCount: 1, edges: [quoteWithoutUuid] } },
+      });
+
+      server.use(graphql.query('GetQuotesList', () => HttpResponse.json(quotesListBC)));
+
+      const { navigation } = renderWithProviders(<QuotesList />, { preloadedState });
+
+      const table = await screen.findByRole('table');
+
+      await userEvent.click(within(table).getByRole('row', { name: /Quote without UUID/ }));
+
+      expect(navigation).toHaveBeenCalledWith(
+        `/quoteDetail/789012?date=${getUnixTime(new Date('2 January 2025'))}`,
       );
     });
   });

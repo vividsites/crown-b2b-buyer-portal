@@ -1,12 +1,26 @@
-import { CompanyHierarchyListProps, ConfigsSwitchStatusProps } from '@/types';
+import { CompanyHierarchyListProps, ConfigsSwitchStatusProps, LoginTypes } from '@/types';
+import { storeHash } from '@/utils/basicConfig';
+import { mapToCompanyError } from '@/utils/companyUtils';
 import {
   convertArrayToGraphql,
   convertObjectOrArrayKeysToCamel,
   convertObjectOrArrayKeysToSnake,
-  storeHash,
-} from '@/utils';
+} from '@/utils/graphqlDataConvert';
 
 import B3Request from '../../request/b3Fetch';
+
+interface B2BTokenResponse {
+  authorization: {
+    result: {
+      token: string;
+      loginType: LoginTypes;
+      permissions: {
+        code: string;
+        permissionLevel: number;
+      }[];
+    };
+  };
+}
 
 interface ProductPriceOption {
   option_id: number;
@@ -171,6 +185,47 @@ const storefrontConfig = () => `{
 	}
 }`;
 
+const storefrontConfigWithCompanyHierarchy = () => `
+query storefrontConfigWithCompanyHierarchy($includeCompanyHierarchy: Boolean!) {
+	storefrontConfig(
+		storeHash: "${storeHash}"
+	) {
+		config{
+			accountSettings,
+			addressBook,
+			buyAgain,
+			dashboard,
+			invoice{
+				enabledStatus,
+				value,
+			},
+			messages,
+			orders,
+			quickOrderPad,
+			quotes,
+			recentlyViewed,
+			returns,
+			shoppingLists,
+			tradeProfessionalApplication,
+			userManagement,
+			wishLists,
+		}
+		configId,
+	}
+	companySubsidiaries @include(if: $includeCompanyHierarchy) {
+		companyId
+		companyName
+		parentCompanyId
+		parentCompanyName
+		channelFlag
+	}
+	userMasqueradingCompany @include(if: $includeCompanyHierarchy) {
+		companyId
+		companyName
+		bcId
+	}
+}`;
+
 const currencies = (channelId: string | number) => `{
 	currencies(
 		storeHash: "${storeHash}",
@@ -211,7 +266,8 @@ const storefrontConfigs = (channelId: number, keys: string[]) => `{
 	}
 }`;
 
-const taxZoneRates = () => `{
+const taxZoneRates = () => `
+query TaxZoneRates {
 	taxZoneRates(storeHash: "${storeHash}") {
 		rates {
 			id,
@@ -446,9 +502,9 @@ const storeConfigSwitchStatus = `query storeConfigSwitchStatus($key: String!){
 }`;
 
 export const getB2BToken = (currentCustomerJWT: string, channelId = 1) =>
-  B3Request.graphqlB2B({
+  B3Request.graphqlB2B<B2BTokenResponse>({
     query: getB2BTokenQl(currentCustomerJWT, channelId),
-  });
+  }).catch(mapToCompanyError);
 
 export const getAgentInfo = (customerId: string | number) =>
   B3Request.graphqlB2B({
@@ -478,6 +534,12 @@ export const getUserCompany = (userId: number) =>
 export const getStorefrontConfig = () =>
   B3Request.graphqlB2B({
     query: storefrontConfig(),
+  });
+
+export const getStorefrontConfigWithCompanyHierarchy = (includeCompanyHierarchy = false) =>
+  B3Request.graphqlB2B({
+    query: storefrontConfigWithCompanyHierarchy(),
+    variables: { includeCompanyHierarchy },
   });
 
 export const getCurrencies = (channelId: string | number) =>
@@ -522,10 +584,13 @@ export const getCompanySubsidiaries = (): Promise<CompanySubsidiariesProps> =>
   });
 
 export const startUserMasqueradingCompany = (companyId: number) =>
-  B3Request.graphqlB2B({
-    query: userMasqueradingCompanyBegin,
-    variables: { companyId },
-  });
+  B3Request.graphqlB2B(
+    {
+      query: userMasqueradingCompanyBegin,
+      variables: { companyId },
+    },
+    true,
+  ).catch(mapToCompanyError);
 
 export const endUserMasqueradingCompany = () =>
   B3Request.graphqlB2B({

@@ -2,10 +2,10 @@ import { ChangeEvent, Dispatch, SetStateAction, useEffect, useState } from 'reac
 import { Box, Checkbox, FormControlLabel, FormGroup } from '@mui/material';
 
 import B3Dialog from '@/components/B3Dialog';
-import { useMobile } from '@/hooks';
+import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { updateB2BAddress } from '@/shared/service/b2b';
-import { snackbar } from '@/utils';
+import { snackbar } from '@/utils/b3Tip';
 
 import { AddressItemType } from '../../../types/address';
 
@@ -74,7 +74,7 @@ export default function SetDefaultDialog(props: SetDefaultDialogProps) {
       isOpen={isOpen}
       title={b3Lang('addresses.setDefaultDialog.setDefaultAddress')}
       leftSizeBtn={b3Lang('addresses.setDefaultDialog.cancel')}
-      rightSizeBtn="set"
+      rightSizeBtn={b3Lang('addresses.setDefaultDialog.set')}
       handleLeftClick={closeDialog}
       handRightClick={handleSetDefault}
     >

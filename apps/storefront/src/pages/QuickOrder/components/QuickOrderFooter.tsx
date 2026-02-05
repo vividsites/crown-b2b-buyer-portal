@@ -2,11 +2,14 @@ import { Dispatch, SetStateAction, useContext, useEffect, useRef, useState } fro
 import { useNavigate } from 'react-router-dom';
 import { ArrowDropDown } from '@mui/icons-material';
 import { Box, Grid, Menu, MenuItem, SxProps, Typography, useMediaQuery } from '@mui/material';
+import { groupBy } from 'lodash-es';
+import uniq from 'lodash-es/uniq';
 import { v1 as uuid } from 'uuid';
 
 import CustomButton from '@/components/button/CustomButton';
 import { CART_URL, PRODUCT_DEFAULT_IMAGE } from '@/constants';
-import { useMobile } from '@/hooks';
+import { useIsBackorderValidationEnabled } from '@/hooks/useIsBackorderValidationEnabled';
+import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { GlobalContext } from '@/shared/global';
 import {
@@ -15,8 +18,10 @@ import {
   searchProducts,
 } from '@/shared/service/b2b';
 import { activeCurrencyInfoSelector, rolePermissionSelector, useAppSelector } from '@/store';
-import { currencyFormat, getProductPriceIncTaxOrExTaxBySetting, snackbar } from '@/utils';
+import { Product } from '@/types';
+import { currencyFormat } from '@/utils/b3CurrencyFormat';
 import b2bLogger from '@/utils/b3Logger';
+import { getProductPriceIncTaxOrExTaxBySetting } from '@/utils/b3Price';
 import {
   addQuoteDraftProducts,
   calculateProductListPrice,
@@ -24,43 +29,17 @@ import {
   validProductQty,
 } from '@/utils/b3Product/b3Product';
 import { conversionProductsList } from '@/utils/b3Product/shared/config';
+import { snackbar } from '@/utils/b3Tip';
 import b3TriggerCartNumber from '@/utils/b3TriggerCartNumber';
-import { callCart } from '@/utils/cartUtils';
+import { createOrUpdateExistingCart } from '@/utils/cartUtils';
+import {
+  convertStockAndThresholdValidationErrorToWarning,
+  validateProductsLegacy,
+} from '@/utils/validateProducts';
 
 import CreateShoppingList from '../../OrderDetail/components/CreateShoppingList';
 import OrderShoppingList from '../../OrderDetail/components/OrderShoppingList';
 import { addCartProductToVerify, CheckedProduct } from '../utils';
-
-interface NodeProps {
-  basePrice: number | string;
-  baseSku: string;
-  createdAt: number;
-  discount: number | string;
-  enteredInclusive: boolean;
-  id: number | string;
-  itemId: number;
-  optionList: CustomFieldItems;
-  primaryImage: string;
-  productId: number;
-  productName: string;
-  productUrl: string;
-  quantity: number | string;
-  tax: number | string;
-  updatedAt: number;
-  variantId: number;
-  variantSku: string;
-  productsSearch: CustomFieldItems;
-  optionSelections: CustomFieldItems;
-}
-
-interface ProductsProps {
-  maxQuantity?: number;
-  minQuantity?: number;
-  stock?: number;
-  isStock?: string;
-  node: NodeProps;
-  isValid?: boolean;
-}
 
 interface QuickOrderFooterProps {
   checkedArr: CheckedProduct[];
@@ -69,15 +48,59 @@ interface QuickOrderFooterProps {
   isB2BUser: boolean;
 }
 
+const transformToCartLineItems = (productsSearch: Product[], checkedArr: CheckedProduct[]) => {
+  const lineItems: CustomFieldItems[] = [];
+
+  checkedArr.forEach((item: CheckedProduct) => {
+    const { node } = item;
+
+    const currentProduct: CustomFieldItems | undefined = productsSearch.find(
+      (inventory: CustomFieldItems) => Number(node.productId) === inventory.id,
+    );
+    if (currentProduct) {
+      const { variants }: CustomFieldItems = currentProduct;
+
+      if (variants.length > 0) {
+        const currentInventoryInfo: CustomFieldItems | undefined = variants.find(
+          (variant: CustomFieldItems) =>
+            node.variantSku === variant.sku &&
+            Number(node.variantId) === Number(variant.variant_id),
+        );
+
+        if (currentInventoryInfo) {
+          const { optionList, quantity } = node;
+
+          const options = optionList.map((option: CustomFieldItems) => ({
+            optionId: option.product_option_id,
+            optionValue: option.value,
+          }));
+
+          lineItems.push({
+            optionSelections: options,
+            allOptions: optionList,
+            productId: parseInt(currentInventoryInfo.product_id, 10) || 0,
+            quantity,
+            variantId: parseInt(currentInventoryInfo.variant_id, 10) || 0,
+          });
+        }
+      }
+    }
+  });
+
+  return lineItems;
+};
+
 function QuickOrderFooter(props: QuickOrderFooterProps) {
   const { checkedArr, isAgenting, setIsRequestLoading, isB2BUser } = props;
   const {
     state: { productQuoteEnabled = false, shoppingListEnabled = false },
   } = useContext(GlobalContext);
   const b3Lang = useB3Lang();
+
   const companyInfoId = useAppSelector((state) => state.company.companyInfo.id);
   const { currency_code: currencyCode } = useAppSelector(activeCurrencyInfoSelector);
   const { purchasabilityPermission } = useAppSelector(rolePermissionSelector);
+  const backendValidationEnabled = useIsBackorderValidationEnabled();
 
   const isShowCartAction = isB2BUser ? purchasabilityPermission : true;
 
@@ -115,95 +138,41 @@ function QuickOrderFooter(props: QuickOrderFooterProps) {
     setIsOpen(false);
   };
 
-  // Add selected to cart
-  const handleSetCartLineItems = (inventoryInfos: ProductsProps[]) => {
-    const lineItems: CustomFieldItems[] = [];
-
-    checkedArr.forEach((item: CheckedProduct) => {
-      const { node } = item;
-
-      const currentProduct: CustomFieldItems | undefined = inventoryInfos.find(
-        (inventory: CustomFieldItems) => Number(node.productId) === inventory.id,
-      );
-      if (currentProduct) {
-        const { variants }: CustomFieldItems = currentProduct;
-
-        if (variants.length > 0) {
-          const currentInventoryInfo: CustomFieldItems | undefined = variants.find(
-            (variant: CustomFieldItems) =>
-              node.variantSku === variant.sku &&
-              Number(node.variantId) === Number(variant.variant_id),
-          );
-
-          if (currentInventoryInfo) {
-            const { optionList, quantity } = node;
-
-            const options = optionList.map((option: CustomFieldItems) => ({
-              optionId: option.product_option_id,
-              optionValue: option.value,
-            }));
-
-            lineItems.push({
-              optionSelections: options,
-              allOptions: optionList,
-              productId: parseInt(currentInventoryInfo.product_id, 10) || 0,
-              quantity,
-              variantId: parseInt(currentInventoryInfo.variant_id, 10) || 0,
-            });
+  const showAddToCartSuccessMessage = () => {
+    snackbar.success(b3Lang('purchasedProducts.footer.productsAdded'), {
+      action: {
+        label: b3Lang('purchasedProducts.footer.viewCart'),
+        onClick: () => {
+          if (window.b2b.callbacks.dispatchEvent('on-click-cart-button')) {
+            window.location.href = CART_URL;
           }
-        }
-      }
+        },
+      },
     });
-
-    return lineItems;
   };
 
-  const handleAddSelectedToCart = async () => {
-    setIsRequestLoading(true);
-    handleClose();
+  const getProductsSearchInfo = async () => {
+    const { productsSearch } = await searchProducts({
+      productIds: uniq(checkedArr.map(({ node }) => Number(node.productId))),
+      companyId: companyInfoId,
+      customerGroupId,
+    });
+
+    return transformToCartLineItems(productsSearch || [], checkedArr);
+  };
+
+  const handleFrontedAddSelectedToCart = async () => {
     try {
-      const productIds: number[] = [];
-
-      checkedArr.forEach((item: CheckedProduct) => {
-        const { node } = item;
-
-        if (!productIds.includes(Number(node.productId))) {
-          productIds.push(Number(node.productId));
-        }
-      });
-
-      if (productIds.length === 0) {
-        snackbar.error(b3Lang('purchasedProducts.footer.selectOneItemToAdd'));
-        return;
-      }
-
       const isPassVerify = await addCartProductToVerify(checkedArr, b3Lang);
 
       if (!isPassVerify) return;
 
-      const companyId = companyInfoId;
+      const lineItems = await getProductsSearchInfo();
 
-      const { productsSearch: getInventoryInfos } = await searchProducts({
-        productIds,
-        companyId,
-        customerGroupId,
-      });
-
-      const lineItems = handleSetCartLineItems(getInventoryInfos || []);
-
-      const res = await callCart(lineItems);
+      const res = await createOrUpdateExistingCart(lineItems);
 
       if (res && !res.errors) {
-        snackbar.success(b3Lang('purchasedProducts.footer.productsAdded'), {
-          action: {
-            label: b3Lang('purchasedProducts.footer.viewCart'),
-            onClick: () => {
-              if (window.b2b.callbacks.dispatchEvent('on-click-cart-button')) {
-                window.location.href = CART_URL;
-              }
-            },
-          },
-        });
+        showAddToCartSuccessMessage();
       } else if (res && res.errors) {
         snackbar.error(res.errors[0].message);
       } else {
@@ -215,7 +184,32 @@ function QuickOrderFooter(props: QuickOrderFooterProps) {
     }
   };
 
-  // Add selected to quote
+  const handleBackendAddSelectedToCart = async () => {
+    try {
+      const lineItems = await getProductsSearchInfo();
+      await createOrUpdateExistingCart(lineItems);
+      showAddToCartSuccessMessage();
+    } catch (e) {
+      if (e instanceof Error) {
+        snackbar.error(e.message);
+      }
+    } finally {
+      b3TriggerCartNumber();
+      setIsRequestLoading(false);
+    }
+  };
+
+  const handleAddSelectedToCart = async () => {
+    setIsRequestLoading(true);
+    handleClose();
+
+    if (backendValidationEnabled) {
+      handleBackendAddSelectedToCart();
+    } else {
+      handleFrontedAddSelectedToCart();
+    }
+  };
+
   const getOptionsList = (options: CustomFieldItems) => {
     if (options?.length === 0) return [];
 
@@ -234,6 +228,75 @@ function QuickOrderFooter(props: QuickOrderFooterProps) {
 
     return option;
   };
+
+  const addToQuoteBackend = async (products: CustomFieldItems[]) => {
+    const validatedProducts = await validateProductsLegacy(products);
+    const { success, warning, error } =
+      convertStockAndThresholdValidationErrorToWarning(validatedProducts);
+
+    const groupedErrors = groupBy(error, (err) =>
+      ['OOS', 'NON_PURCHASABLE', 'NETWORK_ERROR'].includes(err.error.errorCode)
+        ? err.error.errorCode
+        : 'OTHER',
+    );
+
+    if (groupedErrors.OOS?.length > 0) {
+      const productNames = groupedErrors.OOS.map((err) => err.product.node?.productName || '');
+
+      snackbar.error(
+        b3Lang('purchasedProducts.quickAdd.insufficientStockSku', {
+          stockSku: productNames.join(', '),
+        }),
+      );
+    }
+
+    if (groupedErrors.NON_PURCHASABLE?.length > 0) {
+      const productNames = groupedErrors.NON_PURCHASABLE.map(
+        (err) => err.product.node?.productName || '',
+      );
+
+      snackbar.error(
+        b3Lang('purchasedProducts.quickAdd.notPurchaseableSku', {
+          notPurchaseSku: productNames.join(', '),
+        }),
+      );
+    }
+
+    if (groupedErrors.OTHER?.length > 0) {
+      const productNames = groupedErrors.OTHER.map((err) => err.product.node?.productName || '');
+
+      snackbar.error(
+        b3Lang('quotes.productValidationFailed', {
+          productName: productNames.join(', '),
+        }),
+      );
+    }
+
+    if (groupedErrors.NETWORK_ERROR?.length > 0) {
+      const productNames = groupedErrors.NETWORK_ERROR.map(
+        (err) => err.product.node?.productName || '',
+      );
+
+      snackbar.error(
+        b3Lang('quotes.productValidationFailed', {
+          productName: productNames.join(', '),
+        }),
+      );
+    }
+
+    const validProducts = [...success, ...warning].map((product) => product.product);
+
+    addQuoteDraftProducts(validProducts);
+
+    return validProducts.length > 0;
+  };
+
+  const addToQuoteFrontend = (products: CustomFieldItems[]) => {
+    addQuoteDraftProducts(products);
+
+    return true;
+  };
+  const addToQuote = backendValidationEnabled ? addToQuoteBackend : addToQuoteFrontend;
 
   const handleAddSelectedToQuote = async () => {
     setIsRequestLoading(true);
@@ -276,7 +339,6 @@ function QuickOrderFooter(props: QuickOrderFooterProps) {
       });
 
       const newProductInfo: CustomFieldItems = conversionProductsList(productsSearch);
-      let isSuccess = false;
       let errorMessage = '';
       let isFondVariant = true;
 
@@ -317,7 +379,11 @@ function QuickOrderFooter(props: QuickOrderFooterProps) {
             id: uuid(),
             variantSku: variantItem?.sku || variantSku,
             variantId,
-            productsSearch: currentProductSearch,
+            productsSearch: {
+              ...currentProductSearch,
+              newSelectOptionList: optionsList,
+              variantId,
+            },
             primaryImage: variantItem?.image_url || PRODUCT_DEFAULT_IMAGE,
             productName,
             quantity: Number(quantity) || 1,
@@ -329,11 +395,9 @@ function QuickOrderFooter(props: QuickOrderFooterProps) {
         };
 
         newProducts.push(quoteListitem);
-
-        isSuccess = true;
       });
 
-      isSuccess = validProductQty(newProducts);
+      const isValidQty = validProductQty(newProducts);
 
       if (!isFondVariant) {
         snackbar.error(errorMessage);
@@ -341,17 +405,20 @@ function QuickOrderFooter(props: QuickOrderFooterProps) {
         return;
       }
 
-      if (isSuccess) {
+      if (isValidQty) {
         await calculateProductListPrice(newProducts, '2');
-        addQuoteDraftProducts(newProducts);
-        snackbar.success(b3Lang('purchasedProducts.footer.productsAddedToQuote'), {
-          action: {
-            label: b3Lang('purchasedProducts.footer.viewQuote'),
-            onClick: () => {
-              navigate('/quoteDraft');
+
+        const success = await addToQuote(newProducts);
+        if (success) {
+          snackbar.success(b3Lang('purchasedProducts.footer.productsAddedToQuote'), {
+            action: {
+              label: b3Lang('purchasedProducts.footer.viewQuote'),
+              onClick: () => {
+                navigate('/quoteDraft');
+              },
             },
-          },
-        });
+          });
+        }
       } else {
         snackbar.error(b3Lang('purchasedProducts.footer.productsLimit'), {
           action: {
@@ -369,7 +436,6 @@ function QuickOrderFooter(props: QuickOrderFooterProps) {
     }
   };
 
-  // Add selected to shopping list
   const gotoShoppingDetail = (id: string | number) => {
     navigate(`/shoppingList/${id}`);
   };

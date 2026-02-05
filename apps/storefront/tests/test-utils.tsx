@@ -126,13 +126,42 @@ export function stringContainingAll(...substrings: string[]) {
   };
 }
 
+interface ProductData {
+  productId: string;
+  quantity: string;
+  sku: string;
+  options: Record<string, string>;
+}
+
+export function FakeProductDataProvider({ productId, quantity, sku, options }: ProductData) {
+  return (
+    <div className="productView">
+      <span data-product-sku>{sku}</span>
+      <form data-cart-item-add>
+        <input type="hidden" name="product_id" defaultValue={productId} />
+        {Object.entries(options).map(([key, value]) => (
+          <input key={key} name={key} defaultValue={value} />
+        ))}
+        <div id="add-to-cart-wrapper">
+          <input type="hidden" name="qty[]" defaultValue={quantity} />
+          <div className="add-to-cart-buttons">
+            <input id="form-action-addToCart" type="submit" defaultValue="Add to Cart" />
+          </div>
+        </div>
+      </form>
+      <a href="#bar">Shopping List Click Node</a>
+    </div>
+  );
+}
+
 export { startMockServer } from './mockServer';
-export { graphql, http, HttpResponse } from 'msw';
+export { graphql, http, HttpResponse, delay } from 'msw';
 export { assertQueryParams } from './assertQueryParams';
 export * from '@testing-library/react';
 export { default as userEvent } from '@testing-library/user-event';
 
 export { builder, bulk } from 'tests/builder';
 export * from 'tests/storeStateBuilders';
+export * from 'tests/quoteBuilders';
 export { faker } from '@faker-js/faker';
 export { getUnixTime } from 'date-fns';

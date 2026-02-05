@@ -1,9 +1,5 @@
-import {
-  channelId,
-  convertArrayToGraphql,
-  convertObjectOrArrayKeysToCamel,
-  storeHash,
-} from '@/utils';
+import { channelId, storeHash } from '@/utils/basicConfig';
+import { convertArrayToGraphql, convertObjectOrArrayKeysToCamel } from '@/utils/graphqlDataConvert';
 
 import B3Request from '../../request/b3Fetch';
 
@@ -120,6 +116,7 @@ const getCountries = () => `query Countries {
 const createCompanyUser = (data: any) => `mutation{
   companyCreate(companyData: {
     customerId: "${data.customerId}",
+    customerEmail: "${data.customerEmail || ''}",
     storeHash: "${data.storeHash}",
     companyName: "${data.companyName}",
     companyEmail: "${data.companyEmail}",
@@ -164,6 +161,7 @@ query getStoreBasicInfo($storeHash: String!, $bcChannelId: Int) {
     storeLogo
     storeUrl
     multiStorefrontEnabled
+    backorderEnabled
     storeSites{
       channelId
       urls

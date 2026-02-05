@@ -13,14 +13,15 @@ import styled from '@emotion/styled';
 import { Box, Divider, TextField, Typography } from '@mui/material';
 import isEqual from 'lodash-es/isEqual';
 
-import { B3CustomForm } from '@/components';
+import { B3CustomForm } from '@/components/B3CustomForm';
 import B3Dialog from '@/components/B3Dialog';
 import B3Spin from '@/components/spin/B3Spin';
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
+import { useIsBackorderValidationEnabled } from '@/hooks/useIsBackorderValidationEnabled';
 import { useB3Lang } from '@/lib/lang';
 import { searchProducts } from '@/shared/service/b2b';
 import { useAppSelector } from '@/store';
-import { currencyFormat, snackbar } from '@/utils';
+import { currencyFormat } from '@/utils/b3CurrencyFormat';
 import b2bLogger from '@/utils/b3Logger';
 import {
   calculateProductListPrice,
@@ -28,6 +29,7 @@ import {
   getProductInfoDisplayPrice,
   getVariantInfoDisplayPrice,
 } from '@/utils/b3Product/b3Product';
+import { snackbar } from '@/utils/b3Tip';
 
 import { AllOptionProps, ShoppingListProductItem, SimpleObject, Variant } from '../../../types';
 import {
@@ -140,20 +142,30 @@ export default function ChooseOptionsDialog(props: ChooseOptionsDialogProps) {
   const [newPrice, setNewPrice] = useState<number>(0);
   const [chooseOptionsProduct, setChooseOptionsProduct] = useState<ChooseOptionsProductProps[]>([]);
   const [isRequestLoading, setIsRequestLoading] = useState<boolean>(false);
+  const isBackorderValidationEnabled = useIsBackorderValidationEnabled();
 
   useEffect(() => {
     if (type === 'quote' && product) {
       if (variantSku) {
         const newProduct = product as CustomFieldItems;
         newProduct.quantity = quantity;
-        const isPrice = !!getVariantInfoDisplayPrice(newProduct.base_price, newProduct, {
-          sku: variantSku,
-        });
+        const isPrice = !!getVariantInfoDisplayPrice(
+          newProduct.base_price,
+          newProduct,
+          isBackorderValidationEnabled,
+          {
+            sku: variantSku,
+          },
+        );
         setShowPrice(isPrice);
       } else {
         const newProduct = product as CustomFieldItems;
         newProduct.quantity = quantity;
-        const isPrice = !!getProductInfoDisplayPrice(newProduct.base_price, newProduct);
+        const isPrice = !!getProductInfoDisplayPrice(
+          newProduct.base_price,
+          newProduct,
+          isBackorderValidationEnabled,
+        );
         if (!isPrice) {
           setShowPrice(false);
         }
@@ -161,7 +173,7 @@ export default function ChooseOptionsDialog(props: ChooseOptionsDialogProps) {
     } else if ((type === 'shoppingList' || type === 'quickOrder') && product) {
       setShowPrice(!product?.isPriceHidden);
     }
-  }, [variantSku, quantity, product, type]);
+  }, [variantSku, quantity, product, type, isBackorderValidationEnabled]);
 
   const setChooseOptionsForm = async (product: ShoppingListProductItem) => {
     try {

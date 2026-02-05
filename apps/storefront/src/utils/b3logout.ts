@@ -1,5 +1,6 @@
 import { store } from '@/store';
 import { clearCompanySlice } from '@/store/slices/company';
+import { resetDraftQuoteInfo, resetDraftQuoteList } from '@/store/slices/quoteInfo';
 
 import b2bVerifyBcLoginStatus from './b2bVerifyBcLoginStatus';
 import b2bLogger from './b3Logger';
@@ -8,6 +9,8 @@ import { clearShoppingListItemQuantities } from '@/shared/service/vs/shoppingLis
 
 export const logoutSession = () => {
   store.dispatch(clearCompanySlice());
+  store.dispatch(resetDraftQuoteList());
+  store.dispatch(resetDraftQuoteInfo());
   clearShoppingListItemQuantities();
 };
 
@@ -28,19 +31,20 @@ export const isB2bTokenPage = (gotoUrl?: string) => {
 };
 
 export const isUserGotoLogin = async (gotoUrl: string) => {
-  const isB2bPage = isB2bTokenPage(gotoUrl);
-  let isGotoLogin = false;
+  if (!isB2bTokenPage(gotoUrl)) {
+    return false;
+  }
 
   try {
     const isBcLogin = await b2bVerifyBcLoginStatus();
 
-    if (!isBcLogin && isB2bPage) {
+    if (!isBcLogin) {
       logoutSession();
-      isGotoLogin = true;
+      return true;
     }
   } catch (error: unknown) {
     b2bLogger.error(error);
   }
 
-  return isGotoLogin;
+  return false;
 };

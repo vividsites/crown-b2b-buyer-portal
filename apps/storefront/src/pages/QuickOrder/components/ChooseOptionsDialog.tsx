@@ -13,7 +13,7 @@ import styled from '@emotion/styled';
 import { Box, Divider, TextField, Typography } from '@mui/material';
 import isEqual from 'lodash-es/isEqual';
 
-import { B3CustomForm } from '@/components';
+import { B3CustomForm } from '@/components/B3CustomForm';
 import B3Dialog from '@/components/B3Dialog';
 import B3Spin from '@/components/spin/B3Spin';
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
@@ -21,7 +21,7 @@ import { useB3Lang } from '@/lib/lang';
 import { searchProducts } from '@/shared/service/b2b';
 import { useAppSelector } from '@/store';
 import { AllOptionProps, ShoppingListProductItem, SimpleObject, Variant } from '@/types';
-import { currencyFormat, snackbar } from '@/utils';
+import { currencyFormat } from '@/utils/b3CurrencyFormat';
 import b2bLogger from '@/utils/b3Logger';
 import { calculateProductListPrice, getBCPrice } from '@/utils/b3Product/b3Product';
 import {
@@ -29,6 +29,7 @@ import {
   getOptionRequestData,
   getProductOptionsFields,
 } from '@/utils/b3Product/shared/config';
+import { snackbar } from '@/utils/b3Tip';
 
 const Flex = styled('div')({
   display: 'flex',
@@ -79,7 +80,7 @@ interface ChooseOptionsDialogProps {
   isOpen: boolean;
   product?: ShoppingListProductItem;
   onCancel: () => void;
-  onConfirm: (products: CustomFieldItems[]) => void;
+  onConfirm: (product: CustomFieldItems) => Promise<void>;
   isLoading: boolean;
   setIsLoading: Dispatch<SetStateAction<boolean>>;
 }
@@ -450,16 +451,14 @@ export default function ChooseOptionsDialog(props: ChooseOptionsDialogProps) {
         return;
       }
 
-      onConfirm([
-        {
-          ...product,
-          newSelectOptionList: optionList,
-          productId: product?.id,
-          quantity: parseInt(quantity.toString(), 10) || 1,
-          variantId: parseInt(variantId.toString(), 10) || 1,
-          additionalProducts,
-        },
-      ]);
+      onConfirm({
+        ...product,
+        newSelectOptionList: optionList,
+        productId: product?.id,
+        quantity: parseInt(quantity.toString(), 10) || 1,
+        variantId: parseInt(variantId.toString(), 10) || 1,
+        additionalProducts,
+      });
     })();
   };
 

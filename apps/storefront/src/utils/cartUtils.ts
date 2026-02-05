@@ -1,6 +1,6 @@
 import Cookies from 'js-cookie';
 
-import { dispatchEvent } from '@/hooks';
+import { dispatchEvent } from '@/hooks/useB2BCallback';
 import { addNewLineToCart, createNewCart, getCart } from '@/shared/service/bc/graphql/cart';
 
 import { LineItem } from './b3Product/b3Product';
@@ -93,11 +93,18 @@ const getLineItemsData = (cartInfo: any, productData: any) => {
   };
 };
 
+export class CartError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CartError';
+  }
+}
+
 const createNewShoppingCart = async (products: any) => {
   const cartData = newDataCart(products);
   const res = await createNewCart(cartData);
   if (res?.errors?.length) {
-    throw new Error(res.errors[0].message);
+    throw new CartError(res.errors[0].message);
   }
   const { entityId } = res.data.cart.createCart.cart;
   Cookies.set('cartId', entityId);
@@ -112,13 +119,13 @@ export const updateCart = async (cartInfo: any, productData: any) => {
   const res = await addNewLineToCart(newItems);
 
   if (res?.errors?.length) {
-    throw new Error(res.errors[0].message);
+    throw new CartError(res.errors[0].message);
   }
 
   return res;
 };
 
-export const callCart = async (lineItems: LineItem[] | CustomFieldItems[]) => {
+export const createOrUpdateExistingCart = async (lineItems: LineItem[] | CustomFieldItems[]) => {
   const cartInfo = await getCart();
 
   const res = cartInfo?.data?.site?.cart
