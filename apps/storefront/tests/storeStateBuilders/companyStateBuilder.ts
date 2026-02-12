@@ -27,6 +27,7 @@ export const buildCompanyStateWith = builder<CompanyState & PersistPartial>(() =
     B2BToken: '',
     bcGraphqlToken: '',
     currentCustomerJWT: '',
+    vsCurrentCustomerJWT: '',
   },
   permissions: [],
   companyHierarchyInfo: {

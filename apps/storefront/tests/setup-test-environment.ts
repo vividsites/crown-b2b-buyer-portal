@@ -17,6 +17,7 @@ window.B3 = {
     store_hash: 'store-hash',
     platform: 'bigcommerce',
     environment: Environment.Local,
+    vsEnvironment: Environment.Local,
   },
 };
 
@@ -27,6 +28,7 @@ beforeEach(() => {
       store_hash: 'store-hash',
       platform: 'bigcommerce',
       environment: Environment.Local,
+      vsEnvironment: Environment.Local,
     },
   };
 

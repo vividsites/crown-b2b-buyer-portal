@@ -62,6 +62,7 @@ declare global {
         store_hash: string;
         platform: ChannelPlatform;
         environment: string;
+        vsEnvironment: string;
         disable_logout_button?: boolean;
         cart_url?: string;
       };

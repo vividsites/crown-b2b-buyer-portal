@@ -30,6 +30,7 @@ interface OrderItemCardProps {
   onCopy: (data: ShoppingListsItemsProps) => void;
   isPermissions: boolean;
   isB2BUser: boolean;
+  defaultShoppingListId: number | null;
 }
 
 const Flex = styled('div')(() => ({
@@ -50,7 +51,7 @@ const FlexItem = styled(Box)(() => ({
 }));
 
 function ShoppingListsCard(props: OrderItemCardProps) {
-  const { item: shoppingList, onEdit, onDelete, onCopy, isPermissions, isB2BUser } = props;
+  const { item: shoppingList, onEdit, onDelete, onCopy, isPermissions, isB2BUser, defaultShoppingListId } = props;
   const b3Lang = useB3Lang();
 
   const [isCanEditShoppingList, setIsCanEditShoppingList] = useState<boolean>(true);
@@ -70,7 +71,12 @@ function ShoppingListsCard(props: OrderItemCardProps) {
     return false;
   };
 
-  const shoppingListCanBeDeleted = (status: number) => {
+  const shoppingListCanBeDeleted = (id: number | undefined, status: number) => {
+
+    if (Number(id) === defaultShoppingListId) {
+      return false;
+    }
+
     if (!submitShoppingListPermission) {
       return true;
     }
@@ -218,7 +224,7 @@ function ShoppingListsCard(props: OrderItemCardProps) {
             >
               <ContentCopyIcon fontSize="inherit" />
             </IconButton>
-            {shoppingListCanBeDeleted(shoppingList.status) && isCanEditShoppingList && (
+            {shoppingListCanBeDeleted(shoppingList.id, shoppingList.status) && isCanEditShoppingList && (
               <IconButton
                 aria-label="delete"
                 size="medium"
