@@ -32,8 +32,8 @@ const DEFAULT_ENVIRONMENT =
       return environment;
     }
   
-    if (isEnvironment(window.B3?.setting?.environment)) {
-      return window.B3.setting.environment;
+    if (isEnvironment(window.B3?.setting?.vsEnvironment)) {
+      return window.B3.setting.vsEnvironment;
     }
   
     return DEFAULT_ENVIRONMENT;
