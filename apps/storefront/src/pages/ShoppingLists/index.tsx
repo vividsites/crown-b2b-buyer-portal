@@ -25,7 +25,6 @@ import { ShoppingListSearch, ShoppingListsItemsProps, useGetFilterMoreList } fro
 import { deleteB2BShoppingList } from './deleteB2BShoppingList';
 import { deleteB2CShoppingList } from './deleteB2CShoppingList';
 import ShoppingListsCard from './ShoppingListsCard';
-import { getDefaultShoppingList } from '@/shared/service/vs';
 
 interface RefCurrentProps extends HTMLInputElement {
   handleOpenAddEditShoppingListsClick: (type: string, data?: ShoppingListsItemsProps) => void;
@@ -35,6 +34,7 @@ function useData() {
   const salesRepCompanyId = useAppSelector(({ b2bFeatures }) => b2bFeatures.masqueradeCompany.id);
   const isB2BUser = useAppSelector(isB2BUserSelector);
   const companyB2BId = useAppSelector(({ company }) => company.companyInfo.id);
+  const defaultShoppingListId = useAppSelector(({ company }) => company.companyInfo.defaultShoppingListId);
   const { shoppingListCreateActionsPermission, submitShoppingListPermission } =
     useAppSelector(rolePermissionSelector);
   const companyId = companyB2BId || salesRepCompanyId;
@@ -45,11 +45,9 @@ function useData() {
     ? () => getShoppingListsCreatedByUser(Number(companyId), 1)
     : () => Promise.resolve({});
 
-  const fetchDefaultShoppingList = () => getDefaultShoppingList();
-
   return {
-    getDefaultShoppingList: fetchDefaultShoppingList,
     isB2BUser,
+    defaultShoppingListId,
     shoppingListCreateActionsPermission,
     submitShoppingListPermission,
     deleteShoppingList,
@@ -63,7 +61,6 @@ function ShoppingLists() {
   const [deleteItem, setDeleteItem] = useState<null | ShoppingListsItemsProps>(null);
   const [filterMoreInfo, setFilterMoreInfo] = useState<Array<any>>([]);
   const getFilterMoreList = useGetFilterMoreList();
-  const [defaultShoppingListId, setDefaultShoppingListId] = useState<number | null>(null);
   const [isMobile] = useMobile();
   const b3Lang = useB3Lang();
 
@@ -71,7 +68,7 @@ function ShoppingLists() {
 
   const {
     isB2BUser,
-    getDefaultShoppingList,
+    defaultShoppingListId,
     shoppingListCreateActionsPermission,
     submitShoppingListPermission,
     deleteShoppingList,
@@ -91,13 +88,6 @@ function ShoppingLists() {
     };
 
     initFilter();
-
-    const initDefaultShoppingList = async () => {
-      const defaultShoppingList = await getDefaultShoppingList();
-      setDefaultShoppingListId(defaultShoppingList?.id || null);
-    };
-
-    initDefaultShoppingList();
 
     if (openAPPParams.shoppingListBtn) {
       dispatch({

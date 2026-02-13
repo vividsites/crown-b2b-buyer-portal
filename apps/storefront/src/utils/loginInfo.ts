@@ -38,6 +38,7 @@ import { channelId, storeHash } from './basicConfig';
 import { getAccountHierarchyIsEnabled } from './storefrontConfig';
 
 import { clearShoppingListItemQuantities } from '@/shared/service/vs/shoppingListQuantityService';
+import { getDefaultShoppingList } from '@/shared/service/vs/api/shoppingList';
 export const getLoginTokenInfo = () => {
   const currentTimestamp = Math.floor(Date.now() / 1000);
   const oneWeekInSeconds = 7 * 24 * 60 * 60;
@@ -272,6 +273,7 @@ export const getCurrentCustomerInfo = async (
         getCompanyInfo(role, id, userType),
         agentInfo(customerId, role),
       ]);
+      const defaultShoppingList = await getDefaultShoppingList();
 
       const isB2BUser =
         (userType === UserTypes.MULTIPLE_B2C &&
@@ -296,6 +298,7 @@ export const getCurrentCustomerInfo = async (
         id: companyInfo.id,
         status: companyInfo.companyStatus,
         companyName: companyInfo.companyName,
+        defaultShoppingListId: defaultShoppingList?.id || null,
       };
 
       const { featureFlags } = store.getState().global;

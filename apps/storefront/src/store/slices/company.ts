@@ -40,6 +40,7 @@ const initialState: CompanyState = {
     id: '',
     companyName: '',
     status: CompanyStatus.DEFAULT,
+    defaultShoppingListId: null,
   },
   customer: {
     id: 0,

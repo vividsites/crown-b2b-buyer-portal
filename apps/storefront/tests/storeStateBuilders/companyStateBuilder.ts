@@ -10,6 +10,7 @@ export const buildCompanyStateWith = builder<CompanyState & PersistPartial>(() =
     id: '',
     companyName: '',
     status: CompanyStatus.DEFAULT,
+    defaultShoppingListId: null,
   },
   customer: {
     id: 0,

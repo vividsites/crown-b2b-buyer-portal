@@ -73,6 +73,11 @@ function ShoppingListsCard(props: OrderItemCardProps) {
 
   const shoppingListCanBeDeleted = (id: number | undefined, status: number) => {
 
+    if(!defaultShoppingListId) {
+      // we want to hide the delete button until we know the default shopping list id
+      return false;
+    }
+
     if (Number(id) === defaultShoppingListId) {
       return false;
     }
