@@ -2,7 +2,7 @@ import { Environment, EnvSpecificConfig } from '@/types';
 
 const ENVIRONMENT_VS_API_URL: EnvSpecificConfig<string> = {
   local: `https://localhost:44320`,
-  integration: 'https://vividconnector.vsstaging.com',
+  integration: 'https://vsconnector.vsstaging.com',
   staging: 'https://crowntest.vividconnector.com',
   production: 'https://crowncom.vividconnector.com',
 };

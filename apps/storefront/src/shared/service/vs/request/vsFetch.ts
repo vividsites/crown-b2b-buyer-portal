@@ -44,6 +44,7 @@ const VSRequest = {
       url,
       {
         method: 'GET',
+        ...config,
       },
     );
   },
