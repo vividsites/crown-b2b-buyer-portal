@@ -1,10 +1,10 @@
-import { ListItemProps } from '@/utils/b3Product/shared/config';
+import { ProductsProps } from '@/utils/b3Product/shared/config';
 
 export const getShoppingListItemQuantities = (shoppingListId: string |number) => {
 	return JSON.parse(sessionStorage.getItem(`quantities_${shoppingListId}`) || '[]');
 };
 
-export const setShoppingListItemQuantities = (shoppingListId: string |number, items: ListItemProps[]) => {
+export const setShoppingListItemQuantities = (shoppingListId: string |number, items: ProductsProps[]) => {
 	sessionStorage.setItem(`quantities_${shoppingListId}`, JSON.stringify(items));
 };
 
