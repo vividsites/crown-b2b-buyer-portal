@@ -50,6 +50,8 @@ const config: Record<string, string> = {
   'dom.cart':
     '[href="/cart.php"], #form-action-addToCart, [data-button-type="add-cart"], [data-emthemesmodez-cart-item-add]',
   'dom.productView': '.productView',
+  'dom.productCard': '.productCard',
+  'dom.setToQuoteCategory': '.card-add-to-quote',
   'dom.register': '[href^="/login.php?action=create_account"]',
   'dom.hideThemePayments':
     '.cart-additionalCheckoutButtons, .previewCart-additionalCheckoutButtons, .previewCartCheckout-additionalCheckoutButtons, [data-content-region="cart_below_totals"], .add-to-cart-wallet-buttons, [data-content-region="product_below_price"]',
