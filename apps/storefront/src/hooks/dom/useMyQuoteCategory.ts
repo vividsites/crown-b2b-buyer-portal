@@ -38,7 +38,7 @@ import { useIsBackorderValidationEnabled } from '../useIsBackorderValidationEnab
 import useDomVariation from './useDomVariation';
 import { addProductFromProductCardToQuote, removeElement } from './utils';
 
-const CATEGORY_QUOTE_BUTTON_CLASS = 'b2b-add-to-quote';
+const CATEGORY_QUOTE_BUTTON_CLASS = 'b2b-add-to-quote-category';
 const STABLE_LISTENER_ATTR = 'data-b2b-quote-stable';
 
 const clearCategoryQuoteDom = () => {
