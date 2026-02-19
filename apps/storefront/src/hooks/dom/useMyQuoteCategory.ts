@@ -1,4 +1,12 @@
-import { Dispatch, SetStateAction, useCallback, useContext, useEffect, useRef } from 'react';
+import {
+  Dispatch,
+  SetStateAction,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import cloneDeep from 'lodash-es/cloneDeep';
 
 import {
@@ -121,6 +129,38 @@ export const useMyQuoteCategory = ({
     setCartPermissionsCallback,
   );
 
+  const [cardsVersion, setCardsVersion] = useState(0);
+  const productCardSelectorRef = useRef(config['dom.productCard']);
+  productCardSelectorRef.current = config['dom.productCard'];
+
+  useEffect(() => {
+    const selector = productCardSelectorRef.current;
+
+    const hasNewProductCard = (node: Node): boolean => {
+      if (node.nodeType !== Node.ELEMENT_NODE) return false;
+      const el = node as Element;
+      if (el.matches?.(selector)) return true;
+      return Boolean(el.querySelector?.(selector));
+    };
+
+    const observer = new MutationObserver((records: MutationRecord[]) => {
+      for (const record of records) {
+        for (const node of record.addedNodes) {
+          if (hasNewProductCard(node)) {
+            setCardsVersion((v) => v + 1);
+            return;
+          }
+        }
+      }
+    });
+
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+    });
+    return () => observer.disconnect();
+  }, []);
+
   const cache = useRef<BtnProperties | null>(null);
   const {
     state: { addQuoteBtn },
@@ -211,6 +251,7 @@ export const useMyQuoteCategory = ({
     cache.current = cloneDeep(buttonProperties);
   }, [
     addQuoteBtn,
+    cardsVersion,
     classSelector,
     color,
     customCss,
