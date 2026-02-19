@@ -323,9 +323,9 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
 
   const tableRef = useRef<TableRefProps | null>(null);
 
-  const [checkedArr, setCheckedArr] = useState<ListItemProps[]>(() => {
+  const [checkedArr, setCheckedArr] = useState<ProductsProps[]>(() => {
     const quantities = getShoppingListItemQuantities(id);
-    return quantities.map((q: ListItemProps) => ({node: q.node}));
+    return quantities.map((q: ProductsProps) => ({node: q.node}));
   });
   const backendValidationEnabled = useIsBackorderValidationEnabled();
   const [shoppingListInfo, setShoppingListInfo] = useState<null | ShoppingListInfoProps>(null);
@@ -459,10 +459,10 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
     setDisabledResetQuantities(checkedArr.length === 0);
   }, [checkedArr]);
 
-  const addItemToCheckedArr = (product: ListItemProps) => {
+  const addItemToCheckedArr = (product: ProductsProps) => {
     setCheckedArr(oldArray => {
       const newArray = [...oldArray];
-      const existingItem = newArray.find((item: ListItemProps) => item.node.id === product.node.id);
+      const existingItem = newArray.find((item: ProductsProps) => item.node.id === product.node.id);
       if(existingItem) {
         existingItem.node.quantity = product.node.quantity;
       } else {
@@ -549,7 +549,7 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
     // Update checkedArr based on quantity
     currentNode.quantity = quantity;
     if(quantity === 0) {
-      setCheckedArr(oldArray => oldArray.filter((item: ListItemProps) => item.node.id !== currentNode.id));
+      setCheckedArr(oldArray => oldArray.filter((item: ProductsProps) => item.node.id !== currentNode.id));
     } else {
       addItemToCheckedArr({node: currentNode});
     }
@@ -827,6 +827,7 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
 
         const success = await addToQuote(newProducts);
         if (success) {
+          handleResetQuantities();
           snackbar.success(b3Lang('shoppingList.footer.productsAddedToQuote'), {
             action: {
               label: b3Lang('shoppingList.footer.viewQuote'),
@@ -863,17 +864,10 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
     ) {
       window.location.href = CHECKOUT_URL;
     } else {
-      snackbar.success(b3Lang('shoppingList.footer.productsAddedToCart'), {
-        action: {
-          label: b3Lang('shoppingList.footer.viewCart'),
-          onClick: () => {
-            if (window.b2b.callbacks.dispatchEvent('on-click-cart-button')) {
-              window.location.href = CART_URL;
-            }
-          },
-        },
-      });
       b3TriggerCartNumber();
+      window.parent.postMessage({
+        type: 'open-cart-flyout',
+      }, '*');
     }
   };
 
@@ -922,6 +916,7 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
       if (res && res.errors) {
         snackbar.error(res.errors[0].message);
       } else if (validateFailureArr.length === 0) {
+        handleResetQuantities();
         shouldRedirectToCheckoutAfterAddToCart();
       }
     }
@@ -943,6 +938,7 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
         setValidateFailureProducts(mapToProductsFailedArray(errors.map((p) => p.product.item)));
 
         if (!errors.length) {
+          handleResetQuantities();
           shouldRedirectToCheckoutAfterAddToCart();
         }
 
@@ -1079,7 +1075,6 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
             <ShoppingDetailFooter
               shoppingListInfo={shoppingListInfo}
               allowJuniorPlaceOrder={allowJuniorPlaceOrder}
-              handleResetQuantities={handleResetQuantities}
               selectedSubTotal={calculateSubTotal(checkedArr)}
               selectedProductCount={checkedArr.length}
               onDelete={() => setDeleteOpen(true)}

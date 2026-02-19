@@ -73,7 +73,6 @@ interface ShoppingDetailTableProps {
   setIsRequestLoading: Dispatch<SetStateAction<boolean>>;
   shoppingListId: number | string;
   getShoppingListDetails: GetRequestList<SearchProps, CustomFieldItems>;
-  setCheckedArr: (values: ProductsProps[]) => void;
   handleUpdateItemQuantity: (values: CustomFieldItems) => void;
   disabledResetQuantities: boolean;
   handleResetQuantities: () => void;
