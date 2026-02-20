@@ -234,6 +234,7 @@ export const useMyQuoteCategory = ({
 
       const quoteButton = document.createElement('div');
       quoteButton.innerHTML = quoteButtonLabel;
+      quoteButton.setAttribute('role', 'button');
       quoteButton.setAttribute('style', customCss);
       quoteButton.style.backgroundColor = color;
       quoteButton.style.color = customTextColor;
