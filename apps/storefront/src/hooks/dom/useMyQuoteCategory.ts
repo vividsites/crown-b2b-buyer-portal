@@ -36,13 +36,17 @@ import { useGetButtonText } from '../useGetButtonText';
 import { useIsBackorderValidationEnabled } from '../useIsBackorderValidationEnabled';
 
 import useDomVariation from './useDomVariation';
+import { usePurchasableQuoteCards } from './usePurchasableQuoteCards';
 import { addProductFromProductCardToQuote, removeElement } from './utils';
 
 const CATEGORY_QUOTE_BUTTON_CLASS = 'b2b-add-to-quote-category';
+const CATEGORY_NO_PURCHASABLE_QUOTE_BUTTON_CLASS = 'b2b-add-to-no-purchasable-quote-category';
 const STABLE_LISTENER_ATTR = 'data-b2b-quote-stable';
 
 const clearCategoryQuoteDom = () => {
-  const quoteButtons = document.querySelectorAll(`.${CATEGORY_QUOTE_BUTTON_CLASS}`);
+  const quoteButtons = document.querySelectorAll(
+    `.${CATEGORY_QUOTE_BUTTON_CLASS}, .${CATEGORY_NO_PURCHASABLE_QUOTE_BUTTON_CLASS}`,
+  );
   quoteButtons.forEach((button) => {
     removeElement(button);
   });
@@ -161,22 +165,45 @@ export const useMyQuoteCategory = ({
     return () => observer.disconnect();
   }, []);
 
-  const cache = useRef<BtnProperties | null>(null);
+  const purchasabilityByProductId = usePurchasableQuoteCards(cardsVersion, openQuickView);
+
+  const cachePurchasable = useRef<BtnProperties | null>(null);
+  const cacheNonPurchasable = useRef<BtnProperties | null>(null);
   const {
-    state: { addQuoteBtn },
+    state: { addQuoteBtn, quoteOnNonPurchasableProductPageBtn },
   } = useContext(CustomStyleContext);
 
   const { color, text, customCss, classSelector, enabled } = addQuoteBtn;
+  const {
+    color: nonPurchasableColor,
+    text: nonPurchasableText,
+    customCss: nonPurchasableCustomCss,
+    classSelector: nonPurchasableClassSelector,
+    enabled: nonPurchasableEnabled,
+  } = quoteOnNonPurchasableProductPageBtn;
 
-  const quoteButtonLabel = useGetButtonText(
+  const purchasableButtonLabel = useGetButtonText(
     TRANSLATION_ADD_TO_QUOTE_VARIABLE,
     text,
     ADD_TO_QUOTE_DEFAULT_VALUE,
   );
+  const nonPurchasableButtonLabel = useGetButtonText(
+    TRANSLATION_ADD_TO_QUOTE_VARIABLE,
+    nonPurchasableText,
+    ADD_TO_QUOTE_DEFAULT_VALUE,
+  );
 
   const { cssValue, mediaBlocks } = splitCustomCssValue(customCss);
+  const {
+    cssValue: nonPurchasableCssValue,
+    mediaBlocks: nonPurchasableMediaBlocks,
+  } = splitCustomCssValue(nonPurchasableCustomCss);
 
-  const customTextColor = getStyles(cssValue).color || getContrastColor(color);
+  const purchasableCustomTextColor =
+    getStyles(cssValue).color || getContrastColor(color);
+  const nonPurchasableCustomTextColor =
+    getStyles(nonPurchasableCssValue).color ||
+    getContrastColor(nonPurchasableColor);
 
   useEffect(() => {
     if (!productQuoteEnabled) {
@@ -189,80 +216,131 @@ export const useMyQuoteCategory = ({
 
     if (!cards.length) return;
 
-    const buttonProperties = addQuoteBtn;
-    const cacheQuoteDom = cache.current;
-    const isSameStyles =
-      cacheQuoteDom &&
-      Object.keys(cacheQuoteDom).every(
-        (key) =>
-          cacheQuoteDom[key as keyof BtnProperties] === buttonProperties[key as keyof BtnProperties],
-      );
-
-    if (!enabled) {
-      clearCategoryQuoteDom();
-      return;
-    }
-
     quoteCallBackRef.current = quoteCallBack;
 
     cards.forEach((card) => {
+      const productId = (
+        card.querySelector('input[name=product_id]') as HTMLInputElement | null
+      )?.value;
+      const isProductPurchasable =
+        productId === undefined
+          ? true
+          : purchasabilityByProductId[productId] !== false;
+
+      const shouldRenderPurchasable = isProductPurchasable && enabled;
+      const shouldRenderNonPurchasable = !isProductPurchasable && nonPurchasableEnabled;
+      if (!shouldRenderPurchasable && !shouldRenderNonPurchasable) return;
+
+      const buttonClass = isProductPurchasable
+        ? CATEGORY_QUOTE_BUTTON_CLASS
+        : CATEGORY_NO_PURCHASABLE_QUOTE_BUTTON_CLASS;
+      const buttonProperties = isProductPurchasable
+        ? addQuoteBtn
+        : quoteOnNonPurchasableProductPageBtn;
+      const cacheRef = isProductPurchasable ? cachePurchasable : cacheNonPurchasable;
+      const quoteButtonLabel = isProductPurchasable
+        ? purchasableButtonLabel
+        : nonPurchasableButtonLabel;
+      const buttonCss = isProductPurchasable ? customCss : nonPurchasableCustomCss;
+      const buttonColor = isProductPurchasable ? color : nonPurchasableColor;
+      const buttonTextColor = isProductPurchasable
+        ? purchasableCustomTextColor
+        : nonPurchasableCustomTextColor;
+      const buttonClassSelector = isProductPurchasable
+        ? classSelector
+        : nonPurchasableClassSelector;
+      const buttonMediaBlocks = isProductPurchasable
+        ? mediaBlocks
+        : nonPurchasableMediaBlocks;
+
+      const cacheQuoteDom = cacheRef.current;
+      const isSameStyles =
+        cacheQuoteDom &&
+        Object.keys(cacheQuoteDom).every(
+          (key) =>
+            cacheQuoteDom[key as keyof BtnProperties] ===
+            buttonProperties[key as keyof BtnProperties],
+        );
+
       const insertPoint = card.querySelector<HTMLElement>(insertSelector);
       const container = insertPoint ?? card;
 
       const existingButton = container.querySelector<HTMLElement>(
-        `.${CATEGORY_QUOTE_BUTTON_CLASS}`,
+        `.${CATEGORY_QUOTE_BUTTON_CLASS}, .${CATEGORY_NO_PURCHASABLE_QUOTE_BUTTON_CLASS}`,
       );
       if (existingButton) {
         const hasStableListener = existingButton.getAttribute(STABLE_LISTENER_ATTR) === 'true';
         if (!hasStableListener) {
           removeElement(existingButton);
         } else {
-          if (!isSameStyles) {
-            existingButton.innerHTML = quoteButtonLabel;
-            existingButton.setAttribute('style', customCss);
-            existingButton.style.backgroundColor = color;
-            existingButton.style.color = customTextColor;
-            existingButton.setAttribute(
-              'class',
-              `${CATEGORY_QUOTE_BUTTON_CLASS} ${classSelector}`.trim(),
-            );
-            setMediaStyle(mediaBlocks, `${CATEGORY_QUOTE_BUTTON_CLASS} ${classSelector}`.trim());
+          const existingIsPurchasable = existingButton.classList.contains(
+            CATEGORY_QUOTE_BUTTON_CLASS,
+          );
+          if (existingIsPurchasable !== isProductPurchasable) {
+            removeElement(existingButton);
+          } else {
+            if (!isSameStyles) {
+              existingButton.innerHTML = quoteButtonLabel;
+              existingButton.setAttribute('style', buttonCss);
+              existingButton.style.backgroundColor = buttonColor;
+              existingButton.style.color = buttonTextColor;
+              existingButton.setAttribute(
+                'class',
+                `${buttonClass} ${buttonClassSelector}`.trim(),
+              );
+              setMediaStyle(
+                buttonMediaBlocks,
+                `${buttonClass} ${buttonClassSelector}`.trim(),
+              );
+            }
+            return;
           }
-          return;
         }
       }
 
       const quoteButton = document.createElement('div');
       quoteButton.innerHTML = quoteButtonLabel;
       quoteButton.setAttribute('role', 'button');
-      quoteButton.setAttribute('style', customCss);
-      quoteButton.style.backgroundColor = color;
-      quoteButton.style.color = customTextColor;
-      quoteButton.setAttribute('class', `${CATEGORY_QUOTE_BUTTON_CLASS} ${classSelector}`.trim());
+      quoteButton.setAttribute('style', buttonCss);
+      quoteButton.style.backgroundColor = buttonColor;
+      quoteButton.style.color = buttonTextColor;
+      quoteButton.setAttribute('class', `${buttonClass} ${buttonClassSelector}`.trim());
       quoteButton.setAttribute(STABLE_LISTENER_ATTR, 'true');
       quoteButton.addEventListener('click', stableQuoteListener, {
         capture: true,
       });
 
-      setMediaStyle(mediaBlocks, `${CATEGORY_QUOTE_BUTTON_CLASS} ${classSelector}`.trim());
+      setMediaStyle(buttonMediaBlocks, `${buttonClass} ${buttonClassSelector}`.trim());
 
       container.appendChild(quoteButton);
     });
 
-    cache.current = cloneDeep(buttonProperties);
+    if (cards.length > 0) {
+      cachePurchasable.current = cloneDeep(addQuoteBtn);
+      cacheNonPurchasable.current = cloneDeep(quoteOnNonPurchasableProductPageBtn);
+    }
   }, [
     addQuoteBtn,
     cardsVersion,
     classSelector,
     color,
     customCss,
-    customTextColor,
     enabled,
     mediaBlocks,
+    nonPurchasableClassSelector,
+    nonPurchasableColor,
+    nonPurchasableCustomCss,
+    nonPurchasableCustomTextColor,
+    nonPurchasableEnabled,
+    nonPurchasableMediaBlocks,
+    nonPurchasableButtonLabel,
     openQuickView,
     productQuoteEnabled,
-    quoteButtonLabel,
+    purchasabilityByProductId,
+    purchasableButtonLabel,
+    purchasableCustomTextColor,
     quoteCallBack,
+    quoteOnNonPurchasableProductPageBtn,
     stableQuoteListener,
   ]);
 };
