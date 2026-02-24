@@ -64,9 +64,9 @@ export function usePurchasableQuoteCards(cardsVersion: number, openQuickView: bo
   >({});
   const isBackorderValidationEnabled = useIsBackorderValidationEnabled();
   const featureFlags = useFeatureFlags();
-  const isEnableProduct = true;
-    //useAppSelector(({ global }) => global.blockPendingQuoteNonPurchasableOOS.isEnableProduct) ||
-    //false;
+  const isEnableProduct =
+    useAppSelector(({ global }) => global.blockPendingQuoteNonPurchasableOOS.isEnableProduct) ||
+    false;
 
   const useTextContentForSku = Boolean(
     featureFlags['B2B-3474.get_sku_from_pdp_with_text_content'],
@@ -122,15 +122,6 @@ export function usePurchasableQuoteCards(cardsVersion: number, openQuickView: bo
         });
       }
     });
-
-    if (!isEnableProduct) {
-      const allTrue: Record<string, boolean> = {};
-      productIds.forEach((id) => {
-        allTrue[id] = true;
-      });
-      setPurchasabilityByProductId(allTrue);
-      return;
-    }
 
     let cancelled = false;
     const fetchAll = async () => {
