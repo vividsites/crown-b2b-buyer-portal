@@ -227,10 +227,6 @@ export const useMyQuoteCategory = ({
           ? true
           : purchasabilityByProductId[productId] !== false;
 
-      const shouldRenderPurchasable = isProductPurchasable && enabled;
-      const shouldRenderNonPurchasable = !isProductPurchasable && nonPurchasableEnabled;
-      if (!shouldRenderPurchasable && !shouldRenderNonPurchasable) return;
-
       const buttonClass = isProductPurchasable
         ? CATEGORY_QUOTE_BUTTON_CLASS
         : CATEGORY_NO_PURCHASABLE_QUOTE_BUTTON_CLASS;
@@ -261,6 +257,7 @@ export const useMyQuoteCategory = ({
             cacheQuoteDom[key as keyof BtnProperties] ===
             buttonProperties[key as keyof BtnProperties],
         );
+      const shouldRenderButton = isProductPurchasable ? enabled : nonPurchasableEnabled;
 
       const insertPoint = card.querySelector<HTMLElement>(insertSelector);
       const container = insertPoint ?? card;
@@ -268,7 +265,10 @@ export const useMyQuoteCategory = ({
       const existingButton = container.querySelector<HTMLElement>(
         `.${CATEGORY_QUOTE_BUTTON_CLASS}, .${CATEGORY_NO_PURCHASABLE_QUOTE_BUTTON_CLASS}`,
       );
-      if (existingButton) {
+      if(existingButton && !shouldRenderButton) {
+        removeElement(existingButton);
+      }
+      else if (existingButton) {
         const hasStableListener = existingButton.getAttribute(STABLE_LISTENER_ATTR) === 'true';
         if (!hasStableListener) {
           removeElement(existingButton);
@@ -297,22 +297,23 @@ export const useMyQuoteCategory = ({
           }
         }
       }
+      else if(shouldRenderButton) {
+        const quoteButton = document.createElement('div');
+        quoteButton.innerHTML = quoteButtonLabel;
+        quoteButton.setAttribute('role', 'button');
+        quoteButton.setAttribute('style', buttonCss);
+        quoteButton.style.backgroundColor = buttonColor;
+        quoteButton.style.color = buttonTextColor;
+        quoteButton.setAttribute('class', `${buttonClass} ${buttonClassSelector}`.trim());
+        quoteButton.setAttribute(STABLE_LISTENER_ATTR, 'true');
+        quoteButton.addEventListener('click', stableQuoteListener, {
+          capture: true,
+        });
 
-      const quoteButton = document.createElement('div');
-      quoteButton.innerHTML = quoteButtonLabel;
-      quoteButton.setAttribute('role', 'button');
-      quoteButton.setAttribute('style', buttonCss);
-      quoteButton.style.backgroundColor = buttonColor;
-      quoteButton.style.color = buttonTextColor;
-      quoteButton.setAttribute('class', `${buttonClass} ${buttonClassSelector}`.trim());
-      quoteButton.setAttribute(STABLE_LISTENER_ATTR, 'true');
-      quoteButton.addEventListener('click', stableQuoteListener, {
-        capture: true,
-      });
+        setMediaStyle(buttonMediaBlocks, `${buttonClass} ${buttonClassSelector}`.trim());
 
-      setMediaStyle(buttonMediaBlocks, `${buttonClass} ${buttonClassSelector}`.trim());
-
-      container.appendChild(quoteButton);
+        container.appendChild(quoteButton);
+      }
     });
 
     if (cards.length > 0) {
