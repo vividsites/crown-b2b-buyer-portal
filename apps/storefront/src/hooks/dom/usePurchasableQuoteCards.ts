@@ -7,39 +7,39 @@ import { useAppSelector } from '@/store';
 import { useFeatureFlags } from '../useFeatureFlags';
 import { useIsBackorderValidationEnabled } from '../useIsBackorderValidationEnabled';
 
-interface ProductInfoProps {
-  availability: boolean;
-  inventoryLevel: number;
-  inventoryTracking: boolean;
-  purchasingDisabled: boolean;
-  availableToSell?: number;
-  unlimitedBackorder?: boolean;
-}
+// interface ProductInfoProps {
+//   availability: boolean;
+//   inventoryLevel: number;
+//   inventoryTracking: boolean;
+//   purchasingDisabled: boolean;
+//   availableToSell?: number;
+//   unlimitedBackorder?: boolean;
+// }
 
-function isOutOfStockPurchaseQuantity(
-  qty: number,
-  productPurchasable: ProductInfoProps,
-  isBackorderValidationEnabled: boolean,
-): boolean {
-  const { inventoryLevel, inventoryTracking, availableToSell, unlimitedBackorder } =
-    productPurchasable;
+// function isOutOfStockPurchaseQuantity(
+//   qty: number,
+//   productPurchasable: ProductInfoProps,
+//   isBackorderValidationEnabled: boolean,
+// ): boolean {
+//   const { inventoryLevel, inventoryTracking, availableToSell, unlimitedBackorder } =
+//     productPurchasable;
 
-  if (!inventoryTracking) {
-    return false;
-  }
+//   if (!inventoryTracking) {
+//     return false;
+//   }
 
-  if (isBackorderValidationEnabled) {
-    if (unlimitedBackorder) {
-      return false;
-    }
+//   if (isBackorderValidationEnabled) {
+//     if (unlimitedBackorder) {
+//       return false;
+//     }
 
-    if (availableToSell !== undefined) {
-      return qty > availableToSell;
-    }
-  }
+//     if (availableToSell !== undefined) {
+//       return qty > availableToSell;
+//     }
+//   }
 
-  return qty > inventoryLevel;
-}
+//   return qty > inventoryLevel;
+// }
 
 function getCardProductInfo(card: HTMLElement, useTextContentForSku: boolean) {
   const productId = (card.querySelector('input[name=product_id]') as HTMLInputElement | null)
@@ -74,33 +74,34 @@ export function usePurchasableQuoteCards(cardsVersion: number, openQuickView: bo
 
   const computeIsPurchasable = useCallback(
     (
-      availability: string,
-      inventoryLevel: number,
-      inventoryTracking: string,
+      // availability: string,
+      // inventoryLevel: number,
+      // inventoryTracking: string,
       purchasingDisabled: boolean,
-      qty: number,
-      availableToSell?: number,
-      unlimitedBackorder?: boolean,
+      // qty: number,
+      // availableToSell?: number,
+      // unlimitedBackorder?: boolean,
     ): boolean => {
-      const productPurchasable: ProductInfoProps = {
-        availability: availability === 'available',
-        inventoryLevel,
-        inventoryTracking:
-          inventoryTracking === 'product' || inventoryTracking === 'variant',
-        purchasingDisabled,
-        availableToSell,
-        unlimitedBackorder,
-      };
-      const isOOStock = isOutOfStockPurchaseQuantity(
-        qty,
-        productPurchasable,
-        isBackorderValidationEnabled,
-      );
-      return (
-        !purchasingDisabled &&
-        !isOOStock &&
-        availability === 'available'
-      );
+      // const productPurchasable: ProductInfoProps = {
+      //   availability: availability === 'available',
+      //   inventoryLevel,
+      //   inventoryTracking:
+      //     inventoryTracking === 'product' || inventoryTracking === 'variant',
+      //   purchasingDisabled,
+      //   availableToSell,
+      //   unlimitedBackorder,
+      // };
+      // const isOOStock = isOutOfStockPurchaseQuantity(
+      //   qty,
+      //   productPurchasable,
+      //   isBackorderValidationEnabled,
+      // );
+      // return (
+      //   !purchasingDisabled &&
+      //   !isOOStock &&
+      //   availability === 'available'
+      // );
+      return !purchasingDisabled;
     },
     [isBackorderValidationEnabled],
   );
@@ -126,16 +127,16 @@ export function usePurchasableQuoteCards(cardsVersion: number, openQuickView: bo
     let cancelled = false;
     const fetchAll = async () => {
       const results = await Promise.all(
-        cardInfos.map(async ({ productId, qty, sku }) => {
+        cardInfos.map(async ({ productId, /*qty,*/ sku }) => {
           try {
             const {
               productPurchasable: {
-                availability,
-                inventoryLevel,
-                inventoryTracking,
+                // availability,
+                // inventoryLevel,
+                // inventoryTracking,
                 purchasingDisabled,
-                availableToSell,
-                unlimitedBackorder,
+                // availableToSell,
+                // unlimitedBackorder,
               },
             } = await getB2BProductPurchasable({
               productId: Number(productId),
@@ -143,13 +144,13 @@ export function usePurchasableQuoteCards(cardsVersion: number, openQuickView: bo
               isProduct: true,
             });
             const isPurchasable = computeIsPurchasable(
-              availability,
-              inventoryLevel,
-              inventoryTracking,
+              // availability,
+              // inventoryLevel,
+              // inventoryTracking,
               purchasingDisabled,
-              qty,
-              availableToSell,
-              unlimitedBackorder,
+              // qty,
+              // availableToSell,
+              // unlimitedBackorder,
             );
             return { productId, isPurchasable };
           } catch {
