@@ -34,6 +34,7 @@ function useData() {
   const salesRepCompanyId = useAppSelector(({ b2bFeatures }) => b2bFeatures.masqueradeCompany.id);
   const isB2BUser = useAppSelector(isB2BUserSelector);
   const companyB2BId = useAppSelector(({ company }) => company.companyInfo.id);
+  const defaultShoppingListId = useAppSelector(({ company }) => company.companyInfo.defaultShoppingListId);
   const { shoppingListCreateActionsPermission, submitShoppingListPermission } =
     useAppSelector(rolePermissionSelector);
   const companyId = companyB2BId || salesRepCompanyId;
@@ -46,6 +47,7 @@ function useData() {
 
   return {
     isB2BUser,
+    defaultShoppingListId,
     shoppingListCreateActionsPermission,
     submitShoppingListPermission,
     deleteShoppingList,
@@ -59,7 +61,6 @@ function ShoppingLists() {
   const [deleteItem, setDeleteItem] = useState<null | ShoppingListsItemsProps>(null);
   const [filterMoreInfo, setFilterMoreInfo] = useState<Array<any>>([]);
   const getFilterMoreList = useGetFilterMoreList();
-
   const [isMobile] = useMobile();
   const b3Lang = useB3Lang();
 
@@ -67,6 +68,7 @@ function ShoppingLists() {
 
   const {
     isB2BUser,
+    defaultShoppingListId,
     shoppingListCreateActionsPermission,
     submitShoppingListPermission,
     deleteShoppingList,
@@ -241,6 +243,7 @@ function ShoppingLists() {
               key={row.id || ''}
               item={row}
               isPermissions={isB2BUser ? shoppingListCreateActionsPermission : true}
+              defaultShoppingListId={defaultShoppingListId}
               onEdit={handleEdit}
               onDelete={handleDelete}
               onCopy={handleCopy}

@@ -18,6 +18,7 @@ interface Tokens {
   B2BToken: string;
   bcGraphqlToken: string;
   currentCustomerJWT: string;
+  vsCurrentCustomerJWT: string;
 }
 
 interface PermissionsCodesProps {
@@ -39,6 +40,7 @@ const initialState: CompanyState = {
     id: '',
     companyName: '',
     status: CompanyStatus.DEFAULT,
+    defaultShoppingListId: null,
   },
   customer: {
     id: 0,
@@ -57,6 +59,7 @@ const initialState: CompanyState = {
     B2BToken: '',
     bcGraphqlToken: '',
     currentCustomerJWT: '',
+    vsCurrentCustomerJWT: '',
   },
   permissions: [],
   companyHierarchyInfo: {
@@ -163,6 +166,9 @@ const companySlice = createSlice({
         companyHierarchyList,
       };
     },
+    setVSCurrentCustomerJWT: (state, { payload }: PayloadAction<string>) => {
+      state.tokens.vsCurrentCustomerJWT = payload;
+    },
   },
 });
 
@@ -174,6 +180,7 @@ export const {
   setB2BToken,
   setBcGraphQLToken,
   setCurrentCustomerJWT,
+  setVSCurrentCustomerJWT,
   setLoginType,
   setPermissionModules,
   setCompanyHierarchyInfoModules,

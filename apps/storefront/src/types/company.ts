@@ -2,6 +2,7 @@ import { PAGES_SUBSIDIARIES_PERMISSION_KEYS } from '@/constants';
 
 export interface CompanyInfo {
   id: string;
+  defaultShoppingListId: number | null;
   companyName: string;
   status: number;
 }
