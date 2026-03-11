@@ -308,7 +308,6 @@ export default function AddToQuote(props: AddToListProps) {
             quickAddToList={quickAddToList}
             type="quoteDraft"
             buttonText={b3Lang('quoteDraft.button.addProductsToAddToQuote')}
-            type="quote"
           />
 
           <Divider />
