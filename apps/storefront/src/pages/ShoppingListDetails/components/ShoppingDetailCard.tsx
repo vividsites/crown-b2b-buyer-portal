@@ -10,11 +10,16 @@ import { getBCPrice } from '@/utils/b3Product/b3Product';
 
 import { getProductOptionsFields } from '../../../utils/b3Product/shared/config';
 
+interface QtyRequirements {
+  orderQuantityMinimum: number | null;
+  orderQuantityIncrement: number | null;
+}
+
 interface ShoppingDetailCardProps {
   item: any;
   onEdit: (item: any, variantId: number | string, itemId: number | string) => void;
   onDelete: (itemId: number) => void;
-  handleUpdateProductQty: (id: number | string, value: number | string) => void;
+  handleUpdateProductQty: (id: number | string, value: number | string, qtyMin: number, qtyIncrement: number) => void;
   handleUpdateShoppingListItem: (itemId: number | string) => void;
   checkBox?: () => ReactElement;
   isReadForApprove: boolean;
@@ -26,6 +31,7 @@ interface ShoppingDetailCardProps {
   setNotes: (value: string) => void;
   showPrice: (price: string, row: CustomFieldItems) => string | number;
   b2bAndBcShoppingListActionsPermissions: boolean;
+  requirements?: QtyRequirements;
 }
 
 const StyledImage = styled('img')(() => ({
@@ -52,6 +58,7 @@ function ShoppingDetailCard(props: ShoppingDetailCardProps) {
     setNotes,
     showPrice,
     b2bAndBcShoppingListActionsPermissions,
+    requirements,
   } = props;
 
   const {
@@ -67,6 +74,16 @@ function ShoppingDetailCard(props: ShoppingDetailCardProps) {
     taxPrice = 0,
     productNote,
   } = shoppingDetail;
+
+  const qtyMin = requirements?.orderQuantityMinimum ?? 0;
+  const qtyIncrement = requirements?.orderQuantityIncrement ?? 0;
+
+  const getQtyHelperText = (qty: number | string): string => {
+    const n = Number(qty);
+    if (qtyMin > 0 && n < qtyMin) return `Min is ${qtyMin}`;
+    if (qtyIncrement > 1 && (n - (qtyMin || 0)) % qtyIncrement !== 0) return `Must be in increments of ${qtyIncrement}`;
+    return '';
+  };
 
   const price = getBCPrice(Number(basePrice), Number(taxPrice));
 
@@ -193,8 +210,12 @@ function ShoppingDetailCard(props: ShoppingDetailCardProps) {
             inputProps={{
               inputMode: 'numeric',
               pattern: '[0-9]*',
+              min: qtyMin > 0 ? qtyMin : 1,
+              step: qtyIncrement > 1 ? qtyIncrement : 1,
             }}
             value={quantity}
+            error={!!getQtyHelperText(quantity)}
+            helperText={getQtyHelperText(quantity)}
             sx={{
               margin: '0.5rem 0',
               width: '60%',
@@ -206,9 +227,13 @@ function ShoppingDetailCard(props: ShoppingDetailCardProps) {
               '& input': {
                 fontSize: '14px',
               },
+              '& .MuiFormHelperText-root': {
+                marginLeft: 0,
+                marginRight: 0,
+              },
             }}
             onChange={(e) => {
-              handleUpdateProductQty(shoppingDetail.id, e.target.value);
+              handleUpdateProductQty(shoppingDetail.id, e.target.value, qtyMin, qtyIncrement);
             }}
             onBlur={() => {
               handleUpdateShoppingListItem(itemId);

@@ -3,6 +3,7 @@ import {
   forwardRef,
   Ref,
   SetStateAction,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
@@ -17,9 +18,10 @@ import {
   GetRequestList,
   TableRefreshConfig,
 } from '@/components/table/B3PaginationTable';
-import { TableColumnItem, WithRowControls } from '@/components/table/B3Table';
+import { PossibleNodeWrapper, TableColumnItem, WithRowControls } from '@/components/table/B3Table';
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
 import { useMobile } from '@/hooks/useMobile';
+import { useProductRequirements } from '@/hooks/useProductRequirements';
 import { useSort } from '@/hooks/useSort';
 import { useB3Lang } from '@/lib/lang';
 import { updateB2BShoppingListsItem, updateBcShoppingListsItem } from '@/shared/service/b2b';
@@ -209,10 +211,51 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
 
   const [handleSetOrderBy, order, orderBy] = useSort(sortKeys, defaultSortKey, search, setSearch);
 
-  const handleUpdateProductQty = (id: number | string, value: number | string) => {
+  const { requirementsMap, fetchRequirements } = useProductRequirements();
+
+  const wrappedGetShoppingListDetails: GetRequestList<SearchProps, CustomFieldItems> = useCallback(
+    async (params) => {
+      const result = await getShoppingListDetails(params);
+      const productIds: number[] = [];
+      (result.edges || []).forEach((item: PossibleNodeWrapper<CustomFieldItems>) => {
+        const id = item.node?.productId;
+        if (id && !productIds.includes(id)) productIds.push(id);
+      });
+      if (productIds.length) fetchRequirements(productIds);
+      return result;
+    },
+    [getShoppingListDetails, fetchRequirements],
+  );
+
+  const validateQuantity = (qty: number, qtyMin: number, qtyIncrement: number) : {valid: boolean, message: string} => {
+    if(qty > 0){
+      if(
+        (qtyMin > 0 && qty < qtyMin)
+      ) {
+        return {valid: false, message: `Minimum quantity is ${qtyMin}`};
+      }
+      if(
+        (qtyIncrement > 1 && (qty - (qtyMin || 0)) % qtyIncrement !== 0)
+      ) {
+        return {valid: false, message: `Must be in increments of ${qtyIncrement}`};
+      }
+    }
+    return {valid: true, message: ''};
+  }
+
+  const handleUpdateProductQty = (id: number | string, value: number | string, qtyMin: number, qtyIncrement: number) => {
     let newQty = Number(value);
-    
+
     if (isNaN(newQty) || newQty < 0) return;
+
+    const {valid, message} = validateQuantity(newQty, qtyMin, qtyIncrement);
+    if(!valid) {
+      // is snackbar the best way to show this? the error ends up visually separated from the input
+      snackbar.error(message);
+      setQtyNotChangeFlag(true);
+      return;
+    }
+
     const currentItem = originProducts.find((item: ListItemProps) => {
       const { node } = item;
 
@@ -616,30 +659,46 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
     {
       key: 'Qty',
       title: b3Lang('shoppingList.table.quantity'),
-      render: (row) => (
-        <StyledTextField
-          size="small"
-          type="number"
-          variant="filled"
-          sx={{
-            width: '72px',
-          }}
-          disabled={
-            b2bAndBcShoppingListActionsPermissions ? isReadForApprove || isJuniorApprove : true
-          }
-          value={row.quantity}
-          inputProps={{
-            inputMode: 'numeric',
-            pattern: '[0-9]*',
-          }}
-          onChange={(e) => {
-            handleUpdateProductQty(row.id, e.target.value);
-          }}
-          onBlur={() => {
-            handleUpdateShoppingListItemQty(row.itemId);
-          }}
-        />
-      ),
+      render: (row) => {
+        const reqs = requirementsMap.get(row.productId);
+        const qtyMin = reqs?.orderQuantityMinimum ?? 0;
+        const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
+        const qty = Number(row.quantity);
+        let helperText = '';
+        if (qtyMin > 0 && qty < qtyMin) helperText = `Min is ${qtyMin}`;
+        else if (qtyIncrement > 1 && (qty - (qtyMin || 0)) % qtyIncrement !== 0)
+          helperText = `Must be in increments of ${qtyIncrement}`;
+
+        return (
+          <StyledTextField
+            size="small"
+            type="number"
+            variant="filled"
+            sx={{
+              width: '72px',
+              '& .MuiFormHelperText-root': { marginLeft: 0, marginRight: 0 },
+            }}
+            disabled={
+              b2bAndBcShoppingListActionsPermissions ? isReadForApprove || isJuniorApprove : true
+            }
+            value={row.quantity}
+            error={!!helperText}
+            helperText={helperText}
+            inputProps={{
+              inputMode: 'numeric',
+              pattern: '[0-9]*',
+              min: qtyMin > 0 ? qtyMin : 1,
+              step: qtyIncrement > 1 ? qtyIncrement : 1,
+            }}
+            onChange={(e) => {
+              handleUpdateProductQty(row.id, e.target.value, qtyMin, qtyIncrement);
+            }}
+            onBlur={() => {
+              handleUpdateShoppingListItemQty(row.itemId);
+            }}
+          />
+        );
+      },
       width: '15%',
       style: {
         textAlign: 'right',
@@ -837,7 +896,7 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
         ref={paginationTableRef}
         columnItems={columnItems}
         rowsPerPageOptions={[10, 20, 50]}
-        getRequestList={getShoppingListDetails}
+        getRequestList={wrappedGetShoppingListDetails}
         searchParams={search}
         isCustomRender={false}
         showCheckbox={false}
@@ -871,6 +930,7 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
             handleUpdateShoppingListItem={handleUpdateShoppingListItemQty}
             isReadForApprove={isReadForApprove || isJuniorApprove}
             b2bAndBcShoppingListActionsPermissions={b2bAndBcShoppingListActionsPermissions}
+            requirements={requirementsMap.get(row.productId)}
           />
         )}
       />

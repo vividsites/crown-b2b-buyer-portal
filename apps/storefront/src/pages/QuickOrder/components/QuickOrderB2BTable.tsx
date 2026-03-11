@@ -1,4 +1,5 @@
 import { Dispatch, SetStateAction, useRef, useState } from 'react';
+import { useProductRequirements } from '@/hooks/useProductRequirements';
 import { Box, styled, TextField, Typography } from '@mui/material';
 
 import B3Spin from '@/components/spin/B3Spin';
@@ -137,6 +138,8 @@ function QuickOrderTable({
 
   const b3Lang = useB3Lang();
 
+  const { requirementsMap, fetchRequirements } = useProductRequirements();
+
   const { currency_code: currencyCode } = useAppSelector(activeCurrencyInfoSelector);
 
   const handleGetProductsById = async (listProducts: ListItemProps[]) => {
@@ -171,6 +174,8 @@ function QuickOrderTable({
 
           node.productsSearch = productInfo || {};
         });
+
+        fetchRequirements(productIds);
 
         return listProducts;
       } catch (error: unknown) {
@@ -399,6 +404,14 @@ function QuickOrderTable({
       title: b3Lang('purchasedProducts.qty'),
       render: (row) => {
         const qty = handleSetCheckedQty(row);
+        const reqs = requirementsMap.get(row.productId);
+        const qtyMin = reqs?.orderQuantityMinimum ?? 0;
+        const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
+        const n = Number(qty);
+        let helperText = '';
+        if (qtyMin > 0 && n < qtyMin) helperText = `Min is ${qtyMin}`;
+        else if (qtyIncrement > 1 && (n - (qtyMin || 0)) % qtyIncrement !== 0)
+          helperText = `Must be in increments of ${qtyIncrement}`;
 
         return (
           <StyledTextField
@@ -406,12 +419,19 @@ function QuickOrderTable({
             type="number"
             variant="filled"
             value={qty}
+            error={!!helperText}
+            helperText={helperText}
             inputProps={{
               inputMode: 'numeric',
               pattern: '[0-9]*',
+              min: qtyMin > 0 ? qtyMin : 1,
+              step: qtyIncrement > 1 ? qtyIncrement : 1,
             }}
             onChange={(e) => {
               handleUpdateProductQty(row.id, e.target.value);
+            }}
+            sx={{
+              '& .MuiFormHelperText-root': { marginLeft: 0, marginRight: 0 },
             }}
           />
         );
@@ -557,6 +577,7 @@ function QuickOrderTable({
               item={row}
               checkBox={checkBox}
               handleUpdateProductQty={handleUpdateProductQty}
+              requirements={requirementsMap.get(row.productId)}
             />
           )}
         />

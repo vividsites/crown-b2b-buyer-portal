@@ -9,6 +9,7 @@ import B3Dialog from '@/components/B3Dialog';
 import { CART_URL } from '@/constants';
 import { useIsBackorderValidationEnabled } from '@/hooks/useIsBackorderValidationEnabled';
 import { useMobile } from '@/hooks/useMobile';
+import { useProductRequirements } from '@/hooks/useProductRequirements';
 import { useB3Lang } from '@/lib/lang';
 import {
   addProductToBcShoppingList,
@@ -119,6 +120,7 @@ export default function OrderDialog({
     mode: 'all',
   });
   const b3Lang = useB3Lang();
+  const { requirementsMap, fetchRequirements } = useProductRequirements();
 
   const handleClose = () => {
     setOpen(false);
@@ -470,6 +472,11 @@ export default function OrderDialog({
     );
     setCheckedArr([]);
 
+    const productIds = products
+      .map((p) => p.product_id)
+      .filter((id): id is number => !!id);
+    if (productIds.length) fetchRequirements(productIds);
+
     const getVariantInfoByList = async () => {
       const visibleProducts = products.filter((item: OrderProductItem) => item?.isVisible);
 
@@ -483,7 +490,7 @@ export default function OrderDialog({
     };
 
     getVariantInfoByList();
-  }, [isB2BUser, open, products]);
+  }, [isB2BUser, open, products, fetchRequirements]);
 
   const handleProductChange = (products: EditableProductItem[]) => {
     setEditableProducts(products);
@@ -523,6 +530,7 @@ export default function OrderDialog({
             setReturnArr={setReturnArr}
             textAlign={isMobile ? 'left' : 'right'}
             type={type}
+            requirementsMap={requirementsMap}
           />
 
           {type === 'return' && (

@@ -3,6 +3,7 @@ import { Box, CardContent, styled, TextField, Typography } from '@mui/material';
 
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
 import { useB3Lang } from '@/lib/lang';
+import { ProductRequirements } from '@/shared/service/vs/api/product';
 import b2bGetVariantImageByVariantInfo from '@/utils/b2bGetVariantImageByVariantInfo';
 import { currencyFormat } from '@/utils/b3CurrencyFormat';
 import { displayFormat } from '@/utils/b3DateFormat';
@@ -11,6 +12,7 @@ interface QuickOrderCardProps {
   item: any;
   checkBox?: () => ReactElement;
   handleUpdateProductQty: (id: number, val: string) => void;
+  requirements?: ProductRequirements;
 }
 
 const StyledImage = styled('img')(() => ({
@@ -20,7 +22,16 @@ const StyledImage = styled('img')(() => ({
 }));
 
 function QuickOrderCard(props: QuickOrderCardProps) {
-  const { item: shoppingDetail, checkBox, handleUpdateProductQty } = props;
+  const { item: shoppingDetail, checkBox, handleUpdateProductQty, requirements } = props;
+
+  const qtyMin = requirements?.orderQuantityMinimum ?? 0;
+  const qtyIncrement = requirements?.orderQuantityIncrement ?? 0;
+  const getQtyHelperText = (qty: number | string): string => {
+    const n = Number(qty);
+    if (qtyMin > 0 && n < qtyMin) return `Min is ${qtyMin}`;
+    if (qtyIncrement > 1 && (n - (qtyMin || 0)) % qtyIncrement !== 0) return `Must be in increments of ${qtyIncrement}`;
+    return '';
+  };
   const b3Lang = useB3Lang();
 
   const {
@@ -115,8 +126,12 @@ function QuickOrderCard(props: QuickOrderCardProps) {
               inputProps={{
                 inputMode: 'numeric',
                 pattern: '[0-9]*',
+                min: qtyMin > 0 ? qtyMin : 1,
+                step: qtyIncrement > 1 ? qtyIncrement : 1,
               }}
               value={quantity}
+              error={!!getQtyHelperText(quantity)}
+              helperText={getQtyHelperText(quantity)}
               sx={{
                 margin: '1rem 0',
                 width: '60%',
@@ -127,6 +142,7 @@ function QuickOrderCard(props: QuickOrderCardProps) {
                 '& input': {
                   fontSize: '14px',
                 },
+                '& .MuiFormHelperText-root': { marginLeft: 0, marginRight: 0 },
               }}
               onChange={(e) => {
                 handleUpdateProductQty(shoppingDetail.id, e.target.value);

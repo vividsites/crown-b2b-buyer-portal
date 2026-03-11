@@ -4,6 +4,7 @@ import { Box, Checkbox, FormControlLabel, TextField, Typography } from '@mui/mat
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
 import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
+import { ProductRequirementsMap } from '@/hooks/useProductRequirements';
 import { currencyFormat } from '@/utils/b3CurrencyFormat';
 import { snackbar } from '@/utils/b3Tip';
 
@@ -31,6 +32,7 @@ interface OrderCheckboxProductProps {
   setReturnArr?: (items: ReturnListProps[]) => void;
   textAlign?: string;
   type?: string;
+  requirementsMap?: ProductRequirementsMap;
 }
 
 export default function OrderCheckboxProduct(props: OrderCheckboxProductProps) {
@@ -43,6 +45,7 @@ export default function OrderCheckboxProduct(props: OrderCheckboxProductProps) {
     setReturnArr = () => {},
     textAlign = 'left',
     type,
+    requirementsMap,
   } = props;
 
   const b3Lang = useB3Lang();
@@ -222,26 +225,44 @@ export default function OrderCheckboxProduct(props: OrderCheckboxProductProps) {
             {currencyFormat(product.base_price)}
           </FlexItem>
           <FlexItem textAlignLocation={textAlign} {...itemStyle.default}>
-            <TextField
-              type="number"
-              variant="filled"
-              hiddenLabel={!isMobile}
-              label={isMobile ? b3Lang('orderDetail.reorder.qty') : ''}
-              value={getProductQuantity(product)}
-              onChange={handleProductQuantityChange(product)}
-              onKeyDown={handleNumberInputKeyDown}
-              onBlur={handleNumberInputBlur(product)}
-              size="small"
-              sx={{
-                width: isMobile ? '60%' : '80px',
-                '& .MuiFormHelperText-root': {
-                  marginLeft: '0',
-                  marginRight: '0',
-                },
-              }}
-              error={!!product.helperText}
-              helperText={product.helperText}
-            />
+            {(() => {
+              const reqs = requirementsMap?.get(product.product_id);
+              const qtyMin = reqs?.orderQuantityMinimum ?? 0;
+              const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
+              const qty = getProductQuantity(product);
+              let reqHelperText = '';
+              if (qtyMin > 0 && Number(qty) < qtyMin) reqHelperText = `Min is ${qtyMin}`;
+              else if (qtyIncrement > 1 && (Number(qty) - (qtyMin || 0)) % qtyIncrement !== 0)
+                reqHelperText = `Must be in increments of ${qtyIncrement}`;
+              const helperText = product.helperText || reqHelperText;
+
+              return (
+                <TextField
+                  type="number"
+                  variant="filled"
+                  hiddenLabel={!isMobile}
+                  label={isMobile ? b3Lang('orderDetail.reorder.qty') : ''}
+                  value={qty}
+                  onChange={handleProductQuantityChange(product)}
+                  onKeyDown={handleNumberInputKeyDown}
+                  onBlur={handleNumberInputBlur(product)}
+                  size="small"
+                  inputProps={{
+                    min: qtyMin > 0 ? qtyMin : 1,
+                    step: qtyIncrement > 1 ? qtyIncrement : 1,
+                  }}
+                  sx={{
+                    width: isMobile ? '60%' : '80px',
+                    '& .MuiFormHelperText-root': {
+                      marginLeft: '0',
+                      marginRight: '0',
+                    },
+                  }}
+                  error={!!helperText}
+                  helperText={helperText}
+                />
+              );
+            })()}
           </FlexItem>
           <FlexItem textAlignLocation={textAlign} padding="10px 0 0" {...itemStyle.default}>
             {isMobile && <span>{b3Lang('orderDetail.reorder.total')} </span>}

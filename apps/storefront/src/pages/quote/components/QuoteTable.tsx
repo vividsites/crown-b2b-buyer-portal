@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Delete, Edit, Warning as WarningIcon } from '@mui/icons-material';
 import { Box, styled, TextField, Typography } from '@mui/material';
 import ceil from 'lodash-es/ceil';
@@ -7,6 +7,7 @@ import { TableColumnItem } from '@/components/table/B3Table';
 import PaginationTable from '@/components/table/PaginationTable';
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
 import { useIsBackorderValidationEnabled } from '@/hooks/useIsBackorderValidationEnabled';
+import { useProductRequirements } from '@/hooks/useProductRequirements';
 import { LangFormatFunction, useB3Lang } from '@/lib/lang';
 import { deleteProductFromDraftQuoteList, setDraftProduct, useAppDispatch, useAppSelector } from '@/store';
 import { CustomerRole, Product } from '@/types';
@@ -192,6 +193,15 @@ function QuoteTable({ total, items, updateSummary }: QuoteTableProps) {
   const [chooseOptionsOpen, setSelectedOptionsOpen] = useState(false);
   const [optionsProduct, setOptionsProduct] = useState<Product>();
   const [optionsProductId, setOptionsProductId] = useState<string>('');
+
+  const { requirementsMap, fetchRequirements } = useProductRequirements();
+
+  useEffect(() => {
+    const productIds = items
+      .map((item) => item.node.productId)
+      .filter((id): id is number => !!id);
+    if (productIds.length) fetchRequirements(productIds);
+  }, [items, fetchRequirements]);
 
   const handleUpdateProductQty = async (row: QuoteItem['node'], quantity: number) => {
     const product = await setModifierQtyPrice(row, quantity);
@@ -429,27 +439,43 @@ function QuoteTable({ total, items, updateSummary }: QuoteTableProps) {
     {
       key: 'Qty',
       title: b3Lang('quoteDraft.quoteTable.qty'),
-      render: (row) => (
-        <StyledTextField
-          size="small"
-          type="number"
-          variant="filled"
-          value={row.quantity}
-          inputProps={{
-            inputMode: 'numeric',
-            pattern: '[0-9]*',
-          }}
-          onChange={(e) => {
-            handleUpdateProductQty(row, Number(e.target.value));
-          }}
-          onBlur={(e) => {
-            handleCheckProductQty(row, Number(e.target.value));
-          }}
-          sx={{
-            width: '75%',
-          }}
-        />
-      ),
+      render: (row) => {
+        const reqs = row.productId ? requirementsMap.get(row.productId) : undefined;
+        const qtyMin = reqs?.orderQuantityMinimum ?? 0;
+        const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
+        const qty = Number(row.quantity);
+        let helperText = '';
+        if (qtyMin > 0 && qty < qtyMin) helperText = `Min is ${qtyMin}`;
+        else if (qtyIncrement > 1 && (qty - (qtyMin || 0)) % qtyIncrement !== 0)
+          helperText = `Must be in increments of ${qtyIncrement}`;
+
+        return (
+          <StyledTextField
+            size="small"
+            type="number"
+            variant="filled"
+            value={row.quantity}
+            error={!!helperText}
+            helperText={helperText}
+            inputProps={{
+              inputMode: 'numeric',
+              pattern: '[0-9]*',
+              min: qtyMin > 0 ? qtyMin : 1,
+              step: qtyIncrement > 1 ? qtyIncrement : 1,
+            }}
+            onChange={(e) => {
+              handleUpdateProductQty(row, Number(e.target.value));
+            }}
+            onBlur={(e) => {
+              handleCheckProductQty(row, Number(e.target.value));
+            }}
+            sx={{
+              width: '75%',
+              '& .MuiFormHelperText-root': { marginLeft: 0, marginRight: 0 },
+            }}
+          />
+        );
+      },
       width: '15%',
       style: {
         textAlign: 'right',
@@ -560,6 +586,7 @@ function QuoteTable({ total, items, updateSummary }: QuoteTableProps) {
             onEdit={handleOpenProductEdit}
             onDelete={handleDeleteClick}
             handleUpdateProductQty={handleUpdateProductQty}
+            requirements={row.productId ? requirementsMap.get(row.productId) : undefined}
           />
         )}
       />

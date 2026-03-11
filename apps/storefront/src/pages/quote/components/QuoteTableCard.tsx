@@ -3,6 +3,7 @@ import { Box, CardContent, styled, TextField, Typography } from '@mui/material';
 
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
 import { useB3Lang } from '@/lib/lang';
+import { ProductRequirements } from '@/shared/service/vs/api/product';
 import { Product } from '@/types';
 import { QuoteItem } from '@/types/quotes';
 import { currencyFormat } from '@/utils/b3CurrencyFormat';
@@ -15,6 +16,7 @@ interface QuoteTableCardProps {
   onDelete: (id: string) => void;
   handleUpdateProductQty: (item: QuoteItem['node'], quantity: number) => void;
   isLast: boolean;
+  requirements?: ProductRequirements;
 }
 
 const StyledImage = styled('img')(() => ({
@@ -29,6 +31,7 @@ function QuoteTableCard({
   onDelete,
   handleUpdateProductQty,
   isLast,
+  requirements,
 }: QuoteTableCardProps) {
   const {
     basePrice,
@@ -42,6 +45,14 @@ function QuoteTableCard({
   } = item;
 
   const b3Lang = useB3Lang();
+
+  const qtyMin = requirements?.orderQuantityMinimum ?? 0;
+  const qtyIncrement = requirements?.orderQuantityIncrement ?? 0;
+  const getQtyHelperText = (qty: number): string => {
+    if (qtyMin > 0 && qty < qtyMin) return `Min is ${qtyMin}`;
+    if (qtyIncrement > 1 && (qty - (qtyMin || 0)) % qtyIncrement !== 0) return `Must be in increments of ${qtyIncrement}`;
+    return '';
+  };
 
   const price = getBCPrice(Number(basePrice), Number(taxPrice));
 
@@ -149,8 +160,12 @@ function QuoteTableCard({
             inputProps={{
               inputMode: 'numeric',
               pattern: '[0-9]*',
+              min: qtyMin > 0 ? qtyMin : 1,
+              step: qtyIncrement > 1 ? qtyIncrement : 1,
             }}
             value={quantity}
+            error={!!getQtyHelperText(Number(quantity))}
+            helperText={getQtyHelperText(Number(quantity))}
             sx={{
               margin: '1rem 0',
               width: '60%',
@@ -161,6 +176,7 @@ function QuoteTableCard({
               '& input': {
                 fontSize: '14px',
               },
+              '& .MuiFormHelperText-root': { marginLeft: 0, marginRight: 0 },
             }}
             onChange={(e) => {
               handleUpdateProductQty(item, Number(e.target.value));
