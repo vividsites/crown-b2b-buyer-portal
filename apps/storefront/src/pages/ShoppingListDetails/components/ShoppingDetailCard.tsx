@@ -203,7 +203,7 @@ function ShoppingDetailCard(props: ShoppingDetailCardProps) {
             })}
           </Typography>
 
-          {qtyMin > 1 && qtyIncrement > 1 && (
+          {(qtyMin > 1 || qtyIncrement > 1) && (
             <Box>
               {qtyMin > 1 && (
                 <Typography sx={{ fontSize: '0.75rem', lineHeight: '1.5', color: '#455A64' }}>

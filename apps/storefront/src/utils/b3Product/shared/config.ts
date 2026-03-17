@@ -12,6 +12,7 @@ import {
 } from '@/types';
 import { AllOptionProps, ALlOptionValue, Product } from '@/types/products';
 import b2bLogger from '@/utils/b3Logger';
+import { ProductRequirements } from '@/shared/service/vs/api/product';
 
 export interface ShoppingListInfoProps {
   name: string;
@@ -414,7 +415,7 @@ export const getAllModifierDefaultValue = (modifiers: CustomFieldItems) => {
   return modifierDefaultValue;
 };
 
-export const conversionProductsList = (products: Product[], listProduct: ListItemProps[] = []) =>
+export const conversionProductsList = (products: Product[], listProduct: ListItemProps[] = [], requirementsMap: Map<number, ProductRequirements> = new Map()) =>
   products.map((product) => {
     const optionsV3 = product.optionsV3 || [];
     const modifiers = product.modifiers || [];
@@ -434,9 +435,19 @@ export const conversionProductsList = (products: Product[], listProduct: ListIte
     const selectOptions =
       listProduct.find((item) => item.node.productId === product.id)?.node.optionList || '[]';
 
+    let qtyMin: number = 0;
+    let qtyIncrement: number = 0;
+    if(requirementsMap) {
+      const reqs = requirementsMap.get(product.id);
+      qtyMin = reqs?.orderQuantityMinimum ?? 0;
+      qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
+    }
+    console.log('qtyMin', qtyMin);
+    console.log('qtyIncrement', qtyIncrement);
+
     return {
       ...product,
-      quantity: 1,
+      quantity: qtyMin || 1,
       base_price: `${price}`,
       optionsV3,
       options: product.options || [],
@@ -444,6 +455,8 @@ export const conversionProductsList = (products: Product[], listProduct: ListIte
       modifiers,
       selectOptions,
       allOptions: [...variantOptions, ...modifiers],
+      orderQuantityIncrement: qtyIncrement,
+      orderQuantityMinimum: qtyMin || product.orderQuantityMinimum || 0,
     };
   });
 
