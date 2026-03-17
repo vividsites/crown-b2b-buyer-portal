@@ -233,6 +233,24 @@ export default function ReAddToCart({
         item.node.quantity = stock;
       }
 
+      // Apply orderQuantityMinimum / orderQuantityIncrement from requirements
+      const reqProductId = (product.node as any).productId as number;
+      const reqs = requirementsMap.get(reqProductId);
+      const reqMin = reqs?.orderQuantityMinimum ?? 0;
+      const reqIncrement = reqs?.orderQuantityIncrement ?? 0;
+      let adjustedQty = item.node.quantity ? Number(item.node.quantity) : 0;
+      if (reqMin > 0 && adjustedQty < reqMin) {
+        adjustedQty = reqMin;
+      }
+      if (reqIncrement > 1) {
+        const base = reqMin || 0;
+        const remainder = (adjustedQty - base) % reqIncrement;
+        if (remainder !== 0) {
+          adjustedQty = adjustedQty + (reqIncrement - remainder);
+        }
+      }
+      item.node.quantity = adjustedQty;
+
       item.isValid = true;
 
       const qty = product?.node?.quantity ? Number(product.node.quantity) : 0;
@@ -421,7 +439,7 @@ export default function ReAddToCart({
                           <B3QuantityTextField
                             isStock={isStock}
                             maxQuantity={maxQuantity || node.productsSearch?.orderQuantityMaximum}
-                            minQuantity={minQuantity || node.productsSearch?.orderQuantityMinimum || reqs?.orderQuantityMinimum || 0}
+                            minQuantity={minQuantity || reqs?.orderQuantityMinimum || node.productsSearch?.orderQuantityMinimum || 0}
                             increment={reqs?.orderQuantityIncrement ?? 0}
                             stock={stock}
                             value={quantity}

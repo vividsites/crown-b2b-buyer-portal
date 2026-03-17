@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 
-import { getProductRequirements, ProductRequirements } from '@/shared/service/vs/api/product';
+import { getProductRequirementsByIds, ProductRequirements } from '@/shared/service/vs/api/product';
 
 export type ProductRequirementsMap = Map<number, ProductRequirements>;
 
@@ -15,7 +15,7 @@ export function useProductRequirements() {
     newIds.forEach((id) => fetchedIds.current.add(id));
 
     try {
-      const requirements = await getProductRequirements(newIds);
+      const requirements = await getProductRequirementsByIds(newIds);
       setRequirementsMap((prev) => {
         const next = new Map(prev);
         requirements.forEach((req) => next.set(req.productId, req));

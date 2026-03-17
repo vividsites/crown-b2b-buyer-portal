@@ -7,6 +7,7 @@ import B3Spin from '@/components/spin/B3Spin';
 import { CART_URL, CHECKOUT_URL, PRODUCT_DEFAULT_IMAGE } from '@/constants';
 import { useIsBackorderValidationEnabled } from '@/hooks/useIsBackorderValidationEnabled';
 import { useMobile } from '@/hooks/useMobile';
+import { useProductRequirements } from '@/hooks/useProductRequirements';
 import { useB3Lang } from '@/lib/lang';
 import { GlobalContext } from '@/shared/global';
 import {
@@ -328,6 +329,7 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
     return quantities.map((q: ProductsProps) => ({node: q.node}));
   });
   const backendValidationEnabled = useIsBackorderValidationEnabled();
+  const { requirementsMap, fetchRequirements } = useProductRequirements();
   const [shoppingListInfo, setShoppingListInfo] = useState<null | ShoppingListInfoProps>(null);
   const [customerInfo, setCustomerInfo] = useState<null | CustomerInfoProps>(null);
   const [isRequestLoading, setIsRequestLoading] = useState(false);
@@ -740,6 +742,8 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
 
       if (noSkuProducts.length === checkedArr.length) return;
 
+      if (!validateRequirements()) return;
+
       const productIds: number[] = [];
       productsWithSku.forEach((product) => {
         const { node } = product;
@@ -896,7 +900,6 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
     }
 
     const getInventoryInfos = await getVariantInfoBySkus(skus);
-
     const { validateFailureArr, validateSuccessArr } = verifyInventory(
       checkedArr,
       getInventoryInfos?.variantSku || [],
@@ -956,12 +959,38 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
 
   const addToCart = backendValidationEnabled ? handleAddToCartBackend : handleAddToCartOnFrontend;
 
+  const validateRequirements = (): boolean => {
+    const invalidSkus: string[] = [];
+
+    checkedArr.forEach((item: ProductsProps) => {
+      const { node } = item;
+      const reqs = requirementsMap.get(node.productId);
+      const qtyMin = reqs?.orderQuantityMinimum ?? 0;
+      const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
+      const qty = Number(node.quantity);
+
+      if (qtyMin > 0 && qty < qtyMin) {
+        invalidSkus.push(`${node.variantSku} (Minimum quantity: ${qtyMin})`);
+      } else if (qtyIncrement > 1 && (qty - qtyMin) % qtyIncrement !== 0) {
+        invalidSkus.push(`${node.variantSku} (Increment: ${qtyIncrement})`);
+      }
+    });
+
+    if (invalidSkus.length > 0) {
+      snackbar.error(`Invalid quantity for: ${invalidSkus.join(', ')}`);
+      return false;
+    }
+    return true;
+  };
+
   // Add selected product to cart
   const handleAddProductsToCart = async () => {
     if (checkedArr.length === 0) {
       snackbar.error(b3Lang('shoppingList.footer.selectOneItem'));
       return;
     }
+
+    if (!validateRequirements()) return;
 
     setValidateFailureProducts([]);
     setSuccessProductsCount(0);
@@ -1050,6 +1079,8 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
                   getShoppingListDetails={getShoppingListDetails}
                   setDeleteOpen={setDeleteOpen}
                   setDeleteItemId={setDeleteItemId}
+                  requirementsMap={requirementsMap}
+                  fetchRequirements={fetchRequirements}
                   isB2BUser={isB2BUser}
                   productQuoteEnabled={productQuoteEnabled}
                   isCanEditShoppingList={isCanEditShoppingList}

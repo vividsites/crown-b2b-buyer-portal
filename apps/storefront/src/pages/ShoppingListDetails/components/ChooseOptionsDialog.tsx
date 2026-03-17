@@ -18,7 +18,6 @@ import B3Dialog from '@/components/B3Dialog';
 import B3Spin from '@/components/spin/B3Spin';
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
 import { useIsBackorderValidationEnabled } from '@/hooks/useIsBackorderValidationEnabled';
-import { useProductRequirements } from '@/hooks/useProductRequirements';
 import { useB3Lang } from '@/lib/lang';
 import { searchProducts } from '@/shared/service/b2b';
 import { useAppSelector } from '@/store';
@@ -144,22 +143,6 @@ export default function ChooseOptionsDialog(props: ChooseOptionsDialogProps) {
   const [chooseOptionsProduct, setChooseOptionsProduct] = useState<ChooseOptionsProductProps[]>([]);
   const [isRequestLoading, setIsRequestLoading] = useState<boolean>(false);
   const isBackorderValidationEnabled = useIsBackorderValidationEnabled();
-  const { requirementsMap, fetchRequirements } = useProductRequirements();
-
-  useEffect(() => {
-    if (product?.id) fetchRequirements([product.id]);
-  }, [product?.id, fetchRequirements]);
-
-  const productRequirements = product?.id ? requirementsMap.get(product.id) : undefined;
-  const qtyMin = productRequirements?.orderQuantityMinimum ?? 0;
-  const qtyIncrement = productRequirements?.orderQuantityIncrement ?? 0;
-
-  const getQtyHelperText = (qty: number | string): string => {
-    const n = Number(qty);
-    if (qtyMin > 0 && n < qtyMin) return `Min is ${qtyMin}`;
-    if (qtyIncrement > 1 && (n - (qtyMin || 0)) % qtyIncrement !== 0) return `Must be in increments of ${qtyIncrement}`;
-    return '';
-  };
 
   useEffect(() => {
     if (type === 'quote' && product) {
@@ -611,16 +594,9 @@ export default function ChooseOptionsDialog(props: ChooseOptionsDialogProps) {
                       onKeyDown={handleNumberInputKeyDown}
                       onBlur={handleNumberInputBlur}
                       size="small"
-                      inputProps={{
-                        min: qtyMin > 0 ? qtyMin : 1,
-                        step: qtyIncrement > 1 ? qtyIncrement : 1,
-                      }}
-                      error={!!getQtyHelperText(quantity)}
-                      helperText={getQtyHelperText(quantity)}
                       sx={{
                         width: '60%',
                         maxWidth: '100px',
-                        '& .MuiFormHelperText-root': { marginLeft: 0, marginRight: 0 },
                       }}
                     />
                   </FlexItem>
