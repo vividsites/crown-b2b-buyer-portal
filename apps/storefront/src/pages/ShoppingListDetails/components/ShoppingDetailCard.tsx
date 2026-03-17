@@ -1,4 +1,4 @@
-import { Delete, Edit, StickyNote2 } from '@mui/icons-material';
+import { Delete, Edit, StickyNote2, Warning as WarningIcon } from '@mui/icons-material';
 import { Box, CardContent, styled, TextField, Typography } from '@mui/material';
 
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
@@ -231,8 +231,6 @@ function ShoppingDetailCard(props: ShoppingDetailCardProps) {
               step: qtyIncrement > 1 ? qtyIncrement : 1,
             }}
             value={quantity}
-            error={!!qtyHelperText}
-            helperText={qtyHelperText}
             sx={{
               margin: '0.5rem 0',
               width: '60%',
@@ -256,6 +254,22 @@ function ShoppingDetailCard(props: ShoppingDetailCardProps) {
               handleUpdateShoppingListItem(itemId);
             }}
           />
+
+          {qtyHelperText && (
+            <Box sx={{ color: 'red' }}>
+              <Box
+                sx={{
+                  mt: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  '& svg': { mr: '0.5rem' },
+                }}
+              >
+                <WarningIcon color="error" fontSize="small" />
+                {qtyHelperText}
+              </Box>
+            </Box>
+          )}
           <Typography
             sx={{
               color: '#212121',

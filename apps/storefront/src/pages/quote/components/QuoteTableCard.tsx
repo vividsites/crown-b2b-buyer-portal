@@ -1,4 +1,4 @@
-import { Delete, Edit } from '@mui/icons-material';
+import { Delete, Edit, Warning as WarningIcon } from '@mui/icons-material';
 import { Box, CardContent, styled, TextField, Typography } from '@mui/material';
 
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
@@ -52,9 +52,9 @@ function QuoteTableCard({
   let qtyHelperText = '';
   if (qty > 0) {
     if (qtyMin > 0 && qty < qtyMin)
-      qtyHelperText = `Min: ${qtyMin}`;
+      qtyHelperText = b3Lang('quoteDraft.quoteTable.error.minimumQuantity', { quantity: qtyMin });
     else if (qtyIncrement > 1 && (qty - qtyMin) % qtyIncrement !== 0)
-      qtyHelperText = `Step: ${qtyIncrement}`;
+      qtyHelperText = b3Lang('quoteDraft.quoteTable.error.quantityIncrement', { increment: qtyIncrement, minimum: qtyMin });
   }
 
   const price = getBCPrice(Number(basePrice), Number(taxPrice));
@@ -167,8 +167,6 @@ function QuoteTableCard({
               step: qtyIncrement > 1 ? qtyIncrement : 1,
             }}
             value={quantity}
-            error={!!qtyHelperText}
-            helperText={qtyHelperText}
             sx={{
               margin: '1rem 0',
               width: '60%',
@@ -185,6 +183,23 @@ function QuoteTableCard({
               handleUpdateProductQty(item, Number(e.target.value));
             }}
           />
+
+          {qtyHelperText && (
+            <Box sx={{ color: 'red' }}>
+              <Box
+                sx={{
+                  mt: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  '& svg': { mr: '0.5rem' },
+                }}
+              >
+                <WarningIcon color="error" fontSize="small" />
+                {qtyHelperText}
+              </Box>
+            </Box>
+          )}
+
           <Typography sx={{ fontSize: '14px' }}>Total: {totalPrice}</Typography>
           <Box
             sx={{
