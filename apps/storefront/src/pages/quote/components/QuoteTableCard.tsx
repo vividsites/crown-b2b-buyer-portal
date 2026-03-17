@@ -48,11 +48,14 @@ function QuoteTableCard({
 
   const qtyMin = requirements?.orderQuantityMinimum ?? 0;
   const qtyIncrement = requirements?.orderQuantityIncrement ?? 0;
-  const getQtyHelperText = (qty: number): string => {
-    if (qtyMin > 0 && qty < qtyMin) return `Min is ${qtyMin}`;
-    if (qtyIncrement > 1 && (qty - (qtyMin || 0)) % qtyIncrement !== 0) return `Must be in increments of ${qtyIncrement}`;
-    return '';
-  };
+  const qty = Number(quantity);
+  let qtyHelperText = '';
+  if (qty > 0) {
+    if (qtyMin > 0 && qty < qtyMin)
+      qtyHelperText = `Min: ${qtyMin}`;
+    else if (qtyIncrement > 1 && (qty - qtyMin) % qtyIncrement !== 0)
+      qtyHelperText = `Step: ${qtyIncrement}`;
+  }
 
   const price = getBCPrice(Number(basePrice), Number(taxPrice));
 
@@ -164,8 +167,8 @@ function QuoteTableCard({
               step: qtyIncrement > 1 ? qtyIncrement : 1,
             }}
             value={quantity}
-            error={!!getQtyHelperText(Number(quantity))}
-            helperText={getQtyHelperText(Number(quantity))}
+            error={!!qtyHelperText}
+            helperText={qtyHelperText}
             sx={{
               margin: '1rem 0',
               width: '60%',

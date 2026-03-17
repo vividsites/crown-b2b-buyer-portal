@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Delete, Edit, StickyNote2 } from '@mui/icons-material';
+import { Delete, Edit, StickyNote2, Warning as WarningIcon } from '@mui/icons-material';
 import { Box, Button, Grid, styled, TextField, Typography } from '@mui/material';
 import cloneDeep from 'lodash-es/cloneDeep';
 
@@ -23,7 +23,7 @@ import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
 import { useMobile } from '@/hooks/useMobile';
 import { ProductRequirementsMap } from '@/hooks/useProductRequirements';
 import { useSort } from '@/hooks/useSort';
-import { useB3Lang } from '@/lib/lang';
+import { LangFormatFunction, useB3Lang } from '@/lib/lang';
 import { updateB2BShoppingListsItem, updateBcShoppingListsItem } from '@/shared/service/b2b';
 import { rolePermissionSelector, useAppSelector } from '@/store';
 import b2bGetVariantImageByVariantInfo from '@/utils/b2bGetVariantImageByVariantInfo';
@@ -37,6 +37,7 @@ import B3FilterSearch from '../../../components/filter/B3FilterSearch';
 import ChooseOptionsDialog from './ChooseOptionsDialog';
 import ShoppingDetailAddNotes from './ShoppingDetailAddNotes';
 import ShoppingDetailCard from './ShoppingDetailCard';
+import { ProductRequirements } from '@/shared/service/vs/api/product';
 
 interface ListItem {
   [key: string]: string;
@@ -153,6 +154,22 @@ const sortKeys = {
   Qty: 'quantity',
   Sku: 'productSku',
   SortOrder: 'sortOrder',
+};
+
+
+const getThresholdWarning = (row: CustomFieldItems, requirementsMap: Map<number, ProductRequirements>, b3Lang: LangFormatFunction): string | null => {
+  const quantity = Number(row.quantity || 0);
+  const reqs = row.productId ? requirementsMap.get(row.productId) : undefined;
+  const qtyMin = reqs?.orderQuantityMinimum ?? 0;
+  const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
+  if (quantity > 0) {
+    if (qtyMin > 0 && quantity < qtyMin)
+      return b3Lang('shoppingList.table.error.minimumQuantity', { quantity: qtyMin });
+    else if (qtyIncrement > 1 && (quantity - qtyMin) % qtyIncrement !== 0)
+      return b3Lang('shoppingList.table.error.quantityIncrement', { increment: qtyIncrement, minimum: qtyMin });
+  }
+
+  return null;
 };
 
 function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>) {
@@ -527,6 +544,7 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
         const reqs = requirementsMap.get(Number(row.productId));
         const qtyMin = reqs?.orderQuantityMinimum ?? 0;
         const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
+        const warningMessage = getThresholdWarning(row, requirementsMap, b3Lang);
 
         return (
           <Box
@@ -599,6 +617,22 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
                   {row.productNote}
                 </Typography>
               )}
+
+              {warningMessage && (
+                <Box sx={{ color: 'red' }}>
+                  <Box
+                    sx={{
+                      mt: '1rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      '& svg': { mr: '0.5rem' },
+                    }}
+                  >
+                    <WarningIcon color="error" fontSize="small" />
+                    {warningMessage}
+                  </Box>
+                </Box>
+              )}
             </Box>
           </Box>
         );
@@ -667,16 +701,7 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
       title: b3Lang('shoppingList.table.quantity'),
       render: (row) => {
         const reqs = requirementsMap.get(Number(row.productId));
-        const qtyMin = reqs?.orderQuantityMinimum ?? 0;
         const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
-        const qty = Number(row.quantity);
-        let helperText = '';
-        if (qty > 0) {
-          if (qtyMin > 0 && qty < qtyMin)
-            helperText = b3Lang('shoppingList.table.error.minimumQuantity', { quantity: qtyMin });
-          else if (qtyIncrement > 1 && (qty - qtyMin) % qtyIncrement !== 0)
-            helperText = b3Lang('shoppingList.table.error.quantityIncrement', { increment: qtyIncrement });
-        }
 
         return (
           <StyledTextField
@@ -691,8 +716,6 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
               b2bAndBcShoppingListActionsPermissions ? isReadForApprove || isJuniorApprove : true
             }
             value={row.quantity}
-            error={!!helperText}
-            helperText={helperText}
             inputProps={{
               inputMode: 'numeric',
               pattern: '[0-9]*',

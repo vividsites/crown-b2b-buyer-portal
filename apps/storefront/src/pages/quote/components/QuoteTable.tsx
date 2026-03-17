@@ -26,6 +26,7 @@ import { snackbar } from '@/utils/b3Tip';
 import ChooseOptionsDialog from '../../ShoppingListDetails/components/ChooseOptionsDialog';
 
 import QuoteTableCard from './QuoteTableCard';
+import { ProductRequirements } from '@/shared/service/vs/api/product';
 
 const StyledQuoteTableContainer = styled('div')(() => ({
   backgroundColor: '#FFFFFF',
@@ -154,7 +155,7 @@ function getAvailabilityWarningsBackend(
   return { warningMessage, warningDetails };
 }
 
-const getThresholdWarning = (row: QuoteItem['node'], b3Lang: LangFormatFunction): string | null => {
+const getThresholdWarning = (row: QuoteItem['node'], requirementsMap: Map<number, ProductRequirements>, b3Lang: LangFormatFunction): string | null => {
   const minQuantity = Number(row.productsSearch?.orderQuantityMinimum || 0);
   const maxQuantity = Number(row.productsSearch?.orderQuantityMaximum || 0);
   const quantity = Number(row.quantity || 0);
@@ -171,6 +172,16 @@ const getThresholdWarning = (row: QuoteItem['node'], b3Lang: LangFormatFunction)
       maxQuantity,
       sku,
     });
+  }
+
+  const reqs = row.productId ? requirementsMap.get(row.productId) : undefined;
+  const qtyMin = reqs?.orderQuantityMinimum ?? 0;
+  const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
+  if (quantity > 0) {
+    if (qtyMin > 0 && quantity < qtyMin)
+      return b3Lang('quoteDraft.quoteTable.error.minimumQuantity', { quantity: qtyMin });
+    else if (qtyIncrement > 1 && (quantity - qtyMin) % qtyIncrement !== 0)
+      return b3Lang('quoteDraft.quoteTable.error.quantityIncrement', { increment: qtyIncrement, minimum: qtyMin });
   }
 
   return null;
@@ -221,13 +232,8 @@ function QuoteTable({ total, items, updateSummary }: QuoteTableProps) {
     let newQty = ceil(quantity);
     if (newQty === Number(quantity) && newQty >= 1 && newQty <= QUOTE_PRODUCT_QTY_MAX) return;
 
-    if (quantity < 1) {
-      newQty = 1;
-    }
-
-    if (quantity > QUOTE_PRODUCT_QTY_MAX) {
-      newQty = QUOTE_PRODUCT_QTY_MAX;
-    }
+    if (quantity < 1) newQty = 1;
+    if (quantity > QUOTE_PRODUCT_QTY_MAX) newQty = QUOTE_PRODUCT_QTY_MAX;
 
     handleUpdateProductQty(item, newQty);
   };
@@ -332,12 +338,16 @@ function QuoteTable({ total, items, updateSummary }: QuoteTableProps) {
       title: b3Lang('quoteDraft.quoteTable.product'),
       render: (row) => {
         const availabilityWarning = getAvailabilityWarnings(row, b3Lang);
-        const thresholdWarning = getThresholdWarning(row, b3Lang);
+        const thresholdWarning = getThresholdWarning(row, requirementsMap, b3Lang);
         const warningMessage = availabilityWarning.warningMessage
           ? availabilityWarning.warningMessage
           : thresholdWarning;
         const productOptionsValues = getProductOptionsValues(row);
         const productUrl = row.productsSearch?.productUrl;
+
+        const reqs = requirementsMap.get(Number(row.productId));
+        const qtyMin = reqs?.orderQuantityMinimum ?? 0;
+        const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
 
         return (
           <Box
@@ -383,6 +393,21 @@ function QuoteTable({ total, items, updateSummary }: QuoteTableProps) {
                       {`${option.valueLabel}: ${option.valueText}`}
                     </Typography>
                   ))}
+                </Box>
+              )}
+
+              {qtyMin > 1 && qtyIncrement > 1 && (
+                <Box>
+                  {qtyMin > 1 && (
+                    <Typography sx={{ fontSize: '0.75rem', lineHeight: '1.5', color: '#455A64' }}>
+                      {b3Lang('shoppingList.table.label.minimumQuantity', { quantity: qtyMin })}
+                    </Typography>
+                  )}
+                  {qtyIncrement > 1 && (
+                    <Typography sx={{ fontSize: '0.75rem', lineHeight: '1.5', color: '#455A64' }}>
+                      {b3Lang('shoppingList.table.label.quantityIncrement', { increment: qtyIncrement })}
+                    </Typography>
+                  )}
                 </Box>
               )}
 
@@ -443,11 +468,6 @@ function QuoteTable({ total, items, updateSummary }: QuoteTableProps) {
         const reqs = row.productId ? requirementsMap.get(row.productId) : undefined;
         const qtyMin = reqs?.orderQuantityMinimum ?? 0;
         const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
-        const qty = Number(row.quantity);
-        let helperText = '';
-        if (qtyMin > 0 && qty < qtyMin) helperText = `Min is ${qtyMin}`;
-        else if (qtyIncrement > 1 && (qty - (qtyMin || 0)) % qtyIncrement !== 0)
-          helperText = `Must be in increments of ${qtyIncrement}`;
 
         return (
           <StyledTextField
@@ -455,8 +475,6 @@ function QuoteTable({ total, items, updateSummary }: QuoteTableProps) {
             type="number"
             variant="filled"
             value={row.quantity}
-            error={!!helperText}
-            helperText={helperText}
             inputProps={{
               inputMode: 'numeric',
               pattern: '[0-9]*',

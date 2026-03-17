@@ -82,7 +82,7 @@ function ShoppingDetailCard(props: ShoppingDetailCardProps) {
     if (qtyMin > 0 && qty < qtyMin)
       qtyHelperText = b3Lang('shoppingList.table.error.minimumQuantity', { quantity: qtyMin });
     else if (qtyIncrement > 1 && (qty - qtyMin) % qtyIncrement !== 0)
-      qtyHelperText = b3Lang('shoppingList.table.error.quantityIncrement', { increment: qtyIncrement });
+      qtyHelperText = b3Lang('shoppingList.table.error.quantityIncrement', { increment: qtyIncrement, minimum: qtyMin });
   }
 
   const price = getBCPrice(Number(basePrice), Number(taxPrice));
