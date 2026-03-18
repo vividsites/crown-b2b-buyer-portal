@@ -442,8 +442,6 @@ export const conversionProductsList = (products: Product[], listProduct: ListIte
       qtyMin = reqs?.orderQuantityMinimum ?? 0;
       qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
     }
-    console.log('qtyMin', qtyMin);
-    console.log('qtyIncrement', qtyIncrement);
 
     return {
       ...product,

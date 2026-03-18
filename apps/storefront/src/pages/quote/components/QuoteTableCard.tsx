@@ -155,6 +155,22 @@ function QuoteTableCard({
 
           <Typography sx={{ fontSize: '14px' }}>Price: {singlePrice}</Typography>
 
+
+          {(qtyMin > 1 || qtyIncrement > 1) && (
+            <Box>
+              {qtyMin > 1 && (
+                <Typography sx={{ fontSize: '0.75rem', lineHeight: '1.5', color: '#455A64' }}>
+                  {b3Lang('quoteDraft.quoteTable.label.minimumQuantity', { quantity: qtyMin })}
+                </Typography>
+              )}
+              {qtyIncrement > 1 && (
+                <Typography sx={{ fontSize: '0.75rem', lineHeight: '1.5', color: '#455A64' }}>
+                  {b3Lang('quoteDraft.quoteTable.label.quantityIncrement', { increment: qtyIncrement })}
+                </Typography>
+              )}
+            </Box>
+          )}
+
           <TextField
             size="small"
             type="number"

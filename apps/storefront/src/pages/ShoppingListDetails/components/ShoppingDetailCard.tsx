@@ -228,7 +228,6 @@ function ShoppingDetailCard(props: ShoppingDetailCardProps) {
               inputMode: 'numeric',
               pattern: '[0-9]*',
               min: 0,
-              step: qtyIncrement > 1 ? qtyIncrement : 1,
             }}
             value={quantity}
             sx={{

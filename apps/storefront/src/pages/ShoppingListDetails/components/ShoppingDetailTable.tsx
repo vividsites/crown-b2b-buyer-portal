@@ -700,8 +700,6 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
       key: 'Qty',
       title: b3Lang('shoppingList.table.quantity'),
       render: (row) => {
-        const reqs = requirementsMap.get(Number(row.productId));
-        const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
 
         return (
           <StyledTextField
@@ -720,7 +718,6 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
               inputMode: 'numeric',
               pattern: '[0-9]*',
               min: 0,
-              step: qtyIncrement > 1 ? qtyIncrement : 1,
             }}
             onChange={(e) => {
               handleUpdateProductQty(row.id, e.target.value);

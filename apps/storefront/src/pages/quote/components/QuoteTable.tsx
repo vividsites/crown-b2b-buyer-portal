@@ -400,12 +400,12 @@ function QuoteTable({ total, items, updateSummary }: QuoteTableProps) {
                 <Box>
                   {qtyMin > 1 && (
                     <Typography sx={{ fontSize: '0.75rem', lineHeight: '1.5', color: '#455A64' }}>
-                      {b3Lang('shoppingList.table.label.minimumQuantity', { quantity: qtyMin })}
+                      {b3Lang('quoteDraft.quoteTable.label.minimumQuantity', { quantity: qtyMin })}
                     </Typography>
                   )}
                   {qtyIncrement > 1 && (
                     <Typography sx={{ fontSize: '0.75rem', lineHeight: '1.5', color: '#455A64' }}>
-                      {b3Lang('shoppingList.table.label.quantityIncrement', { increment: qtyIncrement })}
+                      {b3Lang('quoteDraft.quoteTable.label.quantityIncrement', { increment: qtyIncrement })}
                     </Typography>
                   )}
                 </Box>

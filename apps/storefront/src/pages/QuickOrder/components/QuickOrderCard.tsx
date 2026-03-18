@@ -1,5 +1,6 @@
 import { ReactElement } from 'react';
 import { Box, CardContent, styled, TextField, Typography } from '@mui/material';
+import { Warning as WarningIcon } from '@mui/icons-material';
 
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
 import { useB3Lang } from '@/lib/lang';
@@ -24,15 +25,8 @@ const StyledImage = styled('img')(() => ({
 function QuickOrderCard(props: QuickOrderCardProps) {
   const { item: shoppingDetail, checkBox, handleUpdateProductQty, requirements } = props;
 
-  const qtyMin = requirements?.orderQuantityMinimum ?? 0;
-  const qtyIncrement = requirements?.orderQuantityIncrement ?? 0;
-  const getQtyHelperText = (qty: number | string): string => {
-    const n = Number(qty);
-    if (qtyMin > 0 && n < qtyMin) return `Min is ${qtyMin}`;
-    if (qtyIncrement > 1 && (n - (qtyMin || 0)) % qtyIncrement !== 0) return `Must be in increments of ${qtyIncrement}`;
-    return '';
-  };
   const b3Lang = useB3Lang();
+
 
   const {
     quantity,
@@ -45,6 +39,17 @@ function QuickOrderCard(props: QuickOrderCardProps) {
     variantId,
     productsSearch,
   } = shoppingDetail;
+
+  const qtyMin = requirements?.orderQuantityMinimum ?? 0;
+  const qtyIncrement = requirements?.orderQuantityIncrement ?? 0;
+  const qty = Number(quantity);
+  let warningMessage = '';
+  if (qty > 0) {
+    if (qtyMin > 0 && qty < qtyMin)
+      warningMessage = b3Lang('quoteDraft.quoteTable.error.minimumQuantity', { quantity: qtyMin });
+    else if (qtyIncrement > 1 && (qty - qtyMin) % qtyIncrement !== 0)
+      warningMessage = b3Lang('quoteDraft.quoteTable.error.quantityIncrement', { increment: qtyIncrement, minimum: qtyMin });
+  }
 
   const price = Number(basePrice) * Number(quantity);
   const currentVariants = productsSearch.variants || [];
@@ -111,6 +116,22 @@ function QuickOrderCard(props: QuickOrderCardProps) {
               price: currencyFormat(price),
             })}
           </Typography>
+          
+          {(qtyMin > 1 || qtyIncrement > 1) && (
+            <Box>
+              {qtyMin > 1 && (
+                <Typography sx={{ fontSize: '0.75rem', lineHeight: '1.5', color: '#455A64' }}>
+                  {b3Lang('shoppingList.table.label.minimumQuantity', { quantity: qtyMin })}
+                </Typography>
+              )}
+              {qtyIncrement > 1 && (
+                <Typography sx={{ fontSize: '0.75rem', lineHeight: '1.5', color: '#455A64' }}>
+                  {b3Lang('shoppingList.table.label.quantityIncrement', { increment: qtyIncrement })}
+                </Typography>
+              )}
+            </Box>
+          )}
+
           <Box
             sx={{
               '& label': {
@@ -130,8 +151,6 @@ function QuickOrderCard(props: QuickOrderCardProps) {
                 step: qtyIncrement > 1 ? qtyIncrement : 1,
               }}
               value={quantity}
-              error={!!getQtyHelperText(quantity)}
-              helperText={getQtyHelperText(quantity)}
               sx={{
                 margin: '1rem 0',
                 width: '60%',
@@ -142,7 +161,6 @@ function QuickOrderCard(props: QuickOrderCardProps) {
                 '& input': {
                   fontSize: '14px',
                 },
-                '& .MuiFormHelperText-root': { marginLeft: 0, marginRight: 0 },
               }}
               onChange={(e) => {
                 handleUpdateProductQty(shoppingDetail.id, e.target.value);
@@ -155,6 +173,22 @@ function QuickOrderCard(props: QuickOrderCardProps) {
               lastOrderedAt: displayFormat(lastOrderedAt),
             })}
           </Typography>
+
+          {warningMessage && (
+            <Box sx={{ color: 'red' }}>
+              <Box
+                sx={{
+                  mt: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  '& svg': { mr: '0.5rem' },
+                }}
+              >
+                <WarningIcon color="error" fontSize="small" />
+                {warningMessage}
+              </Box>
+            </Box>
+          )}
         </Box>
       </CardContent>
     </Box>
