@@ -1,4 +1,4 @@
-import { ChangeEvent, KeyboardEvent, useState } from 'react';
+import { ChangeEvent, KeyboardEvent, useEffect, useState } from 'react';
 import { Search as SearchIcon } from '@mui/icons-material';
 import { Box, InputAdornment, TextField, Typography } from '@mui/material';
 
@@ -16,6 +16,7 @@ import { ShoppingListProductItem } from '../../../types';
 
 import ChooseOptionsDialog from './ChooseOptionsDialog';
 import ProductListDialog from './ProductListDialog';
+import { getProductRequirementsByIds, ProductRequirements } from '@/shared/service/vs/api/product';
 
 interface SearchProductProps {
   addToList: (product: CustomFieldItems) => Promise<void>;
@@ -34,6 +35,7 @@ export default function SearchProduct({ addToList }: SearchProductProps) {
   const [isAdded, setIsAdded] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [productList, setProductList] = useState<ShoppingListProductItem[]>([]);
+  const [requirementsMap, setRequirementsMap] = useState<Map<number, ProductRequirements>>(new Map());
   const [chooseOptionsOpen, setChooseOptionsOpen] = useState(false);
   const [optionsProduct, setOptionsProduct] = useState<ShoppingListProductItem>();
 
@@ -62,7 +64,15 @@ export default function SearchProduct({ addToList }: SearchProductProps) {
         categoryFilter: true,
       });
 
-      const product = conversionProductsList(productsSearch);
+      const productIds = productsSearch.map((p: ShoppingListProductItem) => p.id);
+      let map:Map<number, ProductRequirements> = new Map();
+      if (productIds.length) {
+        const reqs = await getProductRequirementsByIds(productIds);
+        map = new Map(reqs.map((r) => [r.productId, r] as [number, ProductRequirements]));
+        setRequirementsMap(map);
+      }
+
+      const product = conversionProductsList(productsSearch, [], map);
 
       setProductList(product);
       setProductListOpen(true);
@@ -98,7 +108,22 @@ export default function SearchProduct({ addToList }: SearchProductProps) {
 
   const handleProductQuantityChange = (id: number, newQuantity: number) => {
     const product = productList.find((product) => product.id === id);
+
     if (product) {
+      const reqs = requirementsMap?.get(id);
+      const qtyMin = reqs?.orderQuantityMinimum ?? 0;
+      const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
+
+      if (qtyMin > 0 && newQuantity < qtyMin) {
+        product.helperText = b3Lang('quoteDraft.quoteTable.error.minimumQuantity', { quantity: qtyMin });
+      }
+      else if (qtyIncrement > 1 && (newQuantity - qtyMin) % qtyIncrement !== 0) {
+        product.helperText = b3Lang('quoteDraft.quoteTable.error.quantityIncrement', { increment: qtyIncrement, minimum: qtyMin });
+      }
+      else {
+        product.helperText = '';
+      }
+
       product.quantity = newQuantity;
     }
 
@@ -204,6 +229,7 @@ export default function SearchProduct({ addToList }: SearchProductProps) {
         onProductQuantityChange={handleProductQuantityChange}
         onChooseOptionsClick={handleChangeOptionsClick}
         onAddToListClick={handleAddToListClick}
+        requirementsMap={requirementsMap}
       />
 
       <ChooseOptionsDialog

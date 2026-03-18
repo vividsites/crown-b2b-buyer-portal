@@ -74,15 +74,14 @@ export default function SearchProduct({
       });
 
       const productIds = productsSearch.map((p: ShoppingListProductItem) => p.id);
+      let map:Map<number, ProductRequirements> = new Map();
       if (productIds.length) {
-        getProductRequirementsByIds(productIds)
-          .then((reqs: ProductRequirements[]) => {
-            setRequirementsMap(new Map(reqs.map((r) => [r.productId, r])));
-          })
-          .catch(() => {});
+        const reqs = await getProductRequirementsByIds(productIds);
+        map = new Map(reqs.map((r) => [r.productId, r] as [number, ProductRequirements]));
+        setRequirementsMap(map);
       }
 
-      const converted = conversionProductsList(productsSearch, [], requirementsMap);
+      const converted = conversionProductsList(productsSearch, [], map);
       setProductList(converted);
 
       setProductListOpen(true);

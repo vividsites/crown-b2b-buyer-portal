@@ -12,6 +12,7 @@ import { ShoppingListDetailsContext } from '@/pages/ShoppingListDetails/context/
 import { useAppSelector } from '@/store';
 import { ShoppingListProductItem } from '@/types';
 import { snackbar } from '@/utils/b3Tip';
+import { ProductRequirements } from '@/shared/service/vs/api/product';
 
 interface ProductTableActionProps {
   product: ShoppingListProductItem;
@@ -79,6 +80,7 @@ interface ProductListDialogProps {
   onProductQuantityChange: (id: number, newQuantity: number) => void;
   onAddToListClick: (product: CustomFieldItems) => Promise<void>;
   onChooseOptionsClick: (id: number) => void;
+  requirementsMap?: Map<number, ProductRequirements>;
 }
 
 const ProductTable = B3ProductList<ShoppingListProductItem>;
@@ -97,6 +99,7 @@ export default function ProductListDialog(props: ProductListDialogProps) {
     onAddToListClick,
     onChooseOptionsClick,
     isLoading,
+    requirementsMap,
   } = props;
 
   const isEnableProduct = useAppSelector(
@@ -134,6 +137,20 @@ export default function ProductListDialog(props: ProductListDialogProps) {
     const product = productList.find((product) => product.id === id);
 
     if (product && validateQuantityNumber(product || {})) {
+      const reqs = requirementsMap?.get(id);
+      const qtyMin = reqs?.orderQuantityMinimum ?? 0;
+      const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
+      const qty = parseInt(product.quantity.toString(), 10) || 1;
+
+      if (qtyMin > 0 && qty < qtyMin) {
+        snackbar.error(b3Lang('quoteDraft.quoteTable.error.minimumQuantity', { quantity: qtyMin }));
+        return;
+      }
+      if (qtyIncrement > 1 && (qty - qtyMin) % qtyIncrement !== 0) {
+        snackbar.error(b3Lang('quoteDraft.quoteTable.error.quantityIncrement', { increment: qtyIncrement, minimum: qtyMin }));
+        return;
+      }
+
       let variantId: number | string = product.variantId || 0;
 
       if (!product.variantId && product.variants?.[0]) {
@@ -143,7 +160,7 @@ export default function ProductListDialog(props: ProductListDialogProps) {
       onAddToListClick({
         ...product,
         newSelectOptionList: [],
-        quantity: parseInt(product.quantity.toString(), 10) || 1,
+        quantity: qty,
         variantId,
       });
     }
@@ -199,6 +216,7 @@ export default function ProductListDialog(props: ProductListDialogProps) {
               textAlign={isMobile ? 'left' : 'right'}
               canToProduct
               onProductQuantityChange={onProductQuantityChange}
+              requirementsMap={requirementsMap}
               renderAction={(product) => (
                 <ProductTableAction
                   product={product}
