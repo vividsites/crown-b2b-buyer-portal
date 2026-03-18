@@ -9,6 +9,7 @@ import B3Dialog from '@/components/B3Dialog';
 import { CART_URL } from '@/constants';
 import { useIsBackorderValidationEnabled } from '@/hooks/useIsBackorderValidationEnabled';
 import { useMobile } from '@/hooks/useMobile';
+import { useProductRequirements } from '@/hooks/useProductRequirements';
 import { useB3Lang } from '@/lib/lang';
 import {
   addProductToBcShoppingList,
@@ -119,6 +120,7 @@ export default function OrderDialog({
     mode: 'all',
   });
   const b3Lang = useB3Lang();
+  const { requirementsMap, fetchRequirements } = useProductRequirements();
 
   const handleClose = () => {
     setOpen(false);
@@ -185,8 +187,39 @@ export default function OrderDialog({
     }
   };
 
+  const validateRequirements = (products: EditableProductItem[]): boolean => {
+    let isValid = true;
+    const updated = editableProducts.map((p) => {
+      const checked = products.find((cp) => cp.variant_id === p.variant_id);
+      if (!checked) return p;
+
+      const reqs = requirementsMap.get(p.product_id);
+      const qtyMin = reqs?.orderQuantityMinimum ?? 0;
+      const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
+      const qty = Number(p.editQuantity);
+
+      if (qtyMin > 0 && qty < qtyMin) {
+        isValid = false;
+        return { ...p, helperText: b3Lang('shoppingList.table.error.minimumQuantity', { quantity: qtyMin }) };
+      }
+      if (qtyIncrement > 1 && (qty - qtyMin) % qtyIncrement !== 0) {
+        isValid = false;
+        return { ...p, helperText: b3Lang('shoppingList.table.error.quantityIncrement', { increment: qtyIncrement, minimum: qtyMin }) };
+      }
+      return p;
+    });
+
+    if (!isValid) setEditableProducts(updated);
+    return isValid;
+  };
+
   const handleReturn = () => {
     handleSubmit((data) => {
+      // const checkedProducts = editableProducts.filter((p) => checkedArr.includes(p.variant_id));
+      // if (!validateRequirements(checkedProducts)) {
+      //   snackbar.error(b3Lang('purchasedProducts.error.fillCorrectQuantity'));
+      //   return;
+      // }
       sendReturnRequest(data, returnArr, orderId);
     })();
   };
@@ -261,6 +294,12 @@ export default function OrderDialog({
       return;
     }
 
+    const checkedProducts = editableProducts.filter((p) => checkedArr.includes(p.variant_id));
+    if (!validateRequirements(checkedProducts)) {
+      snackbar.error(b3Lang('purchasedProducts.error.fillCorrectQuantity'));
+      return;
+    }
+
     // This will throw if there are errors, no need to check the response
     await createOrUpdateExistingCart(items);
 
@@ -281,6 +320,11 @@ export default function OrderDialog({
     const items = editableProducts.filter((product) => checkedArr.includes(product.variant_id));
 
     if (items.length <= 0) {
+      return;
+    }
+
+    if (!validateRequirements(items)) {
+      snackbar.error(b3Lang('purchasedProducts.error.fillCorrectQuantity'));
       return;
     }
 
@@ -470,6 +514,11 @@ export default function OrderDialog({
     );
     setCheckedArr([]);
 
+    const productIds = products
+      .map((p) => p.product_id)
+      .filter((id): id is number => !!id);
+    if (productIds.length) fetchRequirements(productIds);
+
     const getVariantInfoByList = async () => {
       const visibleProducts = products.filter((item: OrderProductItem) => item?.isVisible);
 
@@ -483,7 +532,7 @@ export default function OrderDialog({
     };
 
     getVariantInfoByList();
-  }, [isB2BUser, open, products]);
+  }, [isB2BUser, open, products, fetchRequirements]);
 
   const handleProductChange = (products: EditableProductItem[]) => {
     setEditableProducts(products);
@@ -523,6 +572,7 @@ export default function OrderDialog({
             setReturnArr={setReturnArr}
             textAlign={isMobile ? 'left' : 'right'}
             type={type}
+            requirementsMap={requirementsMap}
           />
 
           {type === 'return' && (

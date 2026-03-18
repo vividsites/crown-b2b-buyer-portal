@@ -1,8 +1,10 @@
 import { ReactElement } from 'react';
 import { Box, CardContent, styled, TextField, Typography } from '@mui/material';
+import { Warning as WarningIcon } from '@mui/icons-material';
 
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
 import { useB3Lang } from '@/lib/lang';
+import { ProductRequirements } from '@/shared/service/vs/api/product';
 import b2bGetVariantImageByVariantInfo from '@/utils/b2bGetVariantImageByVariantInfo';
 import { currencyFormat } from '@/utils/b3CurrencyFormat';
 import { displayFormat } from '@/utils/b3DateFormat';
@@ -11,6 +13,7 @@ interface QuickOrderCardProps {
   item: any;
   checkBox?: () => ReactElement;
   handleUpdateProductQty: (id: number, val: string) => void;
+  requirements?: ProductRequirements;
 }
 
 const StyledImage = styled('img')(() => ({
@@ -20,8 +23,10 @@ const StyledImage = styled('img')(() => ({
 }));
 
 function QuickOrderCard(props: QuickOrderCardProps) {
-  const { item: shoppingDetail, checkBox, handleUpdateProductQty } = props;
+  const { item: shoppingDetail, checkBox, handleUpdateProductQty, requirements } = props;
+
   const b3Lang = useB3Lang();
+
 
   const {
     quantity,
@@ -34,6 +39,17 @@ function QuickOrderCard(props: QuickOrderCardProps) {
     variantId,
     productsSearch,
   } = shoppingDetail;
+
+  const qtyMin = requirements?.orderQuantityMinimum ?? 0;
+  const qtyIncrement = requirements?.orderQuantityIncrement ?? 0;
+  const qty = Number(quantity);
+  let warningMessage = '';
+  if (qty > 0) {
+    if (qtyMin > 0 && qty < qtyMin)
+      warningMessage = b3Lang('quoteDraft.quoteTable.error.minimumQuantity', { quantity: qtyMin });
+    else if (qtyIncrement > 1 && (qty - qtyMin) % qtyIncrement !== 0)
+      warningMessage = b3Lang('quoteDraft.quoteTable.error.quantityIncrement', { increment: qtyIncrement, minimum: qtyMin });
+  }
 
   const price = Number(basePrice) * Number(quantity);
   const currentVariants = productsSearch.variants || [];
@@ -100,6 +116,22 @@ function QuickOrderCard(props: QuickOrderCardProps) {
               price: currencyFormat(price),
             })}
           </Typography>
+          
+          {(qtyMin > 1 || qtyIncrement > 1) && (
+            <Box>
+              {qtyMin > 1 && (
+                <Typography sx={{ fontSize: '0.75rem', lineHeight: '1.5', color: '#455A64' }}>
+                  {b3Lang('shoppingList.table.label.minimumQuantity', { quantity: qtyMin })}
+                </Typography>
+              )}
+              {qtyIncrement > 1 && (
+                <Typography sx={{ fontSize: '0.75rem', lineHeight: '1.5', color: '#455A64' }}>
+                  {b3Lang('shoppingList.table.label.quantityIncrement', { increment: qtyIncrement })}
+                </Typography>
+              )}
+            </Box>
+          )}
+
           <Box
             sx={{
               '& label': {
@@ -115,6 +147,8 @@ function QuickOrderCard(props: QuickOrderCardProps) {
               inputProps={{
                 inputMode: 'numeric',
                 pattern: '[0-9]*',
+                min: qtyMin > 0 ? qtyMin : 1,
+                step: qtyIncrement > 1 ? qtyIncrement : 1,
               }}
               value={quantity}
               sx={{
@@ -139,6 +173,22 @@ function QuickOrderCard(props: QuickOrderCardProps) {
               lastOrderedAt: displayFormat(lastOrderedAt),
             })}
           </Typography>
+
+          {warningMessage && (
+            <Box sx={{ color: 'red' }}>
+              <Box
+                sx={{
+                  mt: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  '& svg': { mr: '0.5rem' },
+                }}
+              >
+                <WarningIcon color="error" fontSize="small" />
+                {warningMessage}
+              </Box>
+            </Box>
+          )}
         </Box>
       </CardContent>
     </Box>

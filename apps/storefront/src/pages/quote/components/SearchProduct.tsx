@@ -1,4 +1,4 @@
-import { ChangeEvent, KeyboardEvent, useEffect, useState } from 'react';
+import { ChangeEvent, KeyboardEvent, useState } from 'react';
 import { Search as SearchIcon } from '@mui/icons-material';
 import { Box, InputAdornment, TextField, Typography } from '@mui/material';
 
@@ -7,6 +7,7 @@ import B3Spin from '@/components/spin/B3Spin';
 import { useBlockPendingAccountViewPrice } from '@/hooks/useBlockPendingAccountViewPrice';
 import { useB3Lang } from '@/lib/lang';
 import { searchProducts } from '@/shared/service/b2b';
+import { getProductRequirementsByIds, ProductRequirements } from '@/shared/service/vs/api/product';
 import { useAppSelector } from '@/store';
 import { calculateProductListPrice } from '@/utils/b3Product/b3Product';
 import { conversionProductsList } from '@/utils/b3Product/shared/config';
@@ -16,15 +17,25 @@ import { ShoppingListProductItem } from '../../../types';
 
 import ChooseOptionsDialog from './ChooseOptionsDialog';
 import ProductListDialog from './ProductListDialog';
-import { getProductRequirementsByIds, ProductRequirements } from '@/shared/service/vs/api/product';
 
 interface SearchProductProps {
-  addToList: (product: CustomFieldItems) => Promise<void>;
+  updateList?: () => void;
+  addToList: (products: CustomFieldItems[]) => Promise<void>;
+  searchDialogTitle?: string;
+  addButtonText?: string;
+  addQuoteButtonText?: string;
+  type?: string;
 }
 
-export default function SearchProduct({ addToList }: SearchProductProps) {
+export default function SearchProduct({
+  updateList = () => {},
+  addToList,
+  searchDialogTitle,
+  addButtonText,
+  addQuoteButtonText,
+  type,
+}: SearchProductProps) {
   const b3Lang = useB3Lang();
-
   const companyInfoId = useAppSelector(({ company }) => company.companyInfo.id);
   const customerGroupId = useAppSelector((state) => state.company.customer.customerGroupId);
   const companyStatus = useAppSelector(({ company }) => company.companyInfo.status);
@@ -46,9 +57,7 @@ export default function SearchProduct({ addToList }: SearchProductProps) {
   };
 
   const searchProduct = async () => {
-    if (!searchText || isLoading) {
-      return;
-    }
+    if (!searchText || isLoading) return;
 
     if (blockPendingAccountViewPrice && companyStatus === 0) {
       snackbar.info(b3Lang('global.searchProductAddProduct.businessAccountPendingApproval'));
@@ -72,9 +81,9 @@ export default function SearchProduct({ addToList }: SearchProductProps) {
         setRequirementsMap(map);
       }
 
-      const product = conversionProductsList(productsSearch, [], map);
+      const converted = conversionProductsList(productsSearch, [], map);
+      setProductList(converted);
 
-      setProductList(product);
       setProductListOpen(true);
     } finally {
       setIsLoading(false);
@@ -82,18 +91,10 @@ export default function SearchProduct({ addToList }: SearchProductProps) {
   };
 
   const handleSearchTextKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      searchProduct();
-    }
+    if (e.key === 'Enter') searchProduct();
   };
 
-  const handleSearchButtonClicked = () => {
-    searchProduct();
-  };
-
-  const clearProductInfo = () => {
-    setProductList([]);
-  };
+  const clearProductInfo = () => setProductList([]);
 
   const handleProductListDialogCancel = () => {
     setChooseOptionsOpen(false);
@@ -101,52 +102,44 @@ export default function SearchProduct({ addToList }: SearchProductProps) {
 
     if (isAdded) {
       setIsAdded(false);
+      updateList();
     }
 
     clearProductInfo();
   };
 
   const handleProductQuantityChange = (id: number, newQuantity: number) => {
-    const product = productList.find((product) => product.id === id);
-
+    const product = productList.find((p) => p.id === id);
     if (product) {
-      const reqs = requirementsMap?.get(id);
-      const qtyMin = reqs?.orderQuantityMinimum ?? 0;
-      const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
-
-      if (qtyMin > 0 && newQuantity < qtyMin) {
+      product.quantity = newQuantity;
+      const qty = Number(newQuantity);
+      const qtyMin = product.orderQuantityMinimum || 0;
+      const qtyIncrement = product.orderQuantityIncrement || 1;
+      if (qty > 0 && qtyMin > 0 && qty < qtyMin) {
         product.helperText = b3Lang('quoteDraft.quoteTable.error.minimumQuantity', { quantity: qtyMin });
-      }
-      else if (qtyIncrement > 1 && (newQuantity - qtyMin) % qtyIncrement !== 0) {
+      } else if (qty > 0 && qtyIncrement > 1 && (qty - qtyMin) % qtyIncrement !== 0) {
         product.helperText = b3Lang('quoteDraft.quoteTable.error.quantityIncrement', { increment: qtyIncrement, minimum: qtyMin });
-      }
-      else {
+      } else {
         product.helperText = '';
       }
-
-      product.quantity = newQuantity;
     }
-
     setProductList([...productList]);
   };
 
-  const handleAddToListClick = async (product: CustomFieldItems) => {
+  const handleAddToListClick = async (products: CustomFieldItems[]) => {
     try {
       setIsLoading(true);
-      await calculateProductListPrice([product]);
-      await addToList(product);
+      await calculateProductListPrice(products);
+      await addToList(products);
+      updateList();
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleChangeOptionsClick = (productId: number) => {
-    const product = productList.find((product) => product.id === productId);
-    if (product) {
-      setOptionsProduct({
-        ...product,
-      });
-    }
+    const product = productList.find((p) => p.id === productId);
+    if (product) setOptionsProduct({ ...product });
     setProductListOpen(false);
     setChooseOptionsOpen(true);
   };
@@ -156,30 +149,24 @@ export default function SearchProduct({ addToList }: SearchProductProps) {
     setProductListOpen(true);
   };
 
-  const handleChooseOptionsDialogConfirm = async (product: CustomFieldItems) => {
+  const handleChooseOptionsDialogConfirm = async (products: CustomFieldItems[]) => {
     try {
       setIsLoading(true);
-      await calculateProductListPrice([product]);
-      await handleAddToListClick(product);
+      await calculateProductListPrice(products);
+      await handleAddToListClick(products);
       setChooseOptionsOpen(false);
       setProductListOpen(true);
-    } catch (error) {
-      setIsLoading(false);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <Box
-      sx={{
-        margin: '24px 0',
-      }}
-    >
+    <Box sx={{ margin: '24px 0' }}>
       <Typography>{b3Lang('global.searchProductAddProduct.searchBySkuOrName')}</Typography>
       <TextField
         hiddenLabel
-        placeholder={b3Lang('global.searchProduct.placeholder.quickOrder')}
+        placeholder={b3Lang(`global.searchProduct.placeholder.${type}`)}
         variant="filled"
         fullWidth
         size="small"
@@ -195,24 +182,17 @@ export default function SearchProduct({ addToList }: SearchProductProps) {
         }}
         sx={{
           margin: '12px 0',
-          '& input': {
-            padding: '12px 12px 12px 0',
-          },
+          '& input': { padding: '12px 12px 12px 0' },
         }}
       />
       <CustomButton
         variant="outlined"
         fullWidth
         disabled={isLoading}
-        onClick={handleSearchButtonClicked}
+        onClick={searchProduct}
       >
         <B3Spin isSpinning={isLoading} tip="" size={16}>
-          <Box
-            sx={{
-              flex: 1,
-              textAlign: 'center',
-            }}
-          >
+          <Box sx={{ flex: 1, textAlign: 'center' }}>
             {b3Lang('global.searchProductAddProduct.searchProduct')}
           </Box>
         </B3Spin>
@@ -223,22 +203,28 @@ export default function SearchProduct({ addToList }: SearchProductProps) {
         isLoading={isLoading}
         productList={productList}
         searchText={searchText}
+        type={type}
         onSearchTextChange={handleSearchTextChange}
-        onSearch={handleSearchButtonClicked}
+        onSearch={searchProduct}
         onCancel={handleProductListDialogCancel}
         onProductQuantityChange={handleProductQuantityChange}
         onChooseOptionsClick={handleChangeOptionsClick}
         onAddToListClick={handleAddToListClick}
         requirementsMap={requirementsMap}
+        searchDialogTitle={searchDialogTitle}
+        addButtonText={addButtonText}
+        addQuoteButtonText={addQuoteButtonText}
       />
 
       <ChooseOptionsDialog
         isOpen={chooseOptionsOpen}
         isLoading={isLoading}
+        type={type}
         setIsLoading={setIsLoading}
         product={optionsProduct}
         onCancel={handleChooseOptionsDialogCancel}
         onConfirm={handleChooseOptionsDialogConfirm}
+        addButtonText={addButtonText}
       />
     </Box>
   );

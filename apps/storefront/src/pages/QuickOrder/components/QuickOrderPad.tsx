@@ -11,6 +11,7 @@ import { useIsBackorderValidationEnabled } from '@/hooks/useIsBackorderValidatio
 import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { validateProducts } from '@/shared/service/b2b/graphql/product';
+import { getProductRequirementsByIds, ProductRequirements } from '@/shared/service/vs/api/product';
 import { useAppSelector } from '@/store';
 import b2bLogger from '@/utils/b3Logger';
 import { snackbar } from '@/utils/b3Tip';
@@ -75,6 +76,47 @@ export default function QuickOrderPad() {
     }
 
     b3TriggerCartNumber();
+  };
+
+  const validateRequirements = async (
+    items: { productId: number; quantity: number; variantSku?: string }[],
+  ): Promise<boolean> => {
+    const productIds = [...new Set(items.map((i) => i.productId).filter(Boolean))];
+    if (!productIds.length) return true;
+
+    try {
+      const reqs = await getProductRequirementsByIds(productIds);
+      const reqsMap = new Map<number, ProductRequirements>(
+        reqs.map((r: ProductRequirements) => [r.productId, r]),
+      );
+      const invalidMessages: string[] = [];
+
+      items.forEach((item) => {
+        const r = reqsMap.get(item.productId);
+        const qtyMin = r?.orderQuantityMinimum ?? 0;
+        const qtyIncrement = r?.orderQuantityIncrement ?? 0;
+        const qty = Number(item.quantity);
+
+        if (qtyMin > 0 && qty < qtyMin) {
+          invalidMessages.push(
+            b3Lang('quoteDraft.snackbar.error.minimumQuantity', { sku: item.variantSku || '', quantity: qtyMin }),
+          );
+        } else if (qtyIncrement > 1 && (qty - qtyMin) % qtyIncrement !== 0) {
+          invalidMessages.push(
+            b3Lang('quoteDraft.snackbar.error.quantityIncrement', { sku: item.variantSku || '', increment: qtyIncrement, minimum: qtyMin }),
+          );
+        }
+      });
+
+      if (invalidMessages.length > 0) {
+        snackbar.error(`Invalid quantity for: ${invalidMessages.join(', ')}`);
+        return false;
+      }
+    } catch {
+      // don't block the user if requirements fetch fails
+    }
+
+    return true;
   };
 
   const getValidProducts = (products: ValidProductItem[]) => {
@@ -178,6 +220,20 @@ export default function QuickOrderPad() {
       } = getValidProducts(validProduct);
 
       if (productItems.length > 0) {
+        const itemsToValidate = productItems.map((pItem: CustomFieldItems) => {
+          const original = validProduct.find(
+            (v) =>
+              Number(v.products?.productId) === pItem.productId &&
+              Number(v.products?.variantId) === pItem.variantId,
+          );
+          return {
+            productId: pItem.productId,
+            quantity: pItem.quantity,
+            variantSku: original?.products?.variantSku || '',
+          };
+        });
+        if (!await validateRequirements(itemsToValidate)) return;
+
         const res = await createOrUpdateExistingCart(productItems);
 
         getSnackbarMessage(res);
@@ -359,6 +415,20 @@ export default function QuickOrderPad() {
         .filter((item) => item !== null);
 
       if (cartLineItems.length > 0) {
+        const itemsToValidate = cartLineItems.map((item) => {
+          const original = validProduct.find(
+            (v) =>
+              Number(v.products?.productId) === item?.productId &&
+              Number(v.products?.variantId) === item?.variantId,
+          );
+          return {
+            productId: item?.productId || 0,
+            quantity: item?.quantity || 0,
+            variantSku: original?.products?.variantSku || '',
+          };
+        });
+        if (!await validateRequirements(itemsToValidate)) return;
+
         const res = await createOrUpdateExistingCart(cartLineItems);
         getSnackbarMessage(res);
         b3TriggerCartNumber();
@@ -409,6 +479,11 @@ export default function QuickOrderPad() {
 
     try {
       if (isPassVerify) {
+        if (!await validateRequirements([{
+          productId: Number(product.id),
+          quantity: Number(product.quantity),
+          variantSku: product.sku || product.variantSku || '',
+        }])) return;
         await addSingleProductToCart(product);
       }
     } catch (error) {
@@ -426,6 +501,11 @@ export default function QuickOrderPad() {
 
   const handleBackendQuickSearchAddToCart = async (product: CustomFieldItems) => {
     try {
+      if (!await validateRequirements([{
+        productId: Number(product.id),
+        quantity: Number(product.quantity),
+        variantSku: product.sku || product.variantSku || '',
+      }])) return;
       await addSingleProductToCart(product);
     } catch (e: unknown) {
       if (e instanceof Error) {

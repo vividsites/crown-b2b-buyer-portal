@@ -1,5 +1,6 @@
 import { ChangeEvent, KeyboardEvent, ReactElement, useEffect, useState } from 'react';
 import styled from '@emotion/styled';
+import { Warning as WarningIcon } from '@mui/icons-material';
 import { Box, Button, Checkbox, FormControlLabel, TextField, Typography } from '@mui/material';
 import noop from 'lodash-es/noop';
 
@@ -11,6 +12,7 @@ import { currencyFormat, ordersCurrencyFormat } from '@/utils/b3CurrencyFormat';
 import { getDisplayPrice, judgmentBuyerProduct } from '@/utils/b3Product/b3Product';
 
 import { CustomerRole, MoneyFormat, ProductItem } from '../types';
+import { ProductRequirements } from '@/shared/service/vs/api/product';
 
 interface FlexProps {
   isHeader?: boolean;
@@ -125,6 +127,7 @@ interface ProductProps<T> {
   textAlign?: string;
   type?: string;
   getCurrentProductUrls?: (productId: number | undefined) => void;
+  requirementsMap?: Map<number, ProductRequirements>;
 }
 
 export function B3ProductList<T>(props: ProductProps<T>) {
@@ -144,6 +147,7 @@ export function B3ProductList<T>(props: ProductProps<T>) {
     money,
     type,
     getCurrentProductUrls,
+    requirementsMap,
   } = props;
 
   const [list, setList] = useState<ProductItem[]>([]);
@@ -282,8 +286,17 @@ export function B3ProductList<T>(props: ProductProps<T>) {
 
       {products.map((product) => {
         const { variants = [], applied_discounts: appliedDiscounts = [] } = product;
-        const quantity = getQuantity(product) || 1;
-        const originQuantity = Number(product.quantity) || 1;
+
+        let qtyMin: number = 0;
+        let qtyIncrement: number = 0;
+        if(requirementsMap) {
+          const reqs = requirementsMap.get(product.id);
+          qtyMin = reqs?.orderQuantityMinimum ?? 0;
+          qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
+        }
+
+        const quantity = getQuantity(product) || qtyMin || 1;
+        const originQuantity = Number(product.quantity) || qtyMin || 1;
 
         let discountAccountForSingleProduct = 0;
         appliedDiscounts.forEach((discount) => {
@@ -419,6 +432,20 @@ export function B3ProductList<T>(props: ProductProps<T>) {
                 <Typography variant="body1" color="#616161">
                   {product.sku}
                 </Typography>
+                {(qtyMin > 1 || qtyIncrement > 1) && (
+                  <Box>
+                    {qtyMin > 1 && (
+                      <Typography sx={{ fontSize: '0.75rem', lineHeight: '1.5', color: '#455A64' }}>
+                        {b3Lang('shoppingList.table.label.minimumQuantity', { quantity: qtyMin })}
+                      </Typography>
+                    )}
+                    {qtyIncrement > 1 && (
+                      <Typography sx={{ fontSize: '0.75rem', lineHeight: '1.5', color: '#455A64' }}>
+                        {b3Lang('shoppingList.table.label.quantityIncrement', { increment: qtyIncrement })}
+                      </Typography>
+                    )}
+                  </Box>
+                )}
                 {product.type === 'digital' &&
                   product.downloadFileUrls &&
                   product.downloadFileUrls.length > 0 && (
@@ -438,6 +465,22 @@ export function B3ProductList<T>(props: ProductProps<T>) {
                     key={`${option.option_id}`}
                   >{`${option.display_name}: ${option.display_value}`}</ProductOptionText>
                 ))}
+
+                {product.helperText && (
+                  <Box sx={{ color: 'red' }}>
+                    <Box
+                      sx={{
+                        mt: '1rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        '& svg': { mr: '0.5rem' },
+                      }}
+                    >
+                      <WarningIcon color="error" fontSize="small" />
+                      {product.helperText}
+                    </Box>
+                  </Box>
+                )}
               </Box>
             </FlexItem>
 
@@ -464,6 +507,12 @@ export function B3ProductList<T>(props: ProductProps<T>) {
                   onKeyDown={handleNumberInputKeyDown}
                   onBlur={handleNumberInputBlur(product)}
                   size="small"
+                  inputProps={{
+                    inputMode: 'numeric',
+                    pattern: '[0-9]*',
+                    min: qtyMin > 0 ? qtyMin : 1,
+                    step: qtyIncrement > 1 ? qtyIncrement : 1,
+                  }}
                   sx={{
                     width: isMobile ? '110px' : '72px',
                     '& .MuiFormHelperText-root': {
@@ -471,8 +520,6 @@ export function B3ProductList<T>(props: ProductProps<T>) {
                       marginRight: '0',
                     },
                   }}
-                  error={!!product.helperText}
-                  helperText={product.helperText}
                 />
               ) : (
                 <>

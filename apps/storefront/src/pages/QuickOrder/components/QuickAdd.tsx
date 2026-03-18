@@ -10,6 +10,7 @@ import { useBlockPendingAccountViewPrice } from '@/hooks/useBlockPendingAccountV
 import { useIsBackorderValidationEnabled } from '@/hooks/useIsBackorderValidationEnabled';
 import { useB3Lang } from '@/lib/lang';
 import { getVariantInfoBySkus } from '@/shared/service/b2b';
+import { getProductRequirementsBySKUs, ProductRequirements } from '@/shared/service/vs/api/product';
 import { useAppSelector } from '@/store';
 import { snackbar } from '@/utils/b3Tip';
 import b3TriggerCartNumber from '@/utils/b3TriggerCartNumber';
@@ -110,6 +111,7 @@ export default function QuickAdd() {
     variantInfoList: CustomFieldItems,
     skuValue: SimpleObject,
     skus: string[],
+    requirementsMap: Map<string, ProductRequirements>,
   ) => {
     const notFoundSku: string[] = [];
     const notPurchaseSku: string[] = [];
@@ -124,6 +126,8 @@ export default function QuickAdd() {
       min: number;
       max: number;
     }[] = [];
+    const qtyMinError: { sku: string; message: string }[] = [];
+    const qtyIncrementError: { sku: string; message: string }[] = [];
 
     const cartProducts = await getCartProductInfo();
 
@@ -190,6 +194,24 @@ export default function QuickAdd() {
         return;
       }
 
+      const reqs = requirementsMap.get(variantSku.toUpperCase());
+      const qtyMin = reqs?.orderQuantityMinimum ?? 0;
+      const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
+      if (qtyMin > 0 && quantity < qtyMin) {
+        qtyMinError.push({
+          sku,
+          message: b3Lang('quoteDraft.snackbar.error.minimumQuantity', { sku, quantity: qtyMin }),
+        });
+        return;
+      }
+      if (qtyIncrement > 1 && (quantity - qtyMin) % qtyIncrement !== 0) {
+        qtyIncrementError.push({
+          sku,
+          message: b3Lang('quoteDraft.snackbar.error.quantityIncrement', { sku, increment: qtyIncrement, minimum: qtyMin }),
+        });
+        return;
+      }
+
       const optionList = parseOptionList(options);
 
       passSku.push(sku);
@@ -210,6 +232,8 @@ export default function QuickAdd() {
       productItems,
       passSku,
       orderLimitSku,
+      qtyMinError,
+      qtyIncrementError,
     };
   };
 
@@ -257,9 +281,18 @@ export default function QuickAdd() {
     variantInfoList: CustomFieldItems[],
     skuValue: SimpleObject,
     skus: string[],
+    requirementsMap: Map<string, ProductRequirements>,
   ) => {
-    const { notFoundSku, notPurchaseSku, productItems, passSku, notStockSku, orderLimitSku } =
-      await getProductItems(variantInfoList, skuValue, skus);
+    const {
+      notFoundSku,
+      notPurchaseSku,
+      productItems,
+      passSku,
+      notStockSku,
+      orderLimitSku,
+      qtyMinError,
+      qtyIncrementError,
+    } = await getProductItems(variantInfoList, skuValue, skus, requirementsMap);
 
     if (notFoundSku.length > 0) {
       showErrors(value, notFoundSku, 'sku', '');
@@ -313,6 +346,16 @@ export default function QuickAdd() {
           }),
         );
       });
+    }
+
+    if (qtyMinError.length > 0) {
+      qtyMinError.forEach((item) => showErrors(value, [item.sku], 'qty', ''));
+      snackbar.error(`Invalid quantity for: ${qtyMinError.map((e) => e.message).join(', ')}`);
+    }
+
+    if (qtyIncrementError.length > 0) {
+      qtyIncrementError.forEach((item) => showErrors(value, [item.sku], 'qty', ''));
+      snackbar.error(`Invalid quantity for: ${qtyIncrementError.map((e) => e.message).join(', ')}`);
     }
 
     return { productItems, passSku };
@@ -424,6 +467,14 @@ export default function QuickAdd() {
 
         const variantInfoList = await getVariantList(skus);
 
+        const requirementsMap = new Map<string, ProductRequirements>();
+        try {
+          const requirements = await getProductRequirementsBySKUs(skus);
+          requirements.forEach((req) => requirementsMap.set(req.sku.toUpperCase(), req));
+        } catch {
+          // proceed without requirements if fetch fails
+        }
+
         if (isBackorderValidationEnabled) {
           const { productItems, notFoundSkus, warning, error } = await handleBackendValidation(
             variantInfoList,
@@ -460,9 +511,31 @@ export default function QuickAdd() {
             );
           }
 
-          if (productItems.length > 0) {
-            await addProductsToCart(productItems);
-            const skus = productItems.map((item) => item.variantSku);
+          const invalidQtyMessages: string[] = [];
+          const validProductItems = productItems.filter((item) => {
+            const reqs = requirementsMap.get((item.variantSku || '').toUpperCase());
+            const qty = item.quantity;
+            const qtyMin = reqs?.orderQuantityMinimum ?? 0;
+            const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
+            if (qtyMin > 0 && qty < qtyMin) {
+              showErrors(formData, [item.variantSku], 'qty', '');
+              invalidQtyMessages.push(b3Lang('quoteDraft.snackbar.error.minimumQuantity', { sku: item.variantSku, quantity: qtyMin }));
+              return false;
+            }
+            if (qtyIncrement > 1 && (qty - qtyMin) % qtyIncrement !== 0) {
+              showErrors(formData, [item.variantSku], 'qty', '');
+              invalidQtyMessages.push(b3Lang('quoteDraft.snackbar.error.quantityIncrement', { sku: item.variantSku, increment: qtyIncrement, minimum: qtyMin }));
+              return false;
+            }
+            return true;
+          });
+          if (invalidQtyMessages.length > 0) {
+            snackbar.error(`Invalid quantity for: ${invalidQtyMessages.join(', ')}`);
+          }
+
+          if (validProductItems.length > 0) {
+            await addProductsToCart(validProductItems);
+            const skus = validProductItems.map((item) => item.variantSku);
             clearInputValue(formData, skus);
           }
         } else {
@@ -471,6 +544,7 @@ export default function QuickAdd() {
             variantInfoList,
             skuQuantityMap,
             skus,
+            requirementsMap,
           );
 
           if (productItems.length > 0) {

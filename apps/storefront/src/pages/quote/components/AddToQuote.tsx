@@ -12,6 +12,7 @@ import { useBlockPendingAccountViewPrice } from '@/hooks/useBlockPendingAccountV
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { useB3Lang } from '@/lib/lang';
 import { searchProducts } from '@/shared/service/b2b';
+import { getProductRequirementsByIds, ProductRequirements } from '@/shared/service/vs/api/product';
 import { useAppSelector } from '@/store';
 import { Product } from '@/types';
 import b2bLogger from '@/utils/b3Logger';
@@ -19,8 +20,8 @@ import { calculateProductListPrice, validProductQty } from '@/utils/b3Product/b3
 import { conversionProductsList } from '@/utils/b3Product/shared/config';
 import { snackbar } from '@/utils/b3Tip';
 
-import QuickAdd from '../../ShoppingListDetails/components/QuickAdd';
-import SearchProduct from '../../ShoppingListDetails/components/SearchProduct';
+import QuickAdd from './QuickAdd';
+import SearchProduct from './SearchProduct';
 
 interface AddToListProps {
   updateList: () => void;
@@ -44,6 +45,44 @@ export default function AddToQuote(props: AddToListProps) {
   const featureFlags = useFeatureFlags();
   const breakProductSearchesIntoChunks =
     featureFlags['B2B-4231.chunk_product_searches_in_csv_upload'] ?? false;
+
+  // items must have { node: { productId, quantity, variantSku } }
+  const validateRequirements = async (items: CustomFieldItems[]): Promise<boolean> => {
+    const productIds = [
+      ...new Set(items.map((item) => Number(item.node?.productId)).filter(Boolean)),
+    ];
+    if (!productIds.length) return true;
+
+    try {
+      const reqs = await getProductRequirementsByIds(productIds);
+      const reqsMap: Map<number, ProductRequirements> = new Map(reqs.map((r: ProductRequirements) => [r.productId, r]));
+      const invalidSkus: string[] = [];
+
+      items.forEach((item) => {
+        const { productId, quantity, variantSku } = item.node;
+        const r = reqsMap.get(Number(productId));
+        const qtyMin = r?.orderQuantityMinimum ?? 0;
+        const qtyIncrement = r?.orderQuantityIncrement ?? 0;
+        const qty = Number(quantity);
+
+        if (qtyMin > 0 && qty < qtyMin) {
+          invalidSkus.push(b3Lang('quoteDraft.snackbar.error.minimumQuantity', { sku: variantSku || '', quantity: qtyMin }));
+        } else if (qtyIncrement > 1 && (qty - qtyMin) % qtyIncrement !== 0) {
+          invalidSkus.push(b3Lang('quoteDraft.snackbar.error.quantityIncrement', { sku: variantSku || '', increment: qtyIncrement, minimum: qtyMin }));
+        }
+      });
+
+      if (invalidSkus.length > 0) {
+        snackbar.error(`Invalid quantity for: ${invalidSkus.join(', ')}`);
+        return false;
+      }
+    } catch (e) {
+      b2bLogger.error(e);
+      // don't block the user if requirements fetch fails
+    }
+
+    return true;
+  };
 
   const getNewQuoteProduct = (products: CustomFieldItems[]) =>
     products.map((product) => {
@@ -100,7 +139,7 @@ export default function AddToQuote(props: AddToListProps) {
       };
     });
 
-    const addToList = async (products: CustomFieldItems[]) => {
+  const addToList = async (products: CustomFieldItems[]) => {
     const newProducts = getNewQuoteProduct(products);
     const noSkuProducts = products.filter(({ sku, variantId, variants }) => {
       const currentProduct = variants.find(
@@ -116,6 +155,8 @@ export default function AddToQuote(props: AddToListProps) {
     }
 
     if (noSkuProducts.length === products.length) return;
+
+    if (!await validateRequirements(newProducts)) return;
 
     const success = await addToQuote(newProducts);
 
@@ -153,10 +194,12 @@ export default function AddToQuote(props: AddToListProps) {
 
     const newProducts = getNewQuoteProduct(productList);
 
+    if (!await validateRequirements(newProducts)) return;
+
     const success = await addToQuote(newProducts);
 
     if (success) {
-    snackbar.success(b3Lang('quoteDraft.notification.productPlural'));
+      snackbar.success(b3Lang('quoteDraft.notification.productPlural'));
     }
   };
 
@@ -259,11 +302,13 @@ export default function AddToQuote(props: AddToListProps) {
 
       const isSuccess = validProductQty(newProducts);
       if (isSuccess) {
+        if (!await validateRequirements(newProducts)) return;
+
         await calculateProductListPrice(newProducts, '2');
 
         const success = await addToQuote(newProducts);
         if (success) {
-        snackbar.success(b3Lang('quoteDraft.notification.productPlural'));
+          snackbar.success(b3Lang('quoteDraft.notification.productPlural'));
         }
         updateList();
         setIsOpenBulkLoadCSV(false);
@@ -308,7 +353,6 @@ export default function AddToQuote(props: AddToListProps) {
             quickAddToList={quickAddToList}
             type="quoteDraft"
             buttonText={b3Lang('quoteDraft.button.addProductsToAddToQuote')}
-            type="quote"
           />
 
           <Divider />

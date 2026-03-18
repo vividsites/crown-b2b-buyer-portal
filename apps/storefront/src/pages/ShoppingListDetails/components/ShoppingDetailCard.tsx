@@ -1,5 +1,4 @@
-import { ReactElement } from 'react';
-import { Delete, Edit, StickyNote2 } from '@mui/icons-material';
+import { Delete, Edit, StickyNote2, Warning as WarningIcon } from '@mui/icons-material';
 import { Box, CardContent, styled, TextField, Typography } from '@mui/material';
 
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
@@ -10,13 +9,17 @@ import { getBCPrice } from '@/utils/b3Product/b3Product';
 
 import { getProductOptionsFields } from '../../../utils/b3Product/shared/config';
 
+interface QtyRequirements {
+  orderQuantityMinimum: number | null;
+  orderQuantityIncrement: number | null;
+}
+
 interface ShoppingDetailCardProps {
   item: any;
   onEdit: (item: any, variantId: number | string, itemId: number | string) => void;
   onDelete: (itemId: number) => void;
   handleUpdateProductQty: (id: number | string, value: number | string) => void;
   handleUpdateShoppingListItem: (itemId: number | string) => void;
-  checkBox?: () => ReactElement;
   isReadForApprove: boolean;
   len: number;
   itemIndex?: number;
@@ -25,7 +28,9 @@ interface ShoppingDetailCardProps {
   setAddNoteOpen: (open: boolean) => void;
   setNotes: (value: string) => void;
   showPrice: (price: string, row: CustomFieldItems) => string | number;
+  selectedDelegate: (row: CustomFieldItems) => boolean;
   b2bAndBcShoppingListActionsPermissions: boolean;
+  requirements?: QtyRequirements;
 }
 
 const StyledImage = styled('img')(() => ({
@@ -40,7 +45,6 @@ function ShoppingDetailCard(props: ShoppingDetailCardProps) {
     item: shoppingDetail,
     onEdit,
     onDelete,
-    checkBox,
     handleUpdateProductQty,
     handleUpdateShoppingListItem,
     isReadForApprove,
@@ -52,6 +56,8 @@ function ShoppingDetailCard(props: ShoppingDetailCardProps) {
     setNotes,
     showPrice,
     b2bAndBcShoppingListActionsPermissions,
+    requirements,
+    selectedDelegate,
   } = props;
 
   const {
@@ -67,6 +73,17 @@ function ShoppingDetailCard(props: ShoppingDetailCardProps) {
     taxPrice = 0,
     productNote,
   } = shoppingDetail;
+
+  const qtyMin = requirements?.orderQuantityMinimum ?? 0;
+  const qtyIncrement = requirements?.orderQuantityIncrement ?? 0;
+  const qty = Number(quantity);
+  let qtyHelperText = '';
+  if (qty > 0) {
+    if (qtyMin > 0 && qty < qtyMin)
+      qtyHelperText = b3Lang('shoppingList.table.error.minimumQuantity', { quantity: qtyMin });
+    else if (qtyIncrement > 1 && (qty - qtyMin) % qtyIncrement !== 0)
+      qtyHelperText = b3Lang('shoppingList.table.error.quantityIncrement', { increment: qtyIncrement, minimum: qtyMin });
+  }
 
   const price = getBCPrice(Number(basePrice), Number(taxPrice));
 
@@ -90,12 +107,15 @@ function ShoppingDetailCard(props: ShoppingDetailCardProps) {
   const currentImage =
     b2bGetVariantImageByVariantInfo(currentVariants, { variantId, variantSku }) || primaryImage;
 
+  const backgroundColor = selectedDelegate(shoppingDetail) ? 'rgba(25, 118, 210, 0.08)' : 'transparent';
+
   return (
     <Box
       key={shoppingDetail.id}
       sx={{
         borderTop: '1px solid #D9DCE9',
         borderBottom: itemIndex === len - 1 ? '1px solid #D9DCE9' : '',
+        backgroundColor: backgroundColor,
       }}
     >
       <CardContent
@@ -105,7 +125,6 @@ function ShoppingDetailCard(props: ShoppingDetailCardProps) {
           pl: 0,
         }}
       >
-        <Box>{checkBox && checkBox()}</Box>
         <Box>
           <StyledImage
             src={currentImage || PRODUCT_DEFAULT_IMAGE}
@@ -184,6 +203,21 @@ function ShoppingDetailCard(props: ShoppingDetailCardProps) {
             })}
           </Typography>
 
+          {(qtyMin > 1 || qtyIncrement > 1) && (
+            <Box>
+              {qtyMin > 1 && (
+                <Typography sx={{ fontSize: '0.75rem', lineHeight: '1.5', color: '#455A64' }}>
+                  {b3Lang('shoppingList.table.label.minimumQuantity', { quantity: qtyMin })}
+                </Typography>
+              )}
+              {qtyIncrement > 1 && (
+                <Typography sx={{ fontSize: '0.75rem', lineHeight: '1.5', color: '#455A64' }}>
+                  {b3Lang('shoppingList.table.label.quantityIncrement', { increment: qtyIncrement })}
+                </Typography>
+              )}
+            </Box>
+          )}
+
           <TextField
             size="small"
             type="number"
@@ -193,6 +227,7 @@ function ShoppingDetailCard(props: ShoppingDetailCardProps) {
             inputProps={{
               inputMode: 'numeric',
               pattern: '[0-9]*',
+              min: 0,
             }}
             value={quantity}
             sx={{
@@ -206,6 +241,10 @@ function ShoppingDetailCard(props: ShoppingDetailCardProps) {
               '& input': {
                 fontSize: '14px',
               },
+              '& .MuiFormHelperText-root': {
+                marginLeft: 0,
+                marginRight: 0,
+              },
             }}
             onChange={(e) => {
               handleUpdateProductQty(shoppingDetail.id, e.target.value);
@@ -214,6 +253,22 @@ function ShoppingDetailCard(props: ShoppingDetailCardProps) {
               handleUpdateShoppingListItem(itemId);
             }}
           />
+
+          {qtyHelperText && (
+            <Box sx={{ color: 'red' }}>
+              <Box
+                sx={{
+                  mt: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  '& svg': { mr: '0.5rem' },
+                }}
+              >
+                <WarningIcon color="error" fontSize="small" />
+                {qtyHelperText}
+              </Box>
+            </Box>
+          )}
           <Typography
             sx={{
               color: '#212121',

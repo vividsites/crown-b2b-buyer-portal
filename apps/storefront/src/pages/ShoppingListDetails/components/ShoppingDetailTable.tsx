@@ -3,12 +3,13 @@ import {
   forwardRef,
   Ref,
   SetStateAction,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
   useState,
 } from 'react';
-import { Delete, Edit, StickyNote2 } from '@mui/icons-material';
+import { Delete, Edit, StickyNote2, Warning as WarningIcon } from '@mui/icons-material';
 import { Box, Button, Grid, styled, TextField, Typography } from '@mui/material';
 import cloneDeep from 'lodash-es/cloneDeep';
 
@@ -17,17 +18,18 @@ import {
   GetRequestList,
   TableRefreshConfig,
 } from '@/components/table/B3PaginationTable';
-import { TableColumnItem, WithRowControls } from '@/components/table/B3Table';
+import { PossibleNodeWrapper, TableColumnItem, WithRowControls } from '@/components/table/B3Table';
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
 import { useMobile } from '@/hooks/useMobile';
+import { ProductRequirementsMap } from '@/hooks/useProductRequirements';
 import { useSort } from '@/hooks/useSort';
-import { useB3Lang } from '@/lib/lang';
+import { LangFormatFunction, useB3Lang } from '@/lib/lang';
 import { updateB2BShoppingListsItem, updateBcShoppingListsItem } from '@/shared/service/b2b';
 import { rolePermissionSelector, useAppSelector } from '@/store';
 import b2bGetVariantImageByVariantInfo from '@/utils/b2bGetVariantImageByVariantInfo';
 import { currencyFormat } from '@/utils/b3CurrencyFormat';
 import { getBCPrice, getDisplayPrice, getValidOptionsList } from '@/utils/b3Product/b3Product';
-import { getProductOptionsFields, ProductsProps } from '@/utils/b3Product/shared/config';
+import { getProductOptionsFields } from '@/utils/b3Product/shared/config';
 import { snackbar } from '@/utils/b3Tip';
 
 import B3FilterSearch from '../../../components/filter/B3FilterSearch';
@@ -35,6 +37,7 @@ import B3FilterSearch from '../../../components/filter/B3FilterSearch';
 import ChooseOptionsDialog from './ChooseOptionsDialog';
 import ShoppingDetailAddNotes from './ShoppingDetailAddNotes';
 import ShoppingDetailCard from './ShoppingDetailCard';
+import { ProductRequirements } from '@/shared/service/vs/api/product';
 
 interface ListItem {
   [key: string]: string;
@@ -85,6 +88,8 @@ interface ShoppingDetailTableProps {
   productQuoteEnabled: boolean;
   isCanEditShoppingList: boolean;
   isJuniorBuyer: boolean;
+  requirementsMap: ProductRequirementsMap;
+  fetchRequirements: (productIds: number[]) => void;
 }
 
 interface SearchProps {
@@ -151,6 +156,22 @@ const sortKeys = {
   SortOrder: 'sortOrder',
 };
 
+
+const getThresholdWarning = (row: CustomFieldItems, requirementsMap: Map<number, ProductRequirements>, b3Lang: LangFormatFunction): string | null => {
+  const quantity = Number(row.quantity || 0);
+  const reqs = row.productId ? requirementsMap.get(row.productId) : undefined;
+  const qtyMin = reqs?.orderQuantityMinimum ?? 0;
+  const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
+  if (quantity > 0) {
+    if (qtyMin > 0 && quantity < qtyMin)
+      return b3Lang('shoppingList.table.error.minimumQuantity', { quantity: qtyMin });
+    else if (qtyIncrement > 1 && (quantity - qtyMin) % qtyIncrement !== 0)
+      return b3Lang('shoppingList.table.error.quantityIncrement', { increment: qtyIncrement, minimum: qtyMin });
+  }
+
+  return null;
+};
+
 function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>) {
   const [isMobile] = useMobile();
   const b3Lang = useB3Lang();
@@ -172,6 +193,8 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
     //allowJuniorPlaceOrder,
     //productQuoteEnabled,
     isCanEditShoppingList,
+    requirementsMap,
+    fetchRequirements,
     //role,
   } = props;
 
@@ -209,25 +232,45 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
 
   const [handleSetOrderBy, order, orderBy] = useSort(sortKeys, defaultSortKey, search, setSearch);
 
-  const handleUpdateProductQty = (id: number | string, value: number | string) => {
-    let newQty = Number(value);
-    
-    if (isNaN(newQty) || newQty < 0) return;
-    const currentItem = originProducts.find((item: ListItemProps) => {
-      const { node } = item;
+  const wrappedGetShoppingListDetails: GetRequestList<SearchProps, CustomFieldItems> = useCallback(
+    async (params) => {
+      const result = await getShoppingListDetails(params);
+      const productIds: number[] = [];
+      (result.edges || []).forEach((item: PossibleNodeWrapper<CustomFieldItems>) => {
+        const id = item.node?.productId;
+        if (id && !productIds.includes(id)) productIds.push(id);
+      });
+      if (productIds.length) fetchRequirements(productIds);
+      return result;
+    },
+    [getShoppingListDetails, fetchRequirements],
+  );
 
-      return node.id === id;
-    });
+  const handleUpdateProductQty = (id: number | string, value: number | string) => {
+    const newQty = Number(value);
+
+    if (isNaN(newQty) || newQty < 0) return;
+
+    const currentItem = originProducts.find((item: ListItemProps) => item.node.id === id);
+
+    const reqs = requirementsMap.get(currentItem?.node?.productId ?? 0);
+    const qtyMin = reqs?.orderQuantityMinimum ?? 0;
+    const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
+    const isInvalid =
+      newQty > 0 &&
+      ((qtyMin > 0 && newQty < qtyMin) ||
+        (qtyIncrement > 1 && (newQty - qtyMin) % qtyIncrement !== 0));
 
     const currentQty = currentItem?.node?.quantity || '';
-    setQtyNotChangeFlag(Number(currentQty) === newQty);
+    // If invalid, treat as unchanged so onBlur won't persist to sessionStorage
+    setQtyNotChangeFlag(isInvalid || Number(currentQty) === newQty);
 
     const listItems: ListItemProps[] = paginationTableRef.current?.getList() || [];
     const newListItems = listItems?.map((item: ListItemProps) => {
       const { node } = item;
       if (node?.id === id) {
         node.quantity = `${newQty}`;
-        node.disableCurrentCheckbox = newQty === 0;
+        node.disableCurrentCheckbox = newQty === 0 || isInvalid;
       }
 
       return item;
@@ -463,7 +506,12 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
   };
 
   const selectedDelegate = (node: WithRowControls<CustomFieldItems>) => {
-    return node.quantity > 0;
+    const reqs = requirementsMap.get(Number(node.productId));
+    const qtyMin = reqs?.orderQuantityMinimum ?? 0;
+    const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
+    return node.quantity > 0
+      && (qtyMin < 1 || node.quantity >= qtyMin)
+      && (qtyIncrement < 2 || (node.quantity - qtyMin) % qtyIncrement === 0);
   };
 
   function handleResetQuantitiesInternal() {
@@ -492,6 +540,11 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
             variantId: row.variantId,
             variantSku: row.variantSku,
           }) || row.primaryImage;
+
+        const reqs = requirementsMap.get(Number(row.productId));
+        const qtyMin = reqs?.orderQuantityMinimum ?? 0;
+        const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
+        const warningMessage = getThresholdWarning(row, requirementsMap, b3Lang);
 
         return (
           <Box
@@ -538,6 +591,20 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
                   ))}
                 </Box>
               )}
+              {(qtyMin > 1 || qtyIncrement > 1) && (
+                <Box>
+                  {qtyMin > 1 && (
+                    <Typography sx={{ fontSize: '0.75rem', lineHeight: '1.5', color: '#455A64' }}>
+                      {b3Lang('shoppingList.table.label.minimumQuantity', { quantity: qtyMin })}
+                    </Typography>
+                  )}
+                  {qtyIncrement > 1 && (
+                    <Typography sx={{ fontSize: '0.75rem', lineHeight: '1.5', color: '#455A64' }}>
+                      {b3Lang('shoppingList.table.label.quantityIncrement', { increment: qtyIncrement })}
+                    </Typography>
+                  )}
+                </Box>
+              )}
 
               {row?.productNote && row?.productNote.trim().length > 0 && (
                 <Typography
@@ -549,6 +616,22 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
                 >
                   {row.productNote}
                 </Typography>
+              )}
+
+              {warningMessage && (
+                <Box sx={{ color: 'red' }}>
+                  <Box
+                    sx={{
+                      mt: '1rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      '& svg': { mr: '0.5rem' },
+                    }}
+                  >
+                    <WarningIcon color="error" fontSize="small" />
+                    {warningMessage}
+                  </Box>
+                </Box>
               )}
             </Box>
           </Box>
@@ -616,30 +699,35 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
     {
       key: 'Qty',
       title: b3Lang('shoppingList.table.quantity'),
-      render: (row) => (
-        <StyledTextField
-          size="small"
-          type="number"
-          variant="filled"
-          sx={{
-            width: '72px',
-          }}
-          disabled={
-            b2bAndBcShoppingListActionsPermissions ? isReadForApprove || isJuniorApprove : true
-          }
-          value={row.quantity}
-          inputProps={{
-            inputMode: 'numeric',
-            pattern: '[0-9]*',
-          }}
-          onChange={(e) => {
-            handleUpdateProductQty(row.id, e.target.value);
-          }}
-          onBlur={() => {
-            handleUpdateShoppingListItemQty(row.itemId);
-          }}
-        />
-      ),
+      render: (row) => {
+
+        return (
+          <StyledTextField
+            size="small"
+            type="number"
+            variant="filled"
+            sx={{
+              width: '72px',
+              '& .MuiFormHelperText-root': { marginLeft: 0, marginRight: 0 },
+            }}
+            disabled={
+              b2bAndBcShoppingListActionsPermissions ? isReadForApprove || isJuniorApprove : true
+            }
+            value={row.quantity}
+            inputProps={{
+              inputMode: 'numeric',
+              pattern: '[0-9]*',
+              min: 0,
+            }}
+            onChange={(e) => {
+              handleUpdateProductQty(row.id, e.target.value);
+            }}
+            onBlur={() => {
+              handleUpdateShoppingListItemQty(row.itemId);
+            }}
+          />
+        );
+      },
       width: '15%',
       style: {
         textAlign: 'right',
@@ -837,7 +925,7 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
         ref={paginationTableRef}
         columnItems={columnItems}
         rowsPerPageOptions={[10, 20, 50]}
-        getRequestList={getShoppingListDetails}
+        getRequestList={wrappedGetShoppingListDetails}
         searchParams={search}
         isCustomRender={false}
         showCheckbox={false}
@@ -854,7 +942,7 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
         sortByFn={handleSetOrderBy}
         pageType="shoppingListDetailsTable"
         selectedDelegate={selectedDelegate}
-        renderItem={(row, index, checkBox) => (
+        renderItem={(row, index) => (
           <ShoppingDetailCard
             len={shoppingListInfo?.products?.edges.length || 0}
             item={row}
@@ -862,7 +950,6 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
             showPrice={showPrice}
             onEdit={handleOpenProductEdit}
             onDelete={setDeleteItemId}
-            checkBox={checkBox}
             setDeleteOpen={setDeleteOpen}
             setAddNoteOpen={setAddNoteOpen}
             setAddNoteItemId={setAddNoteItemId}
@@ -871,6 +958,8 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
             handleUpdateShoppingListItem={handleUpdateShoppingListItemQty}
             isReadForApprove={isReadForApprove || isJuniorApprove}
             b2bAndBcShoppingListActionsPermissions={b2bAndBcShoppingListActionsPermissions}
+            requirements={requirementsMap.get(Number(row.productId))}
+            selectedDelegate={selectedDelegate}
           />
         )}
       />

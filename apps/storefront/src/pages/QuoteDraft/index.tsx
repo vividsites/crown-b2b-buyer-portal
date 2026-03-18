@@ -13,6 +13,7 @@ import { dispatchEvent } from '@/hooks/useB2BCallback';
 import { useSetCountry } from '@/hooks/useGetCountry';
 import { useIsBackorderValidationEnabled } from '@/hooks/useIsBackorderValidationEnabled';
 import { useMobile } from '@/hooks/useMobile';
+import { useProductRequirements } from '@/hooks/useProductRequirements';
 import { useValidatePermissionWithComparisonType } from '@/hooks/useVerifyPermission';
 import { useB3Lang } from '@/lib/lang';
 import { CustomStyleContext } from '@/shared/customStyleButton';
@@ -172,6 +173,14 @@ function QuoteDraft({ setOpenPage }: PageProps) {
   } = useContext(CustomStyleContext);
 
   const isMoveStockAndBackorderValidationToBackend = useIsBackorderValidationEnabled();
+  const { requirementsMap, fetchRequirements } = useProductRequirements();
+
+  useEffect(() => {
+    const productIds = draftQuoteList
+      .map((item) => item.node.productId)
+      .filter((id): id is number => !!id);
+    if (productIds.length) fetchRequirements(productIds);
+  }, [draftQuoteList, fetchRequirements]);
 
   const quotesActionsPermission = useMemo(() => {
     if (isB2BUser) {
@@ -600,6 +609,26 @@ function QuoteDraft({ setOpenPage }: PageProps) {
           snackbar.error(b3Lang('quoteDraft.submit.errorTip'));
           return;
         }
+      }
+
+      const invalidQtySkus: string[] = [];
+      draftQuoteList.forEach((item) => {
+        const { node } = item;
+        const reqs = node.productId ? requirementsMap.get(node.productId) : undefined;
+        const qtyMin = reqs?.orderQuantityMinimum ?? 0;
+        const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
+        const qty = Number(node.quantity);
+
+        if (qtyMin > 0 && qty < qtyMin) {
+          invalidQtySkus.push(b3Lang('quoteDraft.snackbar.error.minimumQuantity', { sku: node.variantSku || '', quantity: qtyMin }));
+        } else if (qtyIncrement > 1 && (qty - qtyMin) % qtyIncrement !== 0) {
+          invalidQtySkus.push(b3Lang('quoteDraft.snackbar.error.quantityIncrement', { sku: node.variantSku || '', increment: qtyIncrement, minimum: qtyMin }));
+        }
+      });
+
+      if (invalidQtySkus.length > 0) {
+        snackbar.error(`Invalid quantity for: ${invalidQtySkus.join(', ')}`);
+        return;
       }
 
       const note = info?.note || '';
