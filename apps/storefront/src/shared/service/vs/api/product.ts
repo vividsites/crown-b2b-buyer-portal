@@ -16,6 +16,22 @@ export const getProductRequirementsBySKUs = (skus: string[] = []): Promise<Produ
 		}
 	);
 
+export const getAnonymousProductRequirementsByIds = (productIds: number[] = []): Promise<ProductRequirements[]> =>
+	VSRequest.post<{ productIds: number[] }>(
+		`/storefront/product/requirements/anonymous/`,
+		{
+			productIds,
+		}
+	);
+
+export const getAnonymousProductRequirementsBySKUs = (skus: string[] = []): Promise<ProductRequirements[]> =>
+	VSRequest.post<{ skus: string[] }>(
+		`/storefront/product/requirements/anonymous/`,
+		{
+			skus,
+		}
+	);
+
 export type ProductRequirements = {
 	productId: number;
 	sku: string;

@@ -4,6 +4,7 @@ import { type SetOpenPage } from '@/pages/SetOpenPage';
 import { searchProducts } from '@/shared/service/b2b';
 import { validateProduct } from '@/shared/service/b2b/graphql/product';
 import { GetCart, getCart } from '@/shared/service/bc/graphql/cart';
+import { getAnonymousProductRequirementsByIds, getProductRequirementsByIds } from '@/shared/service/vs/api/product';
 import { store } from '@/store';
 import { getProductOptionList, isAllRequiredOptionFilled } from '@/utils/b3AddToShoppingList';
 import b2bLogger from '@/utils/b3Logger';
@@ -330,6 +331,27 @@ const addProductFromProductPageToQuote = (
         }
       }
 
+      try {
+        const { emailAddress, id: customerId } = store.getState().company.customer;
+        const isAnon = !emailAddress || !customerId;
+        const fetchFn = isAnon ? getAnonymousProductRequirementsByIds : getProductRequirementsByIds;
+        const reqs = await fetchFn([Number(productId)]);
+        const r = reqs.find((req) => req.productId === Number(productId));
+        const qtyMin = r?.orderQuantityMinimum ?? 0;
+        const qtyIncrement = r?.orderQuantityIncrement ?? 0;
+        const numQty = Number(qty);
+        if (qtyMin > 0 && numQty < qtyMin) {
+          globalSnackbar.error(b3Lang('quoteDraft.snackbar.error.minimumQuantity', { sku, quantity: qtyMin }));
+          return;
+        }
+        if (qtyIncrement > 1 && (numQty - qtyMin) % qtyIncrement !== 0) {
+          globalSnackbar.error(b3Lang('quoteDraft.snackbar.error.quantityIncrement', { sku, increment: qtyIncrement, minimum: qtyMin }));
+          return;
+        }
+      } catch {
+        // don't block if requirements fetch fails
+      }
+
       const quoteListitem = await getCalculatedProductPrice({
         optionList,
         productsSearch: newProductInfo[0],
@@ -473,6 +495,27 @@ const addProductFromProductCardToQuote = (
           globalSnackbar.error(message);
           return;
         }
+      }
+
+      try {
+        const { emailAddress, id: customerId } = store.getState().company.customer;
+        const isAnon = !emailAddress || !customerId;
+        const fetchFn = isAnon ? getAnonymousProductRequirementsByIds : getProductRequirementsByIds;
+        const reqs = await fetchFn([Number(productId)]);
+        const r = reqs.find((req) => req.productId === Number(productId));
+        const qtyMin = r?.orderQuantityMinimum ?? 0;
+        const qtyIncrement = r?.orderQuantityIncrement ?? 0;
+        const numQty = Number(qty);
+        if (qtyMin > 0 && numQty < qtyMin) {
+          globalSnackbar.error(b3Lang('quoteDraft.snackbar.error.minimumQuantity', { sku, quantity: qtyMin }));
+          return;
+        }
+        if (qtyIncrement > 1 && (numQty - qtyMin) % qtyIncrement !== 0) {
+          globalSnackbar.error(b3Lang('quoteDraft.snackbar.error.quantityIncrement', { sku, increment: qtyIncrement, minimum: qtyMin }));
+          return;
+        }
+      } catch {
+        // don't block if requirements fetch fails
       }
 
       const quoteListitem = await getCalculatedProductPrice({
