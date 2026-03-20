@@ -1,4 +1,5 @@
 import VSRequest from '../request/vsFetch';
+import { storeHash } from '@/utils/basicConfig';
 
 export const getProductRequirementsByIds = (productIds: number[] = []): Promise<ProductRequirements[]> =>
 	VSRequest.post<{ productIds: number[] }>(
@@ -17,17 +18,19 @@ export const getProductRequirementsBySKUs = (skus: string[] = []): Promise<Produ
 	);
 
 export const getAnonymousProductRequirementsByIds = (productIds: number[] = []): Promise<ProductRequirements[]> =>
-	VSRequest.post<{ productIds: number[] }>(
+	VSRequest.post<{ storeHash: string; productIds: number[] }>(
 		`/storefront/product/requirements/anonymous/`,
 		{
+			storeHash,
 			productIds,
 		}
 	);
 
 export const getAnonymousProductRequirementsBySKUs = (skus: string[] = []): Promise<ProductRequirements[]> =>
-	VSRequest.post<{ skus: string[] }>(
+	VSRequest.post<{ storeHash: string; skus: string[] }>(
 		`/storefront/product/requirements/anonymous/`,
 		{
+			storeHash,
 			skus,
 		}
 	);
