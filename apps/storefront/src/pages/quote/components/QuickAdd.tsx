@@ -8,6 +8,7 @@ import B3Spin from '@/components/spin/B3Spin';
 import { useBlockPendingAccountViewPrice } from '@/hooks/useBlockPendingAccountViewPrice';
 import { useB3Lang } from '@/lib/lang';
 import { getVariantInfoBySkus } from '@/shared/service/b2b';
+import { getProductRequirementsByIds, ProductRequirements } from '@/shared/service/vs/api/product';
 import { useAppSelector } from '@/store';
 import { compareOption } from '@/utils/b3Product/b3Product';
 import { getAllModifierDefaultValue, getQuickAddRowFields } from '@/utils/b3Product/shared/config';
@@ -303,6 +304,52 @@ export default function QuickAdd(props: AddToListContentProps) {
     }
   };
 
+  const validateRequirements = async (
+    value: CustomFieldItems,
+    items: CustomFieldItems[],
+  ): Promise<CustomFieldItems[]> => {
+    const productIds = [...new Set(items.map((item) => Number(item.productId)).filter(Boolean))];
+    if (!productIds.length) return items;
+
+    try {
+      const reqs = await getProductRequirementsByIds(productIds);
+      const reqsMap = new Map<number, ProductRequirements>(reqs.map((r: ProductRequirements) => [r.productId, r]));
+
+      const invalidSkus: string[] = [];
+      const validItems = items.filter((item) => {
+        const r = reqsMap.get(Number(item.productId));
+        const qtyMin = r?.orderQuantityMinimum ?? 0;
+        const qtyIncrement = r?.orderQuantityIncrement ?? 0;
+        const qty = Number(item.quantity);
+
+        if (qtyMin > 0 && qty < qtyMin) {
+          invalidSkus.push(
+            b3Lang('quoteDraft.snackbar.error.minimumQuantity', { sku: item.variantSku || '', quantity: qtyMin }),
+          );
+          showErrors(value, [item.variantSku], 'qty', '');
+          return false;
+        }
+        if (qtyIncrement > 1 && (qty - qtyMin) % qtyIncrement !== 0) {
+          invalidSkus.push(
+            b3Lang('quoteDraft.snackbar.error.quantityIncrement', { sku: item.variantSku || '', increment: qtyIncrement, minimum: qtyMin }),
+          );
+          showErrors(value, [item.variantSku], 'qty', '');
+          return false;
+        }
+        return true;
+      });
+
+      if (invalidSkus.length > 0) {
+        snackbar.error(`Invalid quantity for: ${invalidSkus.join(', ')}`);
+      }
+
+      return validItems;
+    } catch {
+      // don't block the user if requirements fetch fails
+      return items;
+    }
+  };
+
   const handleAddToList = () => {
     if (blockPendingAccountViewPrice && companyStatus === 0) {
       snackbar.info(
@@ -364,10 +411,12 @@ export default function QuickAdd(props: AddToListContentProps) {
         }
 
         if (productItems.length > 0) {
-          await quickAddToList(productItems);
-          clearInputValue(value, passSku);
-
-          updateList();
+          const validItems = await validateRequirements(value, productItems);
+          if (validItems.length > 0) {
+            await quickAddToList(validItems);
+            clearInputValue(value, passSku);
+            updateList();
+          }
         }
       } finally {
         setIsLoading(false);

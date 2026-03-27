@@ -172,6 +172,7 @@ export const useOpenPDP = ({ setOpenPage, role }: MutationObserverProps) => {
           myShoppingListBtn.setAttribute('style', customCss);
           myShoppingListBtn.style.backgroundColor = color;
           myShoppingListBtn.style.color = customTextColor;
+          myShoppingListBtn.setAttribute('role', 'button');
           myShoppingListBtn.setAttribute('class', `b2b-add-to-list ${classSelector}`);
           setMediaStyle(mediaBlocks, `b2b-add-to-list ${classSelector}`);
         });
@@ -195,6 +196,7 @@ export const useOpenPDP = ({ setOpenPage, role }: MutationObserverProps) => {
           shoppingBtnDom.setAttribute('style', customCss);
           shoppingBtnDom.style.backgroundColor = color;
           shoppingBtnDom.style.color = customTextColor;
+          shoppingBtnDom.setAttribute('role', 'button');
           shoppingBtnDom.setAttribute('class', `b2b-add-to-list ${classSelector}`);
 
           setMediaStyle(mediaBlocks, `b2b-add-to-list ${classSelector}`);

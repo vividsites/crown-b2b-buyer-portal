@@ -4,6 +4,7 @@ import { type SetOpenPage } from '@/pages/SetOpenPage';
 import { searchProducts } from '@/shared/service/b2b';
 import { validateProduct } from '@/shared/service/b2b/graphql/product';
 import { GetCart, getCart } from '@/shared/service/bc/graphql/cart';
+import { getAnonymousProductRequirementsByIds, getProductRequirementsByIds } from '@/shared/service/vs/api/product';
 import { store } from '@/store';
 import { getProductOptionList, isAllRequiredOptionFilled } from '@/utils/b3AddToShoppingList';
 import b2bLogger from '@/utils/b3Logger';
@@ -330,6 +331,193 @@ const addProductFromProductPageToQuote = (
         }
       }
 
+      try {
+        const { emailAddress, id: customerId } = store.getState().company.customer;
+        const isAnon = !emailAddress || !customerId;
+        const fetchFn = isAnon ? getAnonymousProductRequirementsByIds : getProductRequirementsByIds;
+        const reqs = await fetchFn([Number(productId)]);
+        const r = reqs.find((req) => req.productId === Number(productId));
+        const qtyMin = r?.orderQuantityMinimum ?? 0;
+        const qtyIncrement = r?.orderQuantityIncrement ?? 0;
+        const numQty = Number(qty);
+        if (qtyMin > 0 && numQty < qtyMin) {
+          globalSnackbar.error(b3Lang('quoteDraft.snackbar.error.minimumQuantity', { sku, quantity: qtyMin }));
+          return;
+        }
+        if (qtyIncrement > 1 && (numQty - qtyMin) % qtyIncrement !== 0) {
+          globalSnackbar.error(b3Lang('quoteDraft.snackbar.error.quantityIncrement', { sku, increment: qtyIncrement, minimum: qtyMin }));
+          return;
+        }
+      } catch {
+        // don't block if requirements fetch fails
+      }
+
+      const quoteListitem = await getCalculatedProductPrice({
+        optionList,
+        productsSearch: newProductInfo[0],
+        sku,
+        qty,
+      });
+
+      const newProducts: CustomFieldItems = [quoteListitem];
+      const isSuccess = validProductQty(newProducts);
+      if (quoteListitem && isSuccess) {
+        await addQuoteDraftProduce(quoteListitem, qty, optionList || []);
+        globalSnackbar.success(b3Lang('global.notification.addProductSingular'), {
+          action: {
+            onClick: () => gotoQuoteDraft(setOpenPage),
+            label: b3Lang('quoteDraft.notification.openQuote'),
+          },
+        });
+      } else if (!isSuccess) {
+        globalSnackbar.error(b3Lang('global.notification.maximumPurchaseExceed'), {
+          action: {
+            onClick: () => gotoQuoteDraft(setOpenPage),
+            label: b3Lang('quoteDraft.notification.openQuote'),
+          },
+        });
+      } else {
+        globalSnackbar.error('Price error');
+      }
+    } catch (e) {
+      b2bLogger.error(e);
+    } finally {
+      removeLoading();
+    }
+  };
+
+  return {
+    addToQuote,
+    addLoading,
+  };
+};
+
+const addProductFromProductCardToQuote = (
+  setOpenPage: SetOpenPage,
+  isEnableProduct: boolean,
+  b3Lang: LangFormatFunction,
+  isBackorderValidationEnabled: boolean,
+  featureFlags: FeatureFlags,
+) => {
+  const addToQuote = async (node?: HTMLElement) => {
+    try {
+      const productCard = node ? node.closest(config['dom.productCard']) : document;
+      if (!productCard) return;
+      const productId = (productCard.querySelector('input[name=product_id]') as CustomFieldItems)
+        ?.value;
+      const qty = (productCard.querySelector('[name="qty[]"]') as CustomFieldItems)?.value ?? 1;
+      const sku = featureFlags['B2B-3474.get_sku_from_pdp_with_text_content']
+        ? (productCard.querySelector('[data-product-sku]')?.textContent ?? '').trim()
+        : (productCard.querySelector('[data-product-sku]')?.innerHTML ?? '').trim();
+      const form = productCard.querySelector('form[data-cart-item-add-from-card]') as HTMLFormElement;
+
+      if (!sku) {
+        globalSnackbar.error(b3Lang('quoteDraft.notification.cantAddProductsNoSku'));
+
+        return;
+      }
+      const companyInfoId = store.getState().company.companyInfo.id;
+      const companyId = companyInfoId || B3SStorage.get('salesRepCompanyId');
+      const { customerGroupId } = store.getState().company.customer;
+
+      const { currency_code: currencyCode } = getActiveCurrencyInfo();
+
+      const { productsSearch } = await searchProducts({
+        productIds: [Number(productId)],
+        companyId,
+        customerGroupId,
+        currencyCode,
+      });
+
+      const newProductInfo: CustomFieldItems = conversionProductsList(productsSearch);
+      const { allOptions } = newProductInfo[0];
+
+      const optionMap = serialize(form);
+
+      const optionList = getProductOptionList(optionMap);
+
+      const { isValid, message } = isAllRequiredOptionFilled(allOptions, optionList);
+      if (!isValid) {
+        globalSnackbar.error(message);
+        return;
+      }
+
+      if (isBackorderValidationEnabled) {
+        const variantId = newProductInfo[0]?.variants.find(
+          (variant: CustomFieldItems) => variant.sku === sku,
+        )?.variant_id;
+
+        const productOptions = optionList.map((option: CustomFieldItems) => ({
+          optionId: Number(option.optionId.split('[')[1].split(']')[0]),
+          optionValue: option.optionValue,
+        }));
+
+        const { responseType, message } = await validateProduct({
+          productId: Number(productId),
+          variantId: Number(variantId),
+          quantity: Number(qty),
+          productOptions,
+        });
+
+        if (responseType === 'ERROR') {
+          globalSnackbar.error(message);
+
+          return;
+        }
+      } else if (!isEnableProduct) {
+        const currentProduct = getVariantInfoOOSAndPurchase({
+          ...productsSearch[0],
+          quantity: qty,
+          variantSku: sku,
+          productName: productsSearch[0]?.name,
+          productsSearch: productsSearch[0],
+        });
+
+        const inventoryTracking = productsSearch[0]?.inventoryTracking || 'none';
+        let inventoryLevel = productsSearch[0]?.inventoryLevel;
+        if (inventoryTracking === 'variant') {
+          const currentVariant = productsSearch[0]?.variants.find(
+            (variant: CustomFieldItems) => variant.sku === sku,
+          );
+
+          inventoryLevel = currentVariant?.inventory_level;
+        }
+
+        if (currentProduct?.name) {
+          const message =
+            currentProduct.type === 'oos'
+              ? b3Lang('quoteDraft.productPageToQuote.outOfStock', {
+                  name: currentProduct?.name,
+                  qty: inventoryLevel,
+                })
+              : b3Lang('quoteDraft.productPageToQuote.unavailable');
+
+          globalSnackbar.error(message);
+          return;
+        }
+      }
+
+      try {
+        const { emailAddress, id: customerId } = store.getState().company.customer;
+        const isAnon = !emailAddress || !customerId;
+        const fetchFn = isAnon ? getAnonymousProductRequirementsByIds : getProductRequirementsByIds;
+        const reqs = await fetchFn([Number(productId)]);
+        const r = reqs.find((req) => req.productId === Number(productId));
+        const qtyMin = r?.orderQuantityMinimum ?? 0;
+        const qtyIncrement = r?.orderQuantityIncrement ?? 0;
+        const numQty = Number(qty);
+        if (qtyMin > 0 && numQty < qtyMin) {
+          globalSnackbar.error(b3Lang('quoteDraft.snackbar.error.minimumQuantity', { sku, quantity: qtyMin }));
+          return;
+        }
+        if (qtyIncrement > 1 && (numQty - qtyMin) % qtyIncrement !== 0) {
+          globalSnackbar.error(b3Lang('quoteDraft.snackbar.error.quantityIncrement', { sku, increment: qtyIncrement, minimum: qtyMin }));
+          return;
+        }
+      } catch {
+        // don't block if requirements fetch fails
+      }
+
       const quoteListitem = await getCalculatedProductPrice({
         optionList,
         productsSearch: newProductInfo[0],
@@ -371,6 +559,7 @@ const addProductFromProductPageToQuote = (
 };
 
 export {
+  addProductFromProductCardToQuote,
   addProductFromProductPageToQuote,
   addProductsFromCartToQuote,
   addProductsToDraftQuote,
