@@ -1,8 +1,9 @@
-import { Delete, Edit } from '@mui/icons-material';
+import { Delete, Edit, Warning as WarningIcon } from '@mui/icons-material';
 import { Box, CardContent, styled, TextField, Typography } from '@mui/material';
 
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
 import { useB3Lang } from '@/lib/lang';
+import { ProductRequirements } from '@/shared/service/vs/api/product';
 import { Product } from '@/types';
 import { QuoteItem } from '@/types/quotes';
 import { currencyFormat } from '@/utils/b3CurrencyFormat';
@@ -15,6 +16,7 @@ interface QuoteTableCardProps {
   onDelete: (id: string) => void;
   handleUpdateProductQty: (item: QuoteItem['node'], quantity: number) => void;
   isLast: boolean;
+  requirements?: ProductRequirements;
 }
 
 const StyledImage = styled('img')(() => ({
@@ -29,6 +31,7 @@ function QuoteTableCard({
   onDelete,
   handleUpdateProductQty,
   isLast,
+  requirements,
 }: QuoteTableCardProps) {
   const {
     basePrice,
@@ -42,6 +45,17 @@ function QuoteTableCard({
   } = item;
 
   const b3Lang = useB3Lang();
+
+  const qtyMin = requirements?.orderQuantityMinimum ?? 0;
+  const qtyIncrement = requirements?.orderQuantityIncrement ?? 0;
+  const qty = Number(quantity);
+  let qtyHelperText = '';
+  if (qty > 0) {
+    if (qtyMin > 0 && qty < qtyMin)
+      qtyHelperText = b3Lang('quoteDraft.quoteTable.error.minimumQuantity', { quantity: qtyMin });
+    else if (qtyIncrement > 1 && (qty - qtyMin) % qtyIncrement !== 0)
+      qtyHelperText = b3Lang('quoteDraft.quoteTable.error.quantityIncrement', { increment: qtyIncrement, minimum: qtyMin });
+  }
 
   const price = getBCPrice(Number(basePrice), Number(taxPrice));
 
@@ -141,6 +155,22 @@ function QuoteTableCard({
 
           <Typography sx={{ fontSize: '14px' }}>Price: {singlePrice}</Typography>
 
+
+          {(qtyMin > 1 || qtyIncrement > 1) && (
+            <Box>
+              {qtyMin > 1 && (
+                <Typography sx={{ fontSize: '0.75rem', lineHeight: '1.5', color: '#455A64' }}>
+                  {b3Lang('quoteDraft.quoteTable.label.minimumQuantity', { quantity: qtyMin })}
+                </Typography>
+              )}
+              {qtyIncrement > 1 && (
+                <Typography sx={{ fontSize: '0.75rem', lineHeight: '1.5', color: '#455A64' }}>
+                  {b3Lang('quoteDraft.quoteTable.label.quantityIncrement', { increment: qtyIncrement })}
+                </Typography>
+              )}
+            </Box>
+          )}
+
           <TextField
             size="small"
             type="number"
@@ -149,6 +179,8 @@ function QuoteTableCard({
             inputProps={{
               inputMode: 'numeric',
               pattern: '[0-9]*',
+              min: qtyMin > 0 ? qtyMin : 1,
+              step: qtyIncrement > 1 ? qtyIncrement : 1,
             }}
             value={quantity}
             sx={{
@@ -161,11 +193,29 @@ function QuoteTableCard({
               '& input': {
                 fontSize: '14px',
               },
+              '& .MuiFormHelperText-root': { marginLeft: 0, marginRight: 0 },
             }}
             onChange={(e) => {
               handleUpdateProductQty(item, Number(e.target.value));
             }}
           />
+
+          {qtyHelperText && (
+            <Box sx={{ color: 'red' }}>
+              <Box
+                sx={{
+                  mt: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  '& svg': { mr: '0.5rem' },
+                }}
+              >
+                <WarningIcon color="error" fontSize="small" />
+                {qtyHelperText}
+              </Box>
+            </Box>
+          )}
+
           <Typography sx={{ fontSize: '14px' }}>Total: {totalPrice}</Typography>
           <Box
             sx={{

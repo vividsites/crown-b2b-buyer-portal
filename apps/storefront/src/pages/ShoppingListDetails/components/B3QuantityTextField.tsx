@@ -14,6 +14,7 @@ interface B3NumberTextFieldProps {
   value: number;
   maxQuantity?: number;
   minQuantity?: number;
+  increment?: number;
   isStock?: string;
   stock?: number;
   onChange: (value: number | string, isValid: boolean) => void;
@@ -23,6 +24,7 @@ export function B3QuantityTextField({
   value = 0,
   maxQuantity = 0,
   minQuantity = 0,
+  increment = 0,
   isStock = '0',
   stock = 0,
   onChange = () => {},
@@ -51,13 +53,15 @@ export function B3QuantityTextField({
         validMessage = `Min is ${minQuantity}`;
       } else if (maxQuantity !== 0 && quantity > maxQuantity) {
         validMessage = `Max is ${maxQuantity}`;
+      } else if (increment > 1 && (quantity - (minQuantity || 0)) % increment !== 0) {
+        validMessage = `Must be in increments of ${increment}`;
       }
 
       setValidMessage(validMessage);
 
       return validMessage;
     },
-    [isStock, maxQuantity, minQuantity, stock],
+    [isStock, maxQuantity, minQuantity, increment, stock],
   );
 
   const handleChange = (value: string) => {
@@ -86,7 +90,8 @@ export function B3QuantityTextField({
       helperText={validMessage}
       inputProps={{
         inputMode: 'numeric',
-        min: 1,
+        min: minQuantity > 0 ? minQuantity : 1,
+        step: increment > 1 ? increment : 1,
         pattern: '[0-9]*',
       }}
       onChange={(e) => {

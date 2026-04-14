@@ -1,5 +1,7 @@
 import { Dispatch, SetStateAction, useRef, useState } from 'react';
+import { useProductRequirements } from '@/hooks/useProductRequirements';
 import { Box, styled, TextField, Typography } from '@mui/material';
+import { Warning as WarningIcon } from '@mui/icons-material';
 
 import B3Spin from '@/components/spin/B3Spin';
 import { B3PaginationTable, GetRequestList } from '@/components/table/B3PaginationTable';
@@ -137,6 +139,8 @@ function QuickOrderTable({
 
   const b3Lang = useB3Lang();
 
+  const { requirementsMap, fetchRequirements } = useProductRequirements();
+
   const { currency_code: currencyCode } = useAppSelector(activeCurrencyInfoSelector);
 
   const handleGetProductsById = async (listProducts: ListItemProps[]) => {
@@ -144,7 +148,7 @@ function QuickOrderTable({
       const productIds: number[] = [];
       listProducts.forEach((item) => {
         const { node } = item;
-        node.quantity = 1;
+        //node.quantity = 1;
         if (!productIds.includes(node.productId)) {
           productIds.push(node.productId);
         }
@@ -158,7 +162,9 @@ function QuickOrderTable({
           customerGroupId,
         });
 
-        const newProductsSearch = conversionProductsList(productsSearch);
+        await fetchRequirements(productIds);
+
+        const newProductsSearch = conversionProductsList(productsSearch, [], requirementsMap);
 
         listProducts.forEach((item) => {
           const { node } = item;
@@ -169,6 +175,7 @@ function QuickOrderTable({
             return Number(node.productId) === Number(productId);
           });
 
+          node.quantity = productInfo?.orderQuantityMinimum ?? 1;
           node.productsSearch = productInfo || {};
         });
 
@@ -252,13 +259,15 @@ function QuickOrderTable({
 
   const handleUpdateProductQty = (id: number | string, value: number | string) => {
     if (value !== '' && Number(value) <= 0) return;
+    const newQty = Number(value);
+
     const listItems = paginationTableRef.current?.getList() || [];
     const listCacheItems = paginationTableRef.current?.getCacheList() || [];
 
     const newListItems = listItems?.map((item: ListItemProps) => {
       const { node } = item;
       if (node?.id === id) {
-        node.quantity = Number(value) || '';
+        node.quantity = newQty || '';
       }
 
       return item;
@@ -266,7 +275,7 @@ function QuickOrderTable({
     const newListCacheItems = listCacheItems?.map((item: ListItemProps) => {
       const { node } = item;
       if (node?.id === id) {
-        node.quantity = Number(value) || '';
+        node.quantity = newQty || '';
       }
 
       return item;
@@ -316,6 +325,19 @@ function QuickOrderTable({
         const { optionList, productsSearch, variantId } = row;
         const currentVariants = productsSearch.variants || [];
 
+        const reqs = requirementsMap.get(Number(row.productId));
+        const qtyMin = reqs?.orderQuantityMinimum ?? 0;
+        const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
+        const quantity = Number(row.quantity);
+
+        let warningMessage = '';
+        if (quantity > 0) {
+          if (qtyMin > 0 && quantity < qtyMin)
+            warningMessage = b3Lang('quoteDraft.quoteTable.error.minimumQuantity', { quantity: qtyMin });
+          else if (qtyIncrement > 1 && (quantity - qtyMin) % qtyIncrement !== 0)
+            warningMessage = b3Lang('quoteDraft.quoteTable.error.quantityIncrement', { increment: qtyIncrement, minimum: qtyMin });
+        }
+
         const currentImage =
           b2bGetVariantImageByVariantInfo(currentVariants, { variantId }) || row.imageUrl;
         return (
@@ -351,6 +373,37 @@ function QuickOrderTable({
                       {`${option.display_name}: ${option.display_value}`}
                     </Typography>
                   ))}
+                </Box>
+              )}
+
+              {(qtyMin > 1 || qtyIncrement > 1) && (
+                <Box>
+                  {qtyMin > 1 && (
+                    <Typography sx={{ fontSize: '0.75rem', lineHeight: '1.5', color: '#455A64' }}>
+                      {b3Lang('shoppingList.table.label.minimumQuantity', { quantity: qtyMin })}
+                    </Typography>
+                  )}
+                  {qtyIncrement > 1 && (
+                    <Typography sx={{ fontSize: '0.75rem', lineHeight: '1.5', color: '#455A64' }}>
+                      {b3Lang('shoppingList.table.label.quantityIncrement', { increment: qtyIncrement })}
+                    </Typography>
+                  )}
+                </Box>
+              )}
+
+              {warningMessage && (
+                <Box sx={{ color: 'red' }}>
+                  <Box
+                    sx={{
+                      mt: '1rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      '& svg': { mr: '0.5rem' },
+                    }}
+                  >
+                    <WarningIcon color="error" fontSize="small" />
+                    {warningMessage}
+                  </Box>
                 </Box>
               )}
             </Box>
@@ -399,6 +452,9 @@ function QuickOrderTable({
       title: b3Lang('purchasedProducts.qty'),
       render: (row) => {
         const qty = handleSetCheckedQty(row);
+        const reqs = requirementsMap.get(Number(row.productId));
+        const qtyMin = reqs?.orderQuantityMinimum ?? 0;
+        const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
 
         return (
           <StyledTextField
@@ -409,6 +465,8 @@ function QuickOrderTable({
             inputProps={{
               inputMode: 'numeric',
               pattern: '[0-9]*',
+              min: qtyMin > 0 ? qtyMin : 1,
+              step: qtyIncrement > 1 ? qtyIncrement : 1,
             }}
             onChange={(e) => {
               handleUpdateProductQty(row.id, e.target.value);
@@ -557,6 +615,7 @@ function QuickOrderTable({
               item={row}
               checkBox={checkBox}
               handleUpdateProductQty={handleUpdateProductQty}
+              requirements={requirementsMap.get(row.productId)}
             />
           )}
         />

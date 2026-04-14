@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Delete, Edit, Warning as WarningIcon } from '@mui/icons-material';
 import { Box, styled, TextField, Typography } from '@mui/material';
 import ceil from 'lodash-es/ceil';
@@ -7,6 +7,7 @@ import { TableColumnItem } from '@/components/table/B3Table';
 import PaginationTable from '@/components/table/PaginationTable';
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
 import { useIsBackorderValidationEnabled } from '@/hooks/useIsBackorderValidationEnabled';
+import { useProductRequirements } from '@/hooks/useProductRequirements';
 import { LangFormatFunction, useB3Lang } from '@/lib/lang';
 import { deleteProductFromDraftQuoteList, setDraftProduct, useAppDispatch, useAppSelector } from '@/store';
 import { CustomerRole, Product } from '@/types';
@@ -25,6 +26,7 @@ import { snackbar } from '@/utils/b3Tip';
 import ChooseOptionsDialog from '../../ShoppingListDetails/components/ChooseOptionsDialog';
 
 import QuoteTableCard from './QuoteTableCard';
+import { ProductRequirements } from '@/shared/service/vs/api/product';
 
 const StyledQuoteTableContainer = styled('div')(() => ({
   backgroundColor: '#FFFFFF',
@@ -153,7 +155,7 @@ function getAvailabilityWarningsBackend(
   return { warningMessage, warningDetails };
 }
 
-const getThresholdWarning = (row: QuoteItem['node'], b3Lang: LangFormatFunction): string | null => {
+const getThresholdWarning = (row: QuoteItem['node'], requirementsMap: Map<number, ProductRequirements>, b3Lang: LangFormatFunction): string | null => {
   const minQuantity = Number(row.productsSearch?.orderQuantityMinimum || 0);
   const maxQuantity = Number(row.productsSearch?.orderQuantityMaximum || 0);
   const quantity = Number(row.quantity || 0);
@@ -170,6 +172,16 @@ const getThresholdWarning = (row: QuoteItem['node'], b3Lang: LangFormatFunction)
       maxQuantity,
       sku,
     });
+  }
+
+  const reqs = row.productId ? requirementsMap.get(row.productId) : undefined;
+  const qtyMin = reqs?.orderQuantityMinimum ?? 0;
+  const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
+  if (quantity > 0) {
+    if (qtyMin > 0 && quantity < qtyMin)
+      return b3Lang('quoteDraft.quoteTable.error.minimumQuantity', { quantity: qtyMin });
+    else if (qtyIncrement > 1 && (quantity - qtyMin) % qtyIncrement !== 0)
+      return b3Lang('quoteDraft.quoteTable.error.quantityIncrement', { increment: qtyIncrement, minimum: qtyMin });
   }
 
   return null;
@@ -193,6 +205,15 @@ function QuoteTable({ total, items, updateSummary }: QuoteTableProps) {
   const [optionsProduct, setOptionsProduct] = useState<Product>();
   const [optionsProductId, setOptionsProductId] = useState<string>('');
 
+  const { requirementsMap, fetchRequirements } = useProductRequirements();
+
+  useEffect(() => {
+    const productIds = items
+      .map((item) => item.node.productId)
+      .filter((id): id is number => !!id);
+    if (productIds.length) fetchRequirements(productIds);
+  }, [items, fetchRequirements]);
+
   const handleUpdateProductQty = async (row: QuoteItem['node'], quantity: number) => {
     const product = await setModifierQtyPrice(row, quantity);
 
@@ -211,13 +232,8 @@ function QuoteTable({ total, items, updateSummary }: QuoteTableProps) {
     let newQty = ceil(quantity);
     if (newQty === Number(quantity) && newQty >= 1 && newQty <= QUOTE_PRODUCT_QTY_MAX) return;
 
-    if (quantity < 1) {
-      newQty = 1;
-    }
-
-    if (quantity > QUOTE_PRODUCT_QTY_MAX) {
-      newQty = QUOTE_PRODUCT_QTY_MAX;
-    }
+    if (quantity < 1) newQty = 1;
+    if (quantity > QUOTE_PRODUCT_QTY_MAX) newQty = QUOTE_PRODUCT_QTY_MAX;
 
     handleUpdateProductQty(item, newQty);
   };
@@ -322,12 +338,16 @@ function QuoteTable({ total, items, updateSummary }: QuoteTableProps) {
       title: b3Lang('quoteDraft.quoteTable.product'),
       render: (row) => {
         const availabilityWarning = getAvailabilityWarnings(row, b3Lang);
-        const thresholdWarning = getThresholdWarning(row, b3Lang);
+        const thresholdWarning = getThresholdWarning(row, requirementsMap, b3Lang);
         const warningMessage = availabilityWarning.warningMessage
           ? availabilityWarning.warningMessage
           : thresholdWarning;
         const productOptionsValues = getProductOptionsValues(row);
         const productUrl = row.productsSearch?.productUrl;
+
+        const reqs = requirementsMap.get(Number(row.productId));
+        const qtyMin = reqs?.orderQuantityMinimum ?? 0;
+        const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
 
         return (
           <Box
@@ -373,6 +393,21 @@ function QuoteTable({ total, items, updateSummary }: QuoteTableProps) {
                       {`${option.valueLabel}: ${option.valueText}`}
                     </Typography>
                   ))}
+                </Box>
+              )}
+
+              {(qtyMin > 1 || qtyIncrement > 1) && (
+                <Box>
+                  {qtyMin > 1 && (
+                    <Typography sx={{ fontSize: '0.75rem', lineHeight: '1.5', color: '#455A64' }}>
+                      {b3Lang('quoteDraft.quoteTable.label.minimumQuantity', { quantity: qtyMin })}
+                    </Typography>
+                  )}
+                  {qtyIncrement > 1 && (
+                    <Typography sx={{ fontSize: '0.75rem', lineHeight: '1.5', color: '#455A64' }}>
+                      {b3Lang('quoteDraft.quoteTable.label.quantityIncrement', { increment: qtyIncrement })}
+                    </Typography>
+                  )}
                 </Box>
               )}
 
@@ -429,27 +464,36 @@ function QuoteTable({ total, items, updateSummary }: QuoteTableProps) {
     {
       key: 'Qty',
       title: b3Lang('quoteDraft.quoteTable.qty'),
-      render: (row) => (
-        <StyledTextField
-          size="small"
-          type="number"
-          variant="filled"
-          value={row.quantity}
-          inputProps={{
-            inputMode: 'numeric',
-            pattern: '[0-9]*',
-          }}
-          onChange={(e) => {
-            handleUpdateProductQty(row, Number(e.target.value));
-          }}
-          onBlur={(e) => {
-            handleCheckProductQty(row, Number(e.target.value));
-          }}
-          sx={{
-            width: '75%',
-          }}
-        />
-      ),
+      render: (row) => {
+        const reqs = row.productId ? requirementsMap.get(row.productId) : undefined;
+        const qtyMin = reqs?.orderQuantityMinimum ?? 0;
+        const qtyIncrement = reqs?.orderQuantityIncrement ?? 0;
+
+        return (
+          <StyledTextField
+            size="small"
+            type="number"
+            variant="filled"
+            value={row.quantity}
+            inputProps={{
+              inputMode: 'numeric',
+              pattern: '[0-9]*',
+              min: qtyMin > 0 ? qtyMin : 1,
+              step: qtyIncrement > 1 ? qtyIncrement : 1,
+            }}
+            onChange={(e) => {
+              handleUpdateProductQty(row, Number(e.target.value));
+            }}
+            onBlur={(e) => {
+              handleCheckProductQty(row, Number(e.target.value));
+            }}
+            sx={{
+              width: '75%',
+              '& .MuiFormHelperText-root': { marginLeft: 0, marginRight: 0 },
+            }}
+          />
+        );
+      },
       width: '15%',
       style: {
         textAlign: 'right',
@@ -560,6 +604,7 @@ function QuoteTable({ total, items, updateSummary }: QuoteTableProps) {
             onEdit={handleOpenProductEdit}
             onDelete={handleDeleteClick}
             handleUpdateProductQty={handleUpdateProductQty}
+            requirements={row.productId ? requirementsMap.get(row.productId) : undefined}
           />
         )}
       />

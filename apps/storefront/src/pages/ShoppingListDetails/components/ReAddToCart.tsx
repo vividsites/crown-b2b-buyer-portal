@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import styled from '@emotion/styled';
+import { useProductRequirements } from '@/hooks/useProductRequirements';
 import { Delete } from '@mui/icons-material';
 import { Alert, Box, Grid, Typography } from '@mui/material';
 import { cloneDeep } from 'lodash-es';
@@ -165,10 +166,15 @@ export default function ReAddToCart({
   const itemStyle = isMobile ? mobileItemStyle : defaultItemStyle;
 
   const [internalProducts, setInternalProducts] = useState<ProductsProps[]>([]);
+  const { requirementsMap, fetchRequirements } = useProductRequirements();
 
   useEffect(() => {
     setInternalProducts(cloneDeep(products));
-  }, [products]);
+    const productIds = products
+      .map((p) => (p.node as any).productId as number)
+      .filter(Boolean);
+    if (productIds.length) fetchRequirements(productIds);
+  }, [products, fetchRequirements]);
 
   const handleUpdateProductQty = async (
     index: number,
@@ -226,6 +232,24 @@ export default function ReAddToCart({
       if (isStock !== '0' && stock && (quantity ? Number(quantity) : 0) > stock) {
         item.node.quantity = stock;
       }
+
+      // Apply orderQuantityMinimum / orderQuantityIncrement from requirements
+      const reqProductId = (product.node as any).productId as number;
+      const reqs = requirementsMap.get(reqProductId);
+      const reqMin = reqs?.orderQuantityMinimum ?? 0;
+      const reqIncrement = reqs?.orderQuantityIncrement ?? 0;
+      let adjustedQty = item.node.quantity ? Number(item.node.quantity) : 0;
+      if (reqMin > 0 && adjustedQty < reqMin) {
+        adjustedQty = reqMin;
+      }
+      if (reqIncrement > 1) {
+        const base = reqMin || 0;
+        const remainder = (adjustedQty - base) % reqIncrement;
+        if (remainder !== 0) {
+          adjustedQty = adjustedQty + (reqIncrement - remainder);
+        }
+      }
+      item.node.quantity = adjustedQty;
 
       item.isValid = true;
 
@@ -409,16 +433,22 @@ export default function ReAddToCart({
                       {currencyFormat(price)}
                     </FlexItem>
                     <FlexItem {...itemStyle.default} textAlignLocation={textAlign}>
-                      <B3QuantityTextField
-                        isStock={isStock}
-                        maxQuantity={maxQuantity || node.productsSearch?.orderQuantityMaximum}
-                        minQuantity={minQuantity || node.productsSearch?.orderQuantityMinimum}
-                        stock={stock}
-                        value={quantity}
-                        onChange={(value, isValid) => {
-                          handleUpdateProductQty(index, value, isValid);
-                        }}
-                      />
+                      {(() => {
+                        const reqs = requirementsMap.get((node as any).productId);
+                        return (
+                          <B3QuantityTextField
+                            isStock={isStock}
+                            maxQuantity={maxQuantity || node.productsSearch?.orderQuantityMaximum}
+                            minQuantity={minQuantity || reqs?.orderQuantityMinimum || node.productsSearch?.orderQuantityMinimum || 0}
+                            increment={reqs?.orderQuantityIncrement ?? 0}
+                            stock={stock}
+                            value={quantity}
+                            onChange={(value, isValid) => {
+                              handleUpdateProductQty(index, value, isValid);
+                            }}
+                          />
+                        );
+                      })()}
                     </FlexItem>
                     <FlexItem {...itemStyle.default} textAlignLocation={textAlign}>
                       {isMobile && <div>Total: </div>}
