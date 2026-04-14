@@ -211,6 +211,7 @@ export const useMyQuote = ({ setOpenPage, productQuoteEnabled, role }: UseMyQuot
             );
             quoteButton.style.backgroundColor = isProductPurchasable ? color : nonPurchasableColor;
             quoteButton.style.color = customTextColor;
+            quoteButton.setAttribute('role', 'button');
             quoteButton.setAttribute(
               'class',
               `${buttonClass} ${

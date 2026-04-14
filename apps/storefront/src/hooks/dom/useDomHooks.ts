@@ -10,6 +10,7 @@ import useCartToQuote from './useCartToQuote';
 import useHideGoogleCustomerReviews from './useHideGoogleCustomerReviews';
 import useMonitorBrowserBack from './useMonitorBrowserBack';
 import { useMyQuote } from './useMyQuote';
+import { useMyQuoteCategory } from './useMyQuoteCategory';
 import { useOpenPDP } from './useOpenPDP';
 import useRegisteredbctob2b from './useRegisteredbctob2b';
 
@@ -41,6 +42,12 @@ const useDomHooks = ({ setOpenPage, isOpen }: MutationObserverProps) => {
   useRegisteredbctob2b(setOpenPage);
 
   useMyQuote({
+    setOpenPage,
+    productQuoteEnabled,
+    role,
+    customerId,
+  });
+  useMyQuoteCategory({
     setOpenPage,
     productQuoteEnabled,
     role,
