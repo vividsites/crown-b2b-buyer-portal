@@ -448,7 +448,7 @@ function QuoteTable({ total, items, updateSummary }: QuoteTableProps) {
               padding: '12px 0',
             }}
           >
-            {role === CustomerRole.GUEST ? '-' : getDisplayPrice({
+            {(role === CustomerRole.GUEST || Number(basePrice) === Number(0)) ? '-' : getDisplayPrice({
               price: currencyFormat(inTaxPrice),
               productInfo: row,
               showText: b3Lang('quoteDraft.quoteSummary.tbd'),
@@ -516,7 +516,7 @@ function QuoteTable({ total, items, updateSummary }: QuoteTableProps) {
                 padding: '12px 0',
               }}
             >
-              {role === CustomerRole.GUEST ? '-' : getDisplayPrice({
+              {(role === CustomerRole.GUEST || Number(basePrice) === Number(0)) ? '-' : getDisplayPrice({
                 price: currencyFormat(total),
                 productInfo: row,
                 showText: b3Lang('quoteDraft.quoteSummary.tbd'),

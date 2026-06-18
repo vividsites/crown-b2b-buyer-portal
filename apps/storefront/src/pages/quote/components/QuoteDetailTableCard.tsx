@@ -5,6 +5,7 @@ import { useB3Lang } from '@/lib/lang';
 import { useAppSelector } from '@/store';
 import { currencyFormatConvert } from '@/utils/b3CurrencyFormat';
 import { getBCPrice } from '@/utils/b3Product/b3Product';
+import { CustomerRole } from '@/types';
 
 interface QuoteTableCardProps {
   item: any;
@@ -48,6 +49,8 @@ function QuoteDetailTableCard(props: QuoteTableCardProps) {
     offeredPrice,
     productsSearch: { productUrl, variants = [], taxClassId },
   } = quoteTableItem;
+
+  const role = useAppSelector(({ company }) => company.customer.role);
 
   const taxRate = getTaxRate(taxClassId, variants);
   const taxPrice = enteredInclusiveTax
@@ -142,7 +145,7 @@ function QuoteDetailTableCard(props: QuoteTableCardProps) {
             }}
           >
             {b3Lang('quoteDetail.tableCard.price')}
-            {isDiscount && (
+            {isDiscount && role !== CustomerRole.GUEST && (
               <span
                 style={{
                   marginLeft: '5px',
@@ -187,7 +190,7 @@ function QuoteDetailTableCard(props: QuoteTableCardProps) {
             }}
           >
             {b3Lang('quoteDetail.tableCard.total')}
-            {isDiscount && (
+            {isDiscount && role !== CustomerRole.GUEST && (
               <span
                 style={{
                   marginLeft: '5px',
