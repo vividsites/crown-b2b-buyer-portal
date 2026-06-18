@@ -497,7 +497,6 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
       productsSearch: { isPriceHidden },
     } = row;
     if (isPriceHidden) return '';
-    let priceNbr = Number(price);
     return getDisplayPrice({
       price,
       productInfo: row,
