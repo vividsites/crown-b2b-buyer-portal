@@ -79,7 +79,7 @@ function Login(props: PageProps) {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const {
-    state: { isCheckout, logo, registerEnabled },
+    state: { isCheckout, logo/*, registerEnabled*/ },
   } = useContext(GlobalContext);
 
   const {
@@ -278,8 +278,8 @@ function Login(props: PageProps) {
     }, '*');
   };
 
-  const loginAndRegisterContainerWidth = registerEnabled ? '100%' : '50%';
-  const loginContainerWidth = registerEnabled ? '50%' : 'auto';
+  const loginAndRegisterContainerWidth = /*registerEnabled ? */'100%' /*: '50%'*/;
+  const loginContainerWidth = /*registerEnabled ? */ '50%'/* : 'auto'*/;
 
   const tip = flag && tipInfo(flag, loginAccount?.email);
 
@@ -379,19 +379,17 @@ function Login(props: PageProps) {
                         />
                       </Box>
 
-                      {registerEnabled && (
-                        <Box
-                          sx={{
-                            flex: '1',
-                          }}
-                        >
-                          <LoginPanel
-                            handleCreateAccountClick={handleCreateAccountClick}
-                            createAccountButtonText={loginInfo.createAccountButtonText}
-                            widgetBodyText={loginInfo.widgetBodyText}
-                          />
-                        </Box>
-                      )}
+                      <Box
+                        sx={{
+                          flex: '1',
+                        }}
+                      >
+                        <LoginPanel
+                          handleCreateAccountClick={handleCreateAccountClick}
+                          createAccountButtonText={loginInfo.createAccountButtonText}
+                          widgetBodyText={loginInfo.widgetBodyText}
+                        />
+                      </Box>
                     </Box>
                   </Box>
                 </Box>

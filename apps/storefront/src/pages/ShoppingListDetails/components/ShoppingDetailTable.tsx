@@ -497,6 +497,7 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
       productsSearch: { isPriceHidden },
     } = row;
     if (isPriceHidden) return '';
+    let priceNbr = Number(price);
     return getDisplayPrice({
       price,
       productInfo: row,
@@ -687,7 +688,11 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
               padding: '12px 0',
             }}
           >
-            {showPrice(currencyFormat(inTaxPrice), row)}
+            {
+              Number(basePrice) === Number(0)
+                ? "-"
+                : showPrice(currencyFormat(inTaxPrice), row)
+            }
           </Typography>
         );
       },
@@ -765,7 +770,10 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
                 padding: '12px 0',
               }}
             >
-              {showPrice(currencyFormat(totalPrice), row)}
+              {
+                Number(basePrice) === Number(0)
+                  ? "-"
+                  : showPrice(currencyFormat(totalPrice), row)}
             </Typography>
             <Box
               sx={{
