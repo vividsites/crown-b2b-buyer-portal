@@ -983,6 +983,25 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
     return true;
   };
 
+  const validatePrice = (): boolean => {
+    const invalidSkus: string[] = [];
+
+    checkedArr.forEach((item: ProductsProps) => {
+      const { node } = item;
+      const price = Number(node.base_price);
+
+      if (isNaN(price) || price === 0) {
+        invalidSkus.push(`${node.variantSku}`);
+      }
+    });
+
+    if (invalidSkus.length > 0) {
+      snackbar.error(`Products are not available for purchase: ${invalidSkus.join(', ')}`);
+      return false;
+    }
+    return true;
+  };
+
   // Add selected product to cart
   const handleAddProductsToCart = async () => {
     if (checkedArr.length === 0) {
@@ -991,6 +1010,8 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
     }
 
     if (!validateRequirements()) return;
+
+    if(!validatePrice()) return;
 
     setValidateFailureProducts([]);
     setSuccessProductsCount(0);
