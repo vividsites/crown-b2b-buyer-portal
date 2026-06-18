@@ -199,7 +199,9 @@ function ShoppingDetailCard(props: ShoppingDetailCardProps) {
             }}
           >
             {b3Lang('shoppingList.shoppingDetailCard.price', {
-              price: showPrice(currencyFormat(price), shoppingDetail),
+              price: Number(basePrice) === Number(0)
+                  ? "-"
+                  : showPrice(currencyFormat(price), shoppingDetail),
             })}
           </Typography>
 
@@ -276,7 +278,9 @@ function ShoppingDetailCard(props: ShoppingDetailCardProps) {
             }}
           >
             {b3Lang('shoppingList.shoppingDetailCard.total', {
-              total: showPrice(currencyFormat(total), shoppingDetail),
+              total: Number(basePrice) === Number(0)
+                  ? "-"
+                  : showPrice(currencyFormat(total), shoppingDetail),
             })}
           </Typography>
           <Box

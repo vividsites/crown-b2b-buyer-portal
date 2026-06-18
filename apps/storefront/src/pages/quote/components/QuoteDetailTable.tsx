@@ -248,14 +248,14 @@ function QuoteDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>) {
         const isDiscount = Number(basePrice) - Number(offeredPrice) > 0 && displayDiscount;
         return (
           <>
-            {isDiscount && (
+            {isDiscount && role !== CustomerRole.GUEST && (
               <Typography
                 sx={{
                   padding: '12px 0 0 0',
                   textDecoration: 'line-through',
                 }}
               >
-                {role === CustomerRole.GUEST ? '-' : showPrice(
+                {showPrice(
                   currencyFormatConvert(price, {
                     currency,
                     isConversionRate: false,
@@ -272,7 +272,7 @@ function QuoteDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>) {
                 color: isDiscount ? '#2E7D32' : '#212121',
               }}
             >
-              {role === CustomerRole.GUEST ? '-' : showPrice(
+              {showPrice(
                 currencyFormatConvert(discountPrice, {
                   currency,
                   isConversionRate: false,
@@ -334,14 +334,14 @@ function QuoteDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>) {
 
         return (
           <Box>
-            {isDiscount && (
+            {isDiscount && role !== CustomerRole.GUEST && (
               <Typography
                 sx={{
                   padding: '12px 0 0 0',
                   textDecoration: 'line-through',
                 }}
               >
-                {role === CustomerRole.GUEST ? '-' : showPrice(
+                {showPrice(
                   currencyFormatConvert(total, {
                     currency,
                     isConversionRate: false,
@@ -357,7 +357,7 @@ function QuoteDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>) {
                 color: isDiscount ? '#2E7D32' : '#212121',
               }}
             >
-              {role === CustomerRole.GUEST ? '-' : showPrice(
+              {showPrice(
                 currencyFormatConvert(totalWithDiscount, {
                   currency,
                   isConversionRate: false,
