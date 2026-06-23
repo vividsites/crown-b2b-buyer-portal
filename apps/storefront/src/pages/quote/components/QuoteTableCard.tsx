@@ -4,11 +4,12 @@ import { Box, CardContent, styled, TextField, Typography } from '@mui/material';
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
 import { useB3Lang } from '@/lib/lang';
 import { ProductRequirements } from '@/shared/service/vs/api/product';
-import { Product } from '@/types';
+import { CustomerRole, Product } from '@/types';
 import { QuoteItem } from '@/types/quotes';
 import { currencyFormat } from '@/utils/b3CurrencyFormat';
 import { getBCPrice, getDisplayPrice } from '@/utils/b3Product/b3Product';
 import { getProductOptionsFields } from '@/utils/b3Product/shared/config';
+import { useAppSelector } from '@/store';
 
 interface QuoteTableCardProps {
   item: QuoteItem['node'];
@@ -57,6 +58,8 @@ function QuoteTableCard({
       qtyHelperText = b3Lang('quoteDraft.quoteTable.error.quantityIncrement', { increment: qtyIncrement, minimum: qtyMin });
   }
 
+  const role = useAppSelector(({ company }) => company.customer.role);
+
   const price = getBCPrice(Number(basePrice), Number(taxPrice));
 
   const total = price * Number(quantity);
@@ -73,13 +76,13 @@ function QuoteTableCard({
 
   const { productUrl } = productsSearch;
 
-  const singlePrice = getDisplayPrice({
+  const singlePrice = (role === CustomerRole.GUEST || Number(basePrice) === Number(0)) ? '-' : getDisplayPrice({
     price: currencyFormat(price),
     productInfo: item,
     showText: b3Lang('quoteDraft.quoteSummary.tbd'),
   });
 
-  const totalPrice = getDisplayPrice({
+  const totalPrice = (role === CustomerRole.GUEST || Number(basePrice) === Number(0)) ? '-' : getDisplayPrice({
     price: currencyFormat(total),
     productInfo: item,
     showText: b3Lang('quoteDraft.quoteSummary.tbd'),
