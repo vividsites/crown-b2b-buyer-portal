@@ -988,8 +988,10 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
 
     checkedArr.forEach((item: ProductsProps) => {
       const { node } = item;
-      const price = Number(node.base_price);
-
+      let price = Number(node.basePrice);
+      if(isNaN(price)){
+        price = Number(node.base_price);
+      }
       if (isNaN(price) || price === 0) {
         invalidSkus.push(`${node.variantSku}`);
       }
