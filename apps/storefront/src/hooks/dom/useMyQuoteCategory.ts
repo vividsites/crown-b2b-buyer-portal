@@ -42,6 +42,7 @@ import { addProductFromProductCardToQuote, removeElement } from './utils';
 const CATEGORY_QUOTE_BUTTON_CLASS = 'b2b-add-to-quote-category';
 const CATEGORY_NO_PURCHASABLE_QUOTE_BUTTON_CLASS = 'b2b-add-to-no-purchasable-quote-category';
 const STABLE_LISTENER_ATTR = 'data-b2b-quote-stable';
+const HIDE_QUOTE_BUTTON_ATTR = 'data-hide-quote';
 
 const clearCategoryQuoteDom = () => {
   const quoteButtons = document.querySelectorAll(
@@ -257,10 +258,13 @@ export const useMyQuoteCategory = ({
             cacheQuoteDom[key as keyof BtnProperties] ===
             buttonProperties[key as keyof BtnProperties],
         );
-      const shouldRenderButton = isProductPurchasable ? enabled : nonPurchasableEnabled;
 
       const insertPoint = card.querySelector<HTMLElement>(insertSelector);
       const container = insertPoint ?? card;
+      const isHiddenByPlaceholder = insertPoint?.hasAttribute(HIDE_QUOTE_BUTTON_ATTR) ?? false;
+
+      const shouldRenderButton =
+        (isProductPurchasable ? enabled : nonPurchasableEnabled) && !isHiddenByPlaceholder;
 
       const existingButton = container.querySelector<HTMLElement>(
         `.${CATEGORY_QUOTE_BUTTON_CLASS}, .${CATEGORY_NO_PURCHASABLE_QUOTE_BUTTON_CLASS}`,
