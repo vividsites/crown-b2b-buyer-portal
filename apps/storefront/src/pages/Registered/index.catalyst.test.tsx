@@ -26,6 +26,7 @@ vi.hoisted(() => {
       store_hash: 'store-hash',
       platform: 'catalyst',
       environment: 'local',
+      vsEnvironment: 'local',
     },
   };
 });

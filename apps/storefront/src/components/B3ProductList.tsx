@@ -533,7 +533,7 @@ export function B3ProductList<T extends ProductItem>(props: ProductProps<T>) {
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'flex-end',
-                    justifyContent: textAlign === 'right' ? 'flex-end' : 'flex-start',
+                    justifyContent: numericTextAlign === 'right' ? 'flex-end' : 'flex-start',
                   }}
                 >
                   {isMobile && <span>{priceLabel}: </span>}

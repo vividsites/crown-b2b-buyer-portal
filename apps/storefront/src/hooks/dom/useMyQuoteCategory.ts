@@ -31,9 +31,8 @@ import { CustomerRole } from '@/types';
 import { OpenPageState } from '@/types/hooks';
 import { setCartPermissions } from '@/utils/b3CheckPermissions/juniorRolePermissions';
 
-import { useFeatureFlags } from '../useFeatureFlags';
+import { useIsBackorderEnabled } from '../useIsBackorderEnabled';
 import { useGetButtonText } from '../useGetButtonText';
-import { useIsBackorderValidationEnabled } from '../useIsBackorderValidationEnabled';
 
 import useDomVariation from './useDomVariation';
 import { usePurchasableQuoteCards } from './usePurchasableQuoteCards';
@@ -68,8 +67,8 @@ export const useMyQuoteCategory = ({
 }: UseMyQuoteCategoryProps) => {
   const b3Lang = useB3Lang();
   const dispatch = useAppDispatch();
-  const isBackorderValidationEnabled = useIsBackorderValidationEnabled();
-  const featureFlags = useFeatureFlags();
+  const isBackorderValidationEnabled = useIsBackorderEnabled();
+  const featureFlags = useAppSelector(({ global }) => global.featureFlags);
 
   const quoteDraftUserId = useAppSelector(({ quoteInfo }) => quoteInfo.draftQuoteInfo.userId);
   const b2bId = useAppSelector(({ company }) => company.customer.b2bId);

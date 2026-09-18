@@ -17,7 +17,7 @@ import { B3CustomForm } from '@/components/B3CustomForm';
 import B3Dialog from '@/components/B3Dialog';
 import B3Spin from '@/components/spin/B3Spin';
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
-import { useIsBackorderValidationEnabled } from '@/hooks/useIsBackorderValidationEnabled';
+import { useIsBackorderEnabled } from '@/hooks/useIsBackorderEnabled';
 import { useB3Lang } from '@/lib/lang';
 import { searchProducts } from '@/shared/service/b2b';
 import { getProductRequirementsByIds, ProductRequirements } from '@/shared/service/vs/api/product';
@@ -33,8 +33,8 @@ import {
 import { snackbar } from '@/utils/b3Tip';
 
 import { AllOptionProps, ShoppingListProductItem, SimpleObject, Variant } from '../../../types';
+import { Base64 } from '../../../utils/base64';
 import {
-  Base64,
   getOptionRequestData,
   getProductOptionsFields,
 } from '../../../utils/b3Product/shared/config';
@@ -144,7 +144,7 @@ export default function ChooseOptionsDialog(props: ChooseOptionsDialogProps) {
   const [chooseOptionsProduct, setChooseOptionsProduct] = useState<ChooseOptionsProductProps[]>([]);
   const [isRequestLoading, setIsRequestLoading] = useState<boolean>(false);
   const [requirements, setRequirements] = useState<ProductRequirements | null>(null);
-  const isBackorderValidationEnabled = useIsBackorderValidationEnabled();
+  const isBackorderValidationEnabled = useIsBackorderEnabled();
 
   useEffect(() => {
     if (type === 'quote' && product) {

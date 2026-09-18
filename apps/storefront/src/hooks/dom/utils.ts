@@ -6,6 +6,7 @@ import {
 } from '@/pages/quote/shared/getQuoteValidationErrorMessage';
 import { type SetOpenPage } from '@/pages/SetOpenPage';
 import { searchProducts } from '@/shared/service/b2b';
+import { validateProduct } from '@/shared/service/b2b/graphql/product';
 import { GetCart, getCart } from '@/shared/service/bc/graphql/cart';
 import { getAnonymousProductRequirementsByIds, getProductRequirementsByIds } from '@/shared/service/vs/api/product';
 import { store } from '@/store';
@@ -25,6 +26,7 @@ import { serialize } from '@/utils/b3Serialize';
 import { B3LStorage, B3SStorage } from '@/utils/b3Storage';
 import { globalSnackbar } from '@/utils/b3Tip';
 import { getActiveCurrencyInfo } from '@/utils/currencyUtils';
+import { FeatureFlags } from '@/utils/featureFlags';
 import { validateProducts } from '@/utils/validateProducts';
 
 import { getPdpSku } from './getPdpSku';

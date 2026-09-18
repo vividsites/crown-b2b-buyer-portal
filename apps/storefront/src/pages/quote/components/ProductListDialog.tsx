@@ -221,7 +221,6 @@ export default function ProductListDialog(props: ProductListDialogProps) {
               products={productList}
               quantityEditable
               type={type}
-              textAlign={isMobile ? 'left' : 'right'}
               canToProduct
               onProductQuantityChange={onProductQuantityChange}
               requirementsMap={requirementsMap}

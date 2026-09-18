@@ -41,10 +41,6 @@ export default function AddToQuote(props: AddToListProps) {
 
   const b3Lang = useB3Lang();
 
-  const featureFlags = useFeatureFlags();
-  const breakProductSearchesIntoChunks =
-    featureFlags['B2B-4231.chunk_product_searches_in_csv_upload'] ?? false;
-
   // items must have { node: { productId, quantity, variantSku } }
   const validateRequirements = async (items: CustomFieldItems[]): Promise<boolean> => {
     const productIds = [
