@@ -1,0 +1,851 @@
+/**
+ * Unified SF GQL Orders API (B2B + BC).
+ *
+ * Replaces b2b/graphql/orders.ts. Base SF GQL types live in ./base.ts.
+ * B2B extension types mirror rfc/graphql-schema/additionalTypeDefs/byPage/orders.ts.
+ *
+ * @see https://docs.bigcommerce.com/developer/api-reference/graphql/storefront/queries/node#fields.body.Order
+ */
+
+import type { CollectionInfo, DateTimeExtended, Money, PageInfo } from './base';
+import { storefrontGQLRequest } from './client';
+
+export type { CollectionInfo, DateTimeExtended, Money, PageInfo } from './base';
+
+// ===========================================================================
+// Order-specific SF GQL type projections
+// ===========================================================================
+
+export interface OrderStatus {
+  value: string | null;
+  label: string;
+}
+
+/** Covers both OrderBillingAddress and OrderShippingAddress (same interface fields). */
+export interface OrderAddress {
+  firstName: string | null;
+  lastName: string | null;
+  company: string | null;
+  address1: string | null;
+  address2: string | null;
+  city: string | null;
+  stateOrProvince: string | null;
+  postalCode: string;
+  country: string;
+  countryCode: string;
+  phone: string | null;
+  email: string | null;
+}
+
+export interface OrderLineItemProductOption {
+  name: string;
+  value: string;
+  /** Option ID — maps to product_attribute_id. */
+  productAttributeEntityId?: number;
+  /** Option value ID — maps to validated_value. */
+  productAttributeValueEntityId?: number;
+}
+
+/** Projects OrderPhysicalLineItem. */
+export interface OrderLineItem {
+  entityId: number;
+  productEntityId: number;
+  variantEntityId: number | null;
+  sku: string;
+  brand: string | null;
+  name: string;
+  quantity: number;
+  productOptions: OrderLineItemProductOption[];
+  subTotalListPrice: Money;
+  subTotalSalePrice: Money;
+  image: { url: string } | null;
+  baseCatalogProduct: { path: string } | null;
+}
+
+export interface OrderShipmentTracking {
+  number?: string;
+  url?: string;
+}
+
+export interface OrderShipmentLineItem {
+  lineItemId: number;
+  quantity: number;
+}
+
+export interface OrderShipment {
+  entityId: number;
+  shippedAt: DateTimeExtended;
+  shippingMethodName: string;
+  shippingProviderName: string;
+  tracking: OrderShipmentTracking | null;
+  items: OrderShipmentLineItem[];
+}
+
+/** Projects OrderShippingConsignment. */
+export interface ShippingConsignment {
+  entityId: number;
+  shippingAddress: OrderAddress;
+  shippingCost: Money;
+  lineItems: { edges: Array<{ node: OrderLineItem }> };
+  shipments: { edges: Array<{ node: OrderShipment }> };
+}
+
+/** Projects OrderDigitalLineItem within download consignments. */
+export interface OrderDigitalLineItem {
+  entityId: number;
+  productEntityId: number;
+  name: string;
+  quantity: number;
+  productOptions: OrderLineItemProductOption[];
+  subTotalListPrice: Money;
+  subTotalSalePrice: Money;
+}
+
+/** Projects OrderDownloadConsignment — a plain list element, not a connection node. */
+export interface DownloadConsignment {
+  recipientEmail: string;
+  lineItems: { edges: Array<{ node: OrderDigitalLineItem }> };
+}
+
+export interface OrderConsignments {
+  shipping: { edges: Array<{ cursor: string; node: ShippingConsignment }> };
+  /** A list in the schema, unlike `shipping`. */
+  downloads: DownloadConsignment[] | null;
+}
+
+/** Nested inside OrderDiscounts.couponDiscounts. */
+export interface OrderCouponDiscount {
+  couponCode: string;
+  discountedAmount: Money;
+}
+
+/** What Order.discounts returns (OrderDiscounts in SF GQL). */
+export interface OrderDiscounts {
+  couponDiscounts: OrderCouponDiscount[];
+  nonCouponDiscountTotal: Money;
+  totalDiscount: Money | null;
+}
+
+export interface OrderTax {
+  name: string;
+  amount: Money;
+}
+
+// ===========================================================================
+// B2B extension types (from additionalTypeDefs/byPage/orders.ts)
+// ===========================================================================
+
+/** Projection of Company — selects entityId and name. */
+export interface OrderCompany {
+  entityId: number;
+  name: string;
+}
+
+/** Projection of Customer — selects identity fields. */
+export interface OrderPlacedBy {
+  entityId: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+}
+
+export enum OrderHistoryEventType {
+  ORDER_CREATED = 'ORDER_CREATED',
+  ORDER_UPDATED = 'ORDER_UPDATED',
+}
+
+export interface OrderHistoryEvent {
+  id: string;
+  eventType: OrderHistoryEventType;
+  /** Title-case status label for the event, e.g. "Awaiting Fulfillment". */
+  statusLabel: string;
+  source: string | null;
+  createdAt: string;
+}
+
+export interface OrderInvoice {
+  id: string;
+}
+
+export interface OrderPaymentInfo {
+  paymentMethodName: string;
+}
+
+// ===========================================================================
+// Order (base SF GQL fields + B2B extensions)
+// ===========================================================================
+
+export interface Order {
+  entityId: number;
+  orderedAt: DateTimeExtended;
+  updatedAt: DateTimeExtended;
+  status: OrderStatus;
+  billingAddress: OrderAddress;
+
+  // Financial
+  subTotal: Money;
+  discountedSubTotal: Money | null;
+  shippingCostTotal: Money;
+  handlingCostTotal: Money;
+  wrappingCostTotal: Money;
+  taxTotal: Money;
+  totalIncTax: Money;
+  isTaxIncluded: boolean;
+  taxes: OrderTax[];
+  discounts: OrderDiscounts;
+
+  // Content
+  customerMessage: string | null;
+  totalProductQuantity: number;
+  consignments: OrderConsignments | null;
+
+  // Payments (only on OrderWithPayments via site.order detail query)
+  payments?: { edges: Array<{ node: OrderPaymentInfo }> } | null;
+
+  // B2B extensions (null for B2C orders)
+  reference: string | null;
+  poNumber: string | null;
+  company: OrderCompany | null;
+  placedBy: OrderPlacedBy | null;
+  history: OrderHistoryEvent[];
+  invoice: OrderInvoice | null;
+}
+
+// ===========================================================================
+// B2B connection types
+// ===========================================================================
+
+export interface CompanyOrdersEdge {
+  node: Order;
+  cursor: string;
+}
+
+export interface CompanyOrdersConnection {
+  edges: CompanyOrdersEdge[];
+  pageInfo: PageInfo;
+  collectionInfo: CollectionInfo | null;
+}
+
+export interface CompanyCustomerEdge {
+  node: OrderPlacedBy;
+  cursor: string;
+}
+
+export interface CompanyCustomerConnection {
+  edges: CompanyCustomerEdge[];
+  pageInfo: PageInfo;
+}
+
+// ===========================================================================
+// B2B filter & sort types
+// ===========================================================================
+
+export enum OrdersSortInput {
+  ID_A_TO_Z = 'ID_A_TO_Z',
+  ID_Z_TO_A = 'ID_Z_TO_A',
+  REFERENCE_A_TO_Z = 'REFERENCE_A_TO_Z',
+  REFERENCE_Z_TO_A = 'REFERENCE_Z_TO_A',
+  HIGHEST_TOTAL_INC_TAX = 'HIGHEST_TOTAL_INC_TAX',
+  LOWEST_TOTAL_INC_TAX = 'LOWEST_TOTAL_INC_TAX',
+  STATUS_A_TO_Z = 'STATUS_A_TO_Z',
+  STATUS_Z_TO_A = 'STATUS_Z_TO_A',
+  CREATED_AT_NEWEST = 'CREATED_AT_NEWEST',
+  CREATED_AT_OLDEST = 'CREATED_AT_OLDEST',
+  PLACED_BY_A_TO_Z = 'PLACED_BY_A_TO_Z',
+  PLACED_BY_Z_TO_A = 'PLACED_BY_Z_TO_A',
+}
+
+export interface OrderDateRangeFilterInput {
+  from: string;
+  to?: string;
+}
+
+export interface CompanyOrdersFiltersInput {
+  search?: string;
+  dateRange?: OrderDateRangeFilterInput;
+  status?: string[];
+  customerId?: number[];
+  companyIds?: string[];
+}
+
+/**
+ * Filters for customer.orders, matching what the server currently accepts.
+ * companyName and companyIds are permanently absent: the agreed schema gist specified
+ * them, but the deployed server never implemented them and the gist is being amended
+ * to match. search is a genuine, temporary omission — it's deferred to its
+ * own ticket and should be restored here once that ticket ships.
+ */
+export interface OrdersFiltersInput {
+  /** An OrderStatusValue enum member, e.g. AWAITING_FULFILLMENT — not a display label. */
+  status?: string;
+  dateRange?: OrderDateRangeFilterInput;
+}
+
+export interface CustomerWithOrdersFiltersInput {
+  companyIds?: string[];
+}
+
+// ===========================================================================
+// Response wrappers (client-side only)
+// ===========================================================================
+
+export interface GetCompanyOrdersResponse {
+  data?: {
+    customer?: {
+      activeCompany?: {
+        orders?: CompanyOrdersConnection;
+      };
+    };
+  };
+  errors?: Array<{ message: string }>;
+}
+
+export interface GetCustomerOrdersResponse {
+  data?: {
+    customer?: {
+      orders?: {
+        edges: Array<{ node: Order; cursor: string }>;
+        pageInfo: PageInfo;
+      };
+    };
+  };
+  errors?: Array<{ message: string }>;
+}
+
+export interface GetOrderDetailResponse {
+  data?: {
+    site?: {
+      order?: Order;
+    };
+  };
+  errors?: Array<{ message: string }>;
+}
+
+export interface GetCustomersWithOrdersResponse {
+  data?: {
+    customer?: {
+      activeCompany?: {
+        customersWithOrders?: CompanyCustomerConnection;
+      };
+    };
+  };
+  errors?: Array<{ message: string }>;
+}
+
+// ===========================================================================
+// Fragments
+// ===========================================================================
+
+const moneyFields = `currencyCode
+  value
+  formattedV2`;
+
+const orderStatusFields = `status {
+    value
+    label
+  }`;
+
+const orderAddressFields = `firstName
+    lastName
+    company
+    address1
+    address2
+    city
+    stateOrProvince
+    postalCode
+    country
+    countryCode
+    phone
+    email`;
+
+const orderLineItemFields = `entityId
+      productEntityId
+      variantEntityId
+      sku
+      brand
+      name
+      quantity
+      productOptions {
+        name
+        value
+        productAttributeEntityId
+        productAttributeValueEntityId
+      }
+      subTotalListPrice {
+        ${moneyFields}
+      }
+      subTotalSalePrice {
+        ${moneyFields}
+      }
+      image {
+        url(width: 80)
+      }
+      baseCatalogProduct {
+        path
+      }`;
+
+const orderShipmentFields = `entityId
+      shippedAt {
+        utc
+      }
+      shippingMethodName
+      shippingProviderName
+      tracking {
+        ... on OrderShipmentNumberAndUrlTracking {
+          number
+          url
+        }
+        ... on OrderShipmentNumberOnlyTracking {
+          number
+        }
+        ... on OrderShipmentUrlOnlyTracking {
+          url
+        }
+      }
+      items {
+        lineItemId
+        quantity
+      }`;
+
+const orderConsignmentsFields = `consignments {
+    shipping {
+      edges {
+        cursor
+        node {
+          entityId
+          shippingAddress {
+            ${orderAddressFields}
+          }
+          shippingCost {
+            ${moneyFields}
+          }
+          lineItems {
+            edges {
+              node {
+                ${orderLineItemFields}
+              }
+            }
+          }
+          shipments {
+            edges {
+              node {
+                ${orderShipmentFields}
+              }
+            }
+          }
+        }
+      }
+    }
+    downloads {
+      recipientEmail
+      lineItems {
+        edges {
+          node {
+            entityId
+            productEntityId
+            name
+            quantity
+            productOptions {
+              name
+              value
+            }
+            subTotalListPrice {
+              ${moneyFields}
+            }
+            subTotalSalePrice {
+              ${moneyFields}
+            }
+          }
+        }
+      }
+    }
+  }`;
+
+const orderFinancialFields = `subTotal {
+    ${moneyFields}
+  }
+  discountedSubTotal {
+    ${moneyFields}
+  }
+  shippingCostTotal {
+    ${moneyFields}
+  }
+  handlingCostTotal {
+    ${moneyFields}
+  }
+  wrappingCostTotal {
+    ${moneyFields}
+  }
+  taxTotal {
+    ${moneyFields}
+  }
+  totalIncTax {
+    ${moneyFields}
+  }
+  isTaxIncluded
+  taxes {
+    name
+    amount {
+      ${moneyFields}
+    }
+  }
+  discounts {
+    couponDiscounts {
+      couponCode
+      discountedAmount {
+        ${moneyFields}
+      }
+    }
+    nonCouponDiscountTotal {
+      ${moneyFields}
+    }
+    totalDiscount {
+      ${moneyFields}
+    }
+  }`;
+
+const orderB2BFields = `reference
+  poNumber
+  company {
+    entityId
+    name
+  }
+  placedBy {
+    entityId
+    firstName
+    lastName
+    email
+  }
+  history {
+    id
+    eventType
+    statusLabel
+    source
+    createdAt
+  }
+  invoice {
+    id
+  }`;
+
+/** Lightweight fields for order list views. */
+const orderListNodeFields = `entityId
+  orderedAt {
+    utc
+  }
+  ${orderStatusFields}
+  totalIncTax {
+    ${moneyFields}
+  }
+  reference
+  poNumber
+  company {
+    entityId
+    name
+  }
+  placedBy {
+    entityId
+    firstName
+    lastName
+  }`;
+
+// ===========================================================================
+// Queries
+// ===========================================================================
+
+/** Company-scoped order list (B2B). Entry: customer.activeCompany.orders. */
+const GET_COMPANY_ORDERS = `query GetCompanyOrders(
+  $filters: CompanyOrdersFiltersInput
+  $sortBy: OrdersSortInput
+  $first: Int
+  $after: String
+  $last: Int
+  $before: String
+) {
+  customer {
+    activeCompany {
+      orders(
+        filters: $filters
+        sortBy: $sortBy
+        first: $first
+        after: $after
+        last: $last
+        before: $before
+      ) {
+        edges {
+          node {
+            ${orderListNodeFields}
+          }
+          cursor
+        }
+        pageInfo {
+          hasNextPage
+          hasPreviousPage
+          startCursor
+          endCursor
+        }
+        collectionInfo {
+          totalItems
+        }
+      }
+    }
+  }
+}`;
+
+/**
+ * My Orders (customer-scoped, B2B + B2C). Entry: customer.orders.
+ * B2B fields auto-populate for B2B users, null for B2C.
+ *
+ * collectionInfo is deliberately not selected. The field exists on OrdersConnection,
+ * but the customer resolver returns totalItems: null (only the company resolver
+ * populates it), and selecting it raises no error — so a null total would look like
+ * working code.
+ *
+ * There is no total to fetch: the upstream storefront orders endpoint returns cursors
+ * and hasNext/hasPrevious with no count. My Orders keeps totalCount: -1, which
+ * order/table/B3Table renders as a range without a total. This is the intended
+ * contract, not a placeholder — do not "fix" it.
+ */
+const GET_CUSTOMER_ORDERS = `query GetCustomerOrders(
+  $filters: OrdersFiltersInput
+  $first: Int
+  $after: String
+  $last: Int
+  $before: String
+) {
+  customer {
+    orders(
+      filters: $filters
+      first: $first
+      after: $after
+      last: $last
+      before: $before
+    ) {
+      edges {
+        node {
+          ${orderListNodeFields}
+        }
+        cursor
+      }
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+        startCursor
+        endCursor
+      }
+    }
+  }
+}`;
+
+/** Single order detail. Entry: site.order. */
+const GET_ORDER_DETAIL = `query GetOrderDetail($entityId: Int!) {
+  site {
+    order(filter: { entityId: $entityId }) {
+      entityId
+      orderedAt {
+        utc
+      }
+      updatedAt {
+        utc
+      }
+      ${orderStatusFields}
+      billingAddress {
+        ${orderAddressFields}
+      }
+      ${orderFinancialFields}
+      customerMessage
+      totalProductQuantity
+      ${orderConsignmentsFields}
+      ${orderB2BFields}
+      payments {
+        edges {
+          node {
+            paymentMethodName
+          }
+        }
+      }
+    }
+  }
+}`;
+
+/** Company customers who have placed orders. For "Placed By" filter dropdown. */
+const GET_CUSTOMERS_WITH_ORDERS = `query GetCustomersWithOrders(
+  $filters: CustomerWithOrdersFiltersInput
+  $first: Int
+  $after: String
+) {
+  customer {
+    activeCompany {
+      customersWithOrders(
+        filters: $filters
+        first: $first
+        after: $after
+      ) {
+        edges {
+          node {
+            entityId
+            firstName
+            lastName
+            email
+          }
+          cursor
+        }
+        pageInfo {
+          hasNextPage
+          hasPreviousPage
+          startCursor
+          endCursor
+        }
+      }
+    }
+  }
+}`;
+
+// ===========================================================================
+// Service functions
+// ===========================================================================
+
+/** Company Orders — all orders from all company members (B2B only). */
+export async function getCompanyOrders(variables: {
+  filters?: CompanyOrdersFiltersInput;
+  sortBy?: OrdersSortInput;
+  first?: number;
+  after?: string;
+  last?: number;
+  before?: string;
+}): Promise<GetCompanyOrdersResponse> {
+  return storefrontGQLRequest<GetCompanyOrdersResponse>({
+    query: GET_COMPANY_ORDERS,
+    variables,
+  });
+}
+
+/** My Orders — customer-scoped, unified for B2B and B2C. */
+export async function getCustomerOrders(variables: {
+  filters?: OrdersFiltersInput;
+  first?: number;
+  after?: string;
+  last?: number;
+  before?: string;
+}): Promise<GetCustomerOrdersResponse> {
+  return storefrontGQLRequest<GetCustomerOrdersResponse>({
+    query: GET_CUSTOMER_ORDERS,
+    variables,
+  });
+}
+
+/** Single order detail by entityId. */
+export async function getOrderDetail(variables: {
+  entityId: number;
+}): Promise<GetOrderDetailResponse> {
+  return storefrontGQLRequest<GetOrderDetailResponse>({
+    query: GET_ORDER_DETAIL,
+    variables,
+  });
+}
+
+const GET_ORDER_BACKORDER_HISTORY = `query GetOrderBackorderHistory($entityId: Int!) {
+  site {
+    order(filter: { entityId: $entityId }) {
+      entityId
+      backorderShippingExpectationMessage
+      consignments {
+        shipping {
+          edges {
+            node {
+              lineItems {
+                edges {
+                  node {
+                    entityId
+                    backorderedQuantity
+                    backorderMessage
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}`;
+
+// entityId (orderProductId), not sku: The same SKU can appear on more than one line in an order (split shipments etc.).
+export interface OrderBackorderLineItem {
+  entityId: number;
+  quantityBackordered: number;
+  backorderMessage?: string | null;
+}
+
+export interface OrderBackorderHistory {
+  shippingExpectationMessage?: string | null;
+  lineItems: OrderBackorderLineItem[];
+}
+
+interface GetOrderBackorderHistoryResponse {
+  data?: {
+    site?: {
+      order?: {
+        entityId: number;
+        backorderShippingExpectationMessage?: string | null;
+        consignments?: {
+          shipping?: {
+            edges: Array<{
+              node: {
+                lineItems: {
+                  edges: Array<{
+                    node: {
+                      entityId: number;
+                      backorderedQuantity?: number;
+                      backorderMessage?: string | null;
+                    };
+                  }>;
+                };
+              };
+            }>;
+          };
+        };
+      } | null;
+    };
+  };
+}
+
+export async function getOrderBackorderHistory(variables: {
+  entityId: number;
+}): Promise<OrderBackorderHistory | null> {
+  const response = await storefrontGQLRequest<GetOrderBackorderHistoryResponse>({
+    query: GET_ORDER_BACKORDER_HISTORY,
+    variables,
+  });
+
+  const order = response.data?.site?.order;
+  if (!order) {
+    return null;
+  }
+
+  const shippingEdges = order.consignments?.shipping?.edges ?? [];
+  const lineItems = shippingEdges
+    .flatMap((edge) => edge.node.lineItems.edges.map(({ node }) => node))
+    .filter((node) => (node.backorderedQuantity ?? 0) > 0)
+    .map((node) => ({
+      entityId: node.entityId,
+      quantityBackordered: node.backorderedQuantity ?? 0,
+      backorderMessage: node.backorderMessage,
+    }));
+
+  return {
+    shippingExpectationMessage: order.backorderShippingExpectationMessage,
+    lineItems,
+  };
+}
+
+/** Customers who have placed orders within a company. */
+export async function getCustomersWithOrders(variables: {
+  filters?: CustomerWithOrdersFiltersInput;
+  first?: number;
+  after?: string;
+}): Promise<GetCustomersWithOrdersResponse> {
+  return storefrontGQLRequest<GetCustomersWithOrdersResponse>({
+    query: GET_CUSTOMERS_WITH_ORDERS,
+    variables,
+  });
+}

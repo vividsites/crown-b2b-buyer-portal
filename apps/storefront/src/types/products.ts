@@ -59,6 +59,11 @@ export interface ProductItem {
   type?: string;
   product_id?: number;
   downloadFileUrls?: string[];
+  allOptions?: Partial<AllOptionProps>[];
+  /** Pre-formatted unit price (Intl.NumberFormat with order currencyCode). */
+  formattedPrice?: string;
+  /** Pre-formatted line total from SF GQL Money.formattedV2. */
+  formattedTotal?: string;
 }
 
 interface OptionValue {
@@ -84,6 +89,8 @@ export interface Variant {
   bc_calculated_price: BcCalculatedPrice;
   available_to_sell: number;
   unlimited_backorder: boolean;
+  total_on_hand?: number | null;
+  backorder_message?: string | null;
 }
 
 export interface ALlOptionValue {
@@ -175,6 +182,8 @@ export interface Product {
   product_options?: ProductOptionsItem[];
   unlimitedBackorder: boolean;
   availableToSell: number;
+  totalOnHand?: number | null;
+  backorderMessage?: string | null;
   [key: string]: any;
 }
 

@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { Box } from '@mui/material';
@@ -8,6 +8,7 @@ import { B3CustomForm } from '@/components/B3CustomForm';
 import CustomButton from '@/components/button/CustomButton';
 import { b3HexToRgb, getContrastColor } from '@/components/outSideComponents/utils/b3CustomStyles';
 import B3Spin from '@/components/spin/B3Spin';
+import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 import { useMobile } from '@/hooks/useMobile';
 import useStorageState from '@/hooks/useStorageState';
 import { useB3Lang } from '@/lib/lang';
@@ -21,18 +22,24 @@ import {
   updateB2BAccountSettings,
   updateBCAccountSettings,
 } from '@/shared/service/b2b';
+import { getCompanyUserDetails, getCustomerDetails } from '@/shared/service/bc';
 import { isB2BUserSelector, useAppSelector } from '@/store';
 import { CustomerRole, UserTypes } from '@/types';
 import { Fields, ParamProps } from '@/types/accountSetting';
 import { B3SStorage } from '@/utils/b3Storage';
 import { snackbar } from '@/utils/b3Tip';
-import { channelId, platform } from '@/utils/basicConfig';
-
-import { deCodeField, getAccountFormFields } from '../Registered/config';
+import { channelId, isCatalystPlatform } from '@/utils/basicConfig';
+import { deCodeField, getAccountFormFields } from '@/utils/registerUtils';
 
 import { getAccountSettingsFields, getPasswordModifiedFields } from './config';
 import { UpgradeBanner } from './UpgradeBanner';
-import { b2bSubmitDataProcessing, bcSubmitDataProcessing, initB2BInfo, initBcInfo } from './utils';
+import {
+  b2bSubmitDataProcessing,
+  bcSubmitDataProcessing,
+  initB2BInfo,
+  initBcInfo,
+  mapUserToAccountInfo,
+} from './utils';
 
 function useData() {
   const isB2BUser = useAppSelector(isB2BUserSelector);
@@ -46,7 +53,7 @@ function useData() {
   const isDisplayUpgradeBanner =
     CustomerRole.B2C === customer.role &&
     [UserTypes.B2C, UserTypes.MULTIPLE_B2C].includes(customer.userType) &&
-    platform === 'catalyst';
+    isCatalystPlatform();
 
   const validateEmailValue = async (emailValue: string) => {
     if (customer.emailAddress === trim(emailValue)) return true;
@@ -125,6 +132,10 @@ function AccountSetting() {
 
   const b3Lang = useB3Lang();
 
+  const useBcAccountSettings = useFeatureFlag('PROJECT-7920.use_bc_account_settings');
+  const dedupeStorefrontConfigFetchCalls = useFeatureFlag(
+    'B2B-5309.dedupe_storefront_config_fetch_calls',
+  );
   const [isMobile] = useMobile();
 
   const navigate = useNavigate();
@@ -135,21 +146,21 @@ function AccountSetting() {
   const [isLoading, setLoading] = useState<boolean>(false);
   const [accountSettings, setAccountSettings] = useState<any>({});
   const [isVisible, setIsVisible] = useState<boolean>(false);
+  const skipNextInitRef = useRef(false);
 
   useEffect(() => {
     const init = async () => {
+      if (skipNextInitRef.current && dedupeStorefrontConfigFetchCalls) {
+        skipNextInitRef.current = false;
+        return;
+      }
+
+      skipNextInitRef.current = false;
+
+      let didLoadSuccessfully = false;
+
       try {
         setLoading(true);
-
-        const fn = isBCUser ? getBCAccountSettings : getB2BAccountSettings;
-
-        const params = isBCUser
-          ? {}
-          : {
-              companyId,
-            };
-
-        const key = isBCUser ? 'customerAccountSettings' : 'accountSettings';
 
         const accountFormAllFields = await getB2BAccountFormFields(isBCUser ? 1 : 2);
         const accountFormFields = getAccountFormFields(
@@ -157,12 +168,36 @@ function AccountSetting() {
         );
 
         const contactInformation = (accountFormFields?.contactInformation || []).filter(
-          (item: Partial<Fields>) => item.fieldId !== 'field_email_marketing_newsletter',
-        );
+          (item) => item.fieldId !== 'field_email_marketing_newsletter',
+        ) as Partial<Fields>[];
 
-        const { additionalInformation = [] } = accountFormFields;
+        const additionalInformation = (accountFormFields?.additionalInformation ??
+          []) as Partial<Fields>[];
 
-        const { [key]: accountSettings } = await fn(params);
+        let accountSettings;
+        if (useBcAccountSettings) {
+          let userData;
+          if (isBCUser) {
+            const response = await getCustomerDetails();
+            if (response.errors?.length) throw new Error(response.errors[0]?.message);
+            userData = response.data?.customer;
+          } else {
+            const response = await getCompanyUserDetails();
+            if (response.errors?.length) throw new Error(response.errors[0]?.message);
+            userData = response.data?.company?.companyUser;
+          }
+
+          if (!userData) throw new Error('Account settings response did not include a user');
+
+          accountSettings = mapUserToAccountInfo(userData);
+        } else {
+          const fn = isBCUser ? getBCAccountSettings : getB2BAccountSettings;
+          const params = isBCUser ? {} : { companyId };
+          const key = isBCUser ? 'customerAccountSettings' : 'accountSettings';
+
+          const { [key]: legacyAccountSettings } = await fn(params);
+          accountSettings = legacyAccountSettings;
+        }
 
         const fields = isBCUser
           ? initBcInfo(accountSettings, contactInformation, additionalInformation)
@@ -188,20 +223,28 @@ function AccountSetting() {
         setDecryptionFields(contactInformation);
 
         setExtraFields(additionalInformation);
+
+        setIsVisible(true);
+
+        didLoadSuccessfully = true;
+      } catch {
+        snackbar.error(b3Lang('global.error.genericMessage'));
       } finally {
         if (isFinishUpdate) {
           snackbar.success(b3Lang('accountSettings.notification.detailsUpdated'));
           setIsFinishUpdate(false);
+          if (dedupeStorefrontConfigFetchCalls && didLoadSuccessfully) {
+            skipNextInitRef.current = true;
+          }
         }
         setLoading(false);
-        setIsVisible(true);
       }
     };
 
     init();
     // disabling as we only need to run this once and values at starting render are good enough
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFinishUpdate]);
+  }, [isFinishUpdate, useBcAccountSettings]);
 
   const handleGetUserExtraFields = (
     data: CustomFieldItems,

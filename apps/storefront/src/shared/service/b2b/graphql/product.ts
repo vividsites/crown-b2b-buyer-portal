@@ -1,3 +1,4 @@
+import { store } from '@/store';
 import { channelId, storeHash } from '@/utils/basicConfig';
 import { getActiveCurrencyInfo } from '@/utils/currencyUtils';
 import { convertArrayToGraphql } from '@/utils/graphqlDataConvert';
@@ -9,6 +10,15 @@ interface ProductPurchasable {
   isProduct: boolean;
   sku: string;
 }
+
+export type CatalogQuickVariantSku = CustomFieldItems & {
+  variantSku?: string;
+  inventoryTracking?: string;
+  availableToSell?: number;
+  unlimitedBackorder?: boolean;
+  totalOnHand?: number | null;
+  backorderMessage?: string | null;
+};
 
 const getVariantInfoBySkusQuery = (skuList: string[]) => `
 query GetVariantInfoBySkus {
@@ -33,6 +43,11 @@ query GetVariantInfoBySkus {
     purchasingDisabled,
     variantSku,
     imageUrl,
+    inventoryTracking,
+    availableToSell,
+    unlimitedBackorder,
+    totalOnHand,
+    backorderMessage,
   }
 }`;
 
@@ -56,7 +71,57 @@ const getProductPurchasable = ({
   }
 }`;
 
-const getSearchProductsQuery = (data: CustomFieldItems) => `
+const getSearchProductsQuery = (data: CustomFieldItems, useVariablesImplementation: boolean) => {
+  if (useVariablesImplementation) {
+    return `
+  query SearchProducts(
+    $search: String,
+    $productIds: [Int!]!,
+    $currencyCode: String,
+    $companyId: String,
+    $storeHash: String,
+    $channelId: Int,
+    $customerGroupId: Int,
+    ${data?.categoryFilter ? `$categoryFilter: Boolean,` : ''}
+  ) {
+    productsSearch (
+      search: $search,
+      productIds: $productIds,
+      currencyCode: $currencyCode,
+      companyId: $companyId,
+      storeHash: $storeHash,
+      channelId: $channelId,
+      customerGroupId: $customerGroupId,
+      ${data?.categoryFilter ? `categoryFilter: $categoryFilter,` : ''}
+    ){
+      id,
+      name,
+      sku,
+      costPrice,
+      inventoryLevel,
+      inventoryTracking,
+      availability,
+      orderQuantityMinimum,
+      orderQuantityMaximum,
+      variants,
+      currencyCode,
+      imageUrl,
+      modifiers,
+      options,
+      optionsV3,
+      channelId,
+      productUrl,
+      taxClassId,
+      isPriceHidden,
+      availableToSell,
+      unlimitedBackorder,
+      totalOnHand,
+      backorderMessage,
+    }
+  }
+`;
+  }
+  return `
   query SearchProducts {
     productsSearch (
       search: "${data.search || ''}"
@@ -88,13 +153,16 @@ const getSearchProductsQuery = (data: CustomFieldItems) => `
       taxClassId,
       isPriceHidden,
       availableToSell,
-      unlimitedBackorder
+      unlimitedBackorder,
+      totalOnHand,
+      backorderMessage
     }
   }
 `;
+};
 
 const validateProductQuery = `
-  query ValidateProduct ($productId: Int!, $variantId: Int!, $quantity: Int!, $productOptions: [GenericScalar]) {
+  query ValidateProduct ($productId: Int!, $variantId: Int!, $quantity: Int!, $productOptions: [GenericScalar], $target: String) {
     validateProduct(
       productId: $productId
       variantId: $variantId
@@ -102,6 +170,7 @@ const validateProductQuery = `
       productOptions: $productOptions
       storeHash: "${storeHash}"
       channelId: ${channelId}
+      target: $target
     ) {
       responseType
       message
@@ -114,8 +183,8 @@ const validateProductQuery = `
 `;
 
 const validateProductsQuery = `
-  query ValidateProducts ($products: [ValidateProductInputType]!) {
-    validateProducts(products: $products, storeHash: "${storeHash}", channelId: ${channelId}) {
+  query ValidateProducts ($products: [ValidateProductInputType]!, $target: String) {
+    validateProducts(products: $products, storeHash: "${storeHash}", channelId: ${channelId}, target: $target) {
       isValid
       products {
         errorCode
@@ -258,6 +327,10 @@ export interface ProductSearch {
   productUrl: string;
   taxClassId: number;
   isPriceHidden: boolean;
+  availableToSell?: number;
+  unlimitedBackorder?: boolean;
+  totalOnHand?: number | null;
+  backorderMessage?: string | null;
 }
 
 export interface B2BProducts {
@@ -297,6 +370,8 @@ export interface SearchProductsResponse {
         inventory_level: number;
         available_to_sell: number;
         unlimited_backorder: boolean;
+        total_on_hand?: number | null;
+        backorder_message?: string | null;
         bc_calculated_price: {
           as_entered: number;
           tax_inclusive: number;
@@ -335,9 +410,34 @@ export interface SearchProductsResponse {
       isPriceHidden: boolean;
       availableToSell: number;
       unlimitedBackorder: boolean;
+      totalOnHand?: number | null;
+      backorderMessage?: string | null;
     }>;
   };
 }
+
+/**
+ * Validation error codes returned by the product validation API.
+ * Used for typing API responses and for QUOTE_VALIDATION_ERROR_CODES (quote display).
+ */
+const PRODUCT_VALIDATION_ERROR_CODES = {
+  OOS: 'OOS',
+  NON_PURCHASABLE: 'NON_PURCHASABLE',
+  INVALID_FIELDS: 'INVALID_FIELDS',
+  OTHER: 'OTHER',
+} as const;
+
+export type ProductValidationErrorCode =
+  (typeof PRODUCT_VALIDATION_ERROR_CODES)[keyof typeof PRODUCT_VALIDATION_ERROR_CODES];
+
+/**
+ * Quote validation error codes: API codes plus NETWORK_ERROR (client-side).
+ * Re-exported from getQuoteValidationErrorMessage for consumers that need the full set.
+ */
+export const QUOTE_VALIDATION_ERROR_CODES = {
+  ...PRODUCT_VALIDATION_ERROR_CODES,
+  NETWORK_ERROR: 'NETWORK_ERROR',
+} as const;
 
 interface ValidateProductSuccess {
   responseType: 'SUCCESS';
@@ -346,7 +446,7 @@ interface ValidateProductSuccess {
 
 interface ValidateProductError {
   responseType: 'ERROR';
-  errorCode: 'NON_PURCHASABLE' | 'OOS' | 'INVALID_FIELDS' | 'OTHER';
+  errorCode: ProductValidationErrorCode;
   message: string;
   product: {
     availableToSell: number;
@@ -369,7 +469,7 @@ interface ValidateProductsResponse {
     validateProducts: {
       isValid: boolean;
       products: {
-        errorCode: 'NON_PURCHASABLE' | 'OOS' | 'INVALID_FIELDS' | 'OTHER';
+        errorCode: ProductValidationErrorCode;
         responseType: 'SUCCESS' | 'WARNING' | 'ERROR';
         message: string;
         product: {
@@ -387,13 +487,45 @@ interface ValidateProductsResponse {
 export const searchProducts = (data: CustomFieldItems = {}) => {
   const { currency_code: currencyCode } = getActiveCurrencyInfo();
 
+  const { featureFlags } = store.getState().global;
+  // This feature flag has a different name to the variable, however it is intended to be enabled at
+  // the same time. Once the GQL limit increases are permanently rolled out, logic in this repo should
+  // remain in place, as a general improvement to the code.
+  const separateQueryAndVariablesForProductSearches =
+    featureFlags['B2B-3705.increase_graphql_limits_inline_with_platform_api'];
+
+  if (separateQueryAndVariablesForProductSearches) {
+    return B3Request.graphqlB2B({
+      query: getSearchProductsQuery(data, true),
+      variables: {
+        search: data?.search || '',
+        // One of the calls to this API uses productId values that have been returned from the
+        // backend as strings.
+        // This is incorrect for the datatype, but in sending the values back as variables rather
+        // than interpolated into the query, we need to force-cast until proper types are enforced
+        // in the model.
+        productIds: data?.productIds ? data?.productIds.map(Number) : [],
+        currencyCode: data?.currencyCode || currencyCode || '',
+        companyId: `${data?.companyId || ''}`,
+        storeHash,
+        channelId,
+        customerGroupId: data?.customerGroupId || 0,
+        ...(data?.categoryFilter ? { categoryFilter: data?.categoryFilter } : {}),
+      },
+    });
+  }
   return B3Request.graphqlB2B({
-    query: getSearchProductsQuery({
-      ...data,
-      currencyCode: data?.currencyCode || currencyCode,
-    }),
+    query: getSearchProductsQuery(
+      {
+        ...data,
+        currencyCode: data?.currencyCode || currencyCode,
+      },
+      false,
+    ),
   });
 };
+
+export type ValidationTarget = 'QUOTE' | 'CART';
 
 interface ValidateProductVariables {
   productId: number;
@@ -403,9 +535,11 @@ interface ValidateProductVariables {
     optionId: number;
     optionValue: string;
   }[];
+  target?: ValidationTarget;
 }
 interface ValidateProductsVariables {
-  products: ValidateProductVariables[];
+  products: Omit<ValidateProductVariables, 'target'>[];
+  target?: ValidationTarget;
 }
 
 export const validateProduct = (data: ValidateProductVariables) => {

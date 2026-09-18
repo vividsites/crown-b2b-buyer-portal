@@ -15,9 +15,14 @@ import isEqual from 'lodash-es/isEqual';
 
 import { B3CustomForm } from '@/components/B3CustomForm';
 import B3Dialog from '@/components/B3Dialog';
+import BackorderMessage from '@/components/BackorderMessage';
+import PicklistBackorderMessages from '@/components/PicklistBackorderMessages';
 import B3Spin from '@/components/spin/B3Spin';
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
-import { useIsBackorderValidationEnabled } from '@/hooks/useIsBackorderValidationEnabled';
+import { useBackorderStorefrontMessaging } from '@/hooks/useBackorderStorefrontMessaging';
+import { useCatalogChooseOptionsBackorderDisplay } from '@/hooks/useCatalogChooseOptionsBackorderDisplay';
+import { useCatalogInventoryBySku } from '@/hooks/useCatalogInventoryBySku';
+import { useIsBackorderEnabled } from '@/hooks/useIsBackorderEnabled';
 import { useB3Lang } from '@/lib/lang';
 import { searchProducts } from '@/shared/service/b2b';
 import { useAppSelector } from '@/store';
@@ -30,10 +35,16 @@ import {
   getVariantInfoDisplayPrice,
 } from '@/utils/b3Product/b3Product';
 import { snackbar } from '@/utils/b3Tip';
+import { Base64 } from '@/utils/base64';
+import {
+  catalogListHasPicklistBackorderedItemsForDisplay,
+  getCatalogInventorySku,
+  getProductDetailsForPicklistSelections,
+} from '@/utils/catalogBackorderDisplay';
+import { getPicklistOptionSelectionsFromForm } from '@/utils/getPicklistOptionSelectionsFromForm';
 
 import { AllOptionProps, ShoppingListProductItem, SimpleObject, Variant } from '../../../types';
 import {
-  Base64,
   getOptionRequestData,
   getProductOptionsFields,
 } from '../../../utils/b3Product/shared/config';
@@ -142,7 +153,34 @@ export default function ChooseOptionsDialog(props: ChooseOptionsDialogProps) {
   const [newPrice, setNewPrice] = useState<number>(0);
   const [chooseOptionsProduct, setChooseOptionsProduct] = useState<ChooseOptionsProductProps[]>([]);
   const [isRequestLoading, setIsRequestLoading] = useState<boolean>(false);
-  const isBackorderValidationEnabled = useIsBackorderValidationEnabled();
+  const isBackorderEnabled = useIsBackorderEnabled();
+  const { isBackorderMessagingContextEnabled, hasAnyBackorderDisplay } =
+    useBackorderStorefrontMessaging();
+  const backorderUiEnabled = isBackorderMessagingContextEnabled && hasAnyBackorderDisplay;
+  const showQuoteAtsHelper = type === 'quote' && backorderUiEnabled && !isEnableProduct;
+  const quoteInventorySku = getCatalogInventorySku(product, variantSku);
+
+  const inventoryBySku = useCatalogInventoryBySku({
+    isActive: isOpen && showQuoteAtsHelper,
+    enabled: backorderUiEnabled,
+    skuDependencyKey: showQuoteAtsHelper ? quoteInventorySku : '',
+  });
+
+  const formatQuoteOnlyAvailable = useCallback(
+    (count: number) => b3Lang('orderDetail.reorder.onlyAvailable', { count }),
+    [b3Lang],
+  );
+
+  const { qtyHelperText, backorderFields, exceedsAvailableToSell } =
+    useCatalogChooseOptionsBackorderDisplay({
+      product,
+      variantInfo,
+      quantity,
+      showAvailableToSellHelper: showQuoteAtsHelper,
+      formatOnlyAvailable: showQuoteAtsHelper ? formatQuoteOnlyAvailable : undefined,
+      inventoryBySku: showQuoteAtsHelper ? inventoryBySku : undefined,
+      inventorySku: quoteInventorySku,
+    });
 
   useEffect(() => {
     if (type === 'quote' && product) {
@@ -152,7 +190,7 @@ export default function ChooseOptionsDialog(props: ChooseOptionsDialogProps) {
         const isPrice = !!getVariantInfoDisplayPrice(
           newProduct.base_price,
           newProduct,
-          isBackorderValidationEnabled,
+          isBackorderEnabled,
           {
             sku: variantSku,
           },
@@ -164,7 +202,7 @@ export default function ChooseOptionsDialog(props: ChooseOptionsDialogProps) {
         const isPrice = !!getProductInfoDisplayPrice(
           newProduct.base_price,
           newProduct,
-          isBackorderValidationEnabled,
+          isBackorderEnabled,
         );
         if (!isPrice) {
           setShowPrice(false);
@@ -173,7 +211,7 @@ export default function ChooseOptionsDialog(props: ChooseOptionsDialogProps) {
     } else if ((type === 'shoppingList' || type === 'quickOrder') && product) {
       setShowPrice(!product?.isPriceHidden);
     }
-  }, [variantSku, quantity, product, type, isBackorderValidationEnabled]);
+  }, [variantSku, quantity, product, type, isBackorderEnabled]);
 
   const setChooseOptionsForm = async (product: ShoppingListProductItem) => {
     try {
@@ -412,6 +450,19 @@ export default function ChooseOptionsDialog(props: ChooseOptionsDialogProps) {
     [formFields],
   );
 
+  const picklistSelections =
+    backorderUiEnabled && product?.modifiers?.length
+      ? getProductDetailsForPicklistSelections({
+          optionSelections: getPicklistOptionSelectionsFromForm(formFields, formValues),
+          productsSearch: { modifiers: product.modifiers },
+        })
+      : [];
+
+  const hasPicklistBackorderToDisplay = catalogListHasPicklistBackorderedItemsForDisplay(
+    [{ qty: Number(quantity) || 0, selections: picklistSelections }],
+    additionalProducts,
+  );
+
   useEffect(() => {
     if (cache?.current && isEqual(cache?.current, formValues)) {
       return;
@@ -497,6 +548,10 @@ export default function ChooseOptionsDialog(props: ChooseOptionsDialogProps) {
   }, [chooseOptionsProduct]);
 
   const handleConfirmClicked = () => {
+    if (exceedsAvailableToSell) {
+      return;
+    }
+
     handleSubmit((value) => {
       const optionList = getOptionList(value);
 
@@ -540,6 +595,7 @@ export default function ChooseOptionsDialog(props: ChooseOptionsDialogProps) {
       handRightClick={handleConfirmClicked}
       title={b3Lang('shoppingList.chooseOptionsDialog.chooseOptions')}
       loading={isLoading || isRequestLoading}
+      disabledSaveBtn={exceedsAvailableToSell}
     >
       <B3Spin isSpinning={isLoading}>
         {product && (
@@ -553,10 +609,16 @@ export default function ChooseOptionsDialog(props: ChooseOptionsDialogProps) {
               <Box
                 sx={{
                   display: 'flex',
+                  minWidth: 0,
                 }}
               >
                 <ProductImage src={currentImage || product.imageUrl || PRODUCT_DEFAULT_IMAGE} />
-                <Flex>
+                <Flex
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                  }}
+                >
                   <FlexItem padding="0">
                     <Box
                       sx={{
@@ -584,22 +646,73 @@ export default function ChooseOptionsDialog(props: ChooseOptionsDialogProps) {
                       : currencyFormat(newPrice * Number(quantity) || getProductPrice(product))}
                   </FlexItem>
 
-                  <FlexItem>
-                    <StyleTextField
-                      type="number"
-                      variant="filled"
-                      label={b3Lang('shoppingList.chooseOptionsDialog.quantity')}
-                      value={quantity}
-                      onChange={handleProductQuantityChange}
-                      onKeyDown={handleNumberInputKeyDown}
-                      onBlur={handleNumberInputBlur}
-                      size="small"
+                  <Box
+                    sx={{
+                      flexGrow: 0,
+                      flexShrink: 0,
+                      minWidth: 0,
+                      overflow: 'visible',
+                      padding: '0 0 0 16px',
+                    }}
+                  >
+                    <Box
                       sx={{
-                        width: '60%',
-                        maxWidth: '100px',
+                        display: 'grid',
+                        gridTemplateColumns: '100px',
+                        justifyItems: 'start',
+                        rowGap: 0.5,
+                        overflow: 'visible',
                       }}
-                    />
-                  </FlexItem>
+                    >
+                      <StyleTextField
+                        type="number"
+                        variant="filled"
+                        label={b3Lang('shoppingList.chooseOptionsDialog.quantity')}
+                        value={quantity}
+                        onChange={handleProductQuantityChange}
+                        onKeyDown={handleNumberInputKeyDown}
+                        onBlur={handleNumberInputBlur}
+                        size="small"
+                        fullWidth
+                        error={Boolean(qtyHelperText)}
+                      />
+                      {(qtyHelperText || backorderFields || hasPicklistBackorderToDisplay) && (
+                        <Box
+                          sx={{
+                            width: 'max-content',
+                            maxWidth: 'none',
+                            overflow: 'visible',
+                          }}
+                        >
+                          {qtyHelperText && (
+                            <Typography
+                              variant="caption"
+                              color="error"
+                              component="p"
+                              sx={{ m: 0, whiteSpace: 'nowrap' }}
+                            >
+                              {qtyHelperText}
+                            </Typography>
+                          )}
+                          {backorderFields && (
+                            <BackorderMessage
+                              totalOnHand={backorderFields.totalOnHand}
+                              quantityBackordered={backorderFields.quantityBackordered}
+                              backorderMessage={backorderFields.backorderMessage}
+                              visible
+                            />
+                          )}
+                          <PicklistBackorderMessages
+                            selections={picklistSelections}
+                            picklistProductsById={additionalProducts}
+                            qty={Number(quantity) || 0}
+                            visible
+                            backorderUiEnabled={backorderUiEnabled}
+                          />
+                        </Box>
+                      )}
+                    </Box>
+                  </Box>
                 </Flex>
               </Box>
 

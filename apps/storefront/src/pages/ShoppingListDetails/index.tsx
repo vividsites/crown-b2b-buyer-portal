@@ -5,7 +5,7 @@ import { v1 as uuid } from 'uuid';
 
 import B3Spin from '@/components/spin/B3Spin';
 import { CART_URL, CHECKOUT_URL, PRODUCT_DEFAULT_IMAGE } from '@/constants';
-import { useIsBackorderValidationEnabled } from '@/hooks/useIsBackorderValidationEnabled';
+import { useIsBackorderEnabled } from '@/hooks/useIsBackorderEnabled';
 import { useMobile } from '@/hooks/useMobile';
 import { useProductRequirements } from '@/hooks/useProductRequirements';
 import { useB3Lang } from '@/lib/lang';
@@ -35,7 +35,6 @@ import b2bLogger from '@/utils/b3Logger';
 import {
   addQuoteDraftProducts,
   calculateProductListPrice,
-  getBCPrice,
   validProductQty,
 } from '@/utils/b3Product/b3Product';
 import {
@@ -47,6 +46,11 @@ import {
   SearchProps,
   ShoppingListInfoProps,
 } from '@/utils/b3Product/shared/config';
+import {
+  calculateSubTotal,
+  mapToProductsFailedArray,
+  verifyInventory,
+} from '@/utils/b3ShoppingList/b3ShoppingList';
 import { snackbar } from '@/utils/b3Tip';
 import b3TriggerCartNumber from '@/utils/b3TriggerCartNumber';
 import { channelId } from '@/utils/basicConfig';
@@ -62,6 +66,7 @@ import {
 } from '@/utils/validateProducts';
 
 import { type PageProps } from '../PageProps';
+import { getQuoteValidationErrorMessage } from '../quote/shared/getQuoteValidationErrorMessage';
 
 import AddToShoppingList from './components/AddToShoppingList';
 import ReAddToCart from './components/ReAddToCart';
@@ -89,95 +94,6 @@ interface UpdateShoppingListParamsProps {
   status?: number;
   channelId?: number;
 }
-
-const mapToProductsFailedArray = (items: ProductsProps[]) => {
-  return items.map((item: ProductsProps) => {
-    return {
-      ...item,
-      isStock: item.node.productsSearch.inventoryTracking === 'none' ? '0' : '1',
-      minQuantity: item.node.productsSearch.orderQuantityMinimum,
-      maxQuantity: item.node.productsSearch.orderQuantityMaximum,
-      stock: item.node.productsSearch.unlimitedBackorder
-        ? Infinity
-        : item.node.productsSearch.availableToSell,
-    };
-  });
-};
-
-const calculateSubTotal = (checkedArr: CustomFieldItems) => {
-  if (checkedArr.length > 0) {
-    let total = 0.0;
-
-    checkedArr.forEach((item: ListItemProps) => {
-      const {
-        node: { quantity, basePrice, taxPrice },
-      } = item;
-
-      const price = getBCPrice(Number(basePrice), Number(taxPrice));
-
-      total += price * Number(quantity);
-    });
-
-    return (1000 * total) / 1000;
-  }
-
-  return 0.0;
-};
-
-const verifyInventory = (checkedArr: ProductsProps[], inventoryInfos: ProductsProps[]) => {
-  const validateFailureArr: ProductsProps[] = [];
-  const validateSuccessArr: ProductsProps[] = [];
-
-  checkedArr.forEach((item: ProductsProps) => {
-    const { node } = item;
-
-    const inventoryInfo: CustomFieldItems =
-      inventoryInfos.find((option: CustomFieldItems) => option.variantSku === node.variantSku) ||
-      {};
-
-    if (inventoryInfo) {
-      let isPassVerify = true;
-      if (
-        inventoryInfo.isStock === '1' &&
-        (node?.quantity ? Number(node.quantity) : 0) > inventoryInfo.stock
-      )
-        isPassVerify = false;
-
-      if (
-        inventoryInfo.minQuantity !== 0 &&
-        (node?.quantity ? Number(node.quantity) : 0) < inventoryInfo.minQuantity
-      )
-        isPassVerify = false;
-
-      if (
-        inventoryInfo.maxQuantity !== 0 &&
-        (node?.quantity ? Number(node.quantity) : 0) > inventoryInfo.maxQuantity
-      )
-        isPassVerify = false;
-
-      if (isPassVerify) {
-        validateSuccessArr.push({
-          node,
-        });
-      } else {
-        validateFailureArr.push({
-          node: {
-            ...node,
-          },
-          stock: inventoryInfo.stock,
-          isStock: inventoryInfo.isStock,
-          maxQuantity: inventoryInfo.maxQuantity,
-          minQuantity: inventoryInfo.minQuantity,
-        });
-      }
-    }
-  });
-
-  return {
-    validateFailureArr,
-    validateSuccessArr,
-  };
-};
 
 interface Option {
   option_id: string | number;
@@ -286,6 +202,7 @@ const partialAddToCart = async (checkedArr: ProductsProps[]) => {
         productOptions: getOptionsList(JSON.parse(item.node.optionList || '[]')),
         item,
       })),
+      'CART',
     );
 
     if (success.length > 0) {
@@ -324,11 +241,12 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
 
   const tableRef = useRef<TableRefProps | null>(null);
 
+  const isBackorderEnabled = useIsBackorderEnabled();
+
   const [checkedArr, setCheckedArr] = useState<ProductsProps[]>(() => {
     const quantities = getShoppingListItemQuantities(id);
     return quantities.map((q: ProductsProps) => ({node: q.node}));
   });
-  const backendValidationEnabled = useIsBackorderValidationEnabled();
   const { requirementsMap, fetchRequirements } = useProductRequirements();
   const [shoppingListInfo, setShoppingListInfo] = useState<null | ShoppingListInfoProps>(null);
   const [customerInfo, setCustomerInfo] = useState<null | CustomerInfoProps>(null);
@@ -675,7 +593,14 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
       const errors = await partialAddToCart(products);
 
       setSuccessProductsCount(products.length - errors.length);
-      setValidateFailureProducts(mapToProductsFailedArray(errors.map((p) => p.product.item)));
+      setValidateFailureProducts(
+        mapToProductsFailedArray(
+          errors.map((p) => ({
+            product: p.product.item,
+            availableToSell: p.status === 'error' ? p.error.availableToSell : undefined,
+          })),
+        ),
+      );
 
       if (!errors.length) {
         shouldRedirectToCheckoutAfterRetry();
@@ -690,13 +615,19 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
   };
 
   const addToQuote = async (products: CustomFieldItems[]) => {
-    if (backendValidationEnabled) {
+    if (isBackorderEnabled) {
       const validatedProducts = await validateProducts(products);
       const { success, warning, error } =
         convertStockAndThresholdValidationErrorToWarning(validatedProducts);
 
       error.forEach((err) => {
-        snackbar.error(err.error.message);
+        snackbar.error(
+          getQuoteValidationErrorMessage({
+            b3Lang,
+            errorCode: err.error.errorCode,
+            productName: err.product.node?.productName || '',
+          }),
+        );
       });
 
       const validProducts = [...success, ...warning].map((product) => product.product);
@@ -858,7 +789,7 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
     }
   };
 
-  const retryAddToCart = backendValidationEnabled ? retryAddToCartBackend : retryAddToCartFrontend;
+  const retryAddToCart = isBackorderEnabled ? retryAddToCartBackend : retryAddToCartFrontend;
 
   const shouldRedirectToCheckoutAfterAddToCart = () => {
     if (
@@ -938,7 +869,14 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
         const errors = await partialAddToCart(checkedArr);
 
         setSuccessProductsCount(checkedArr.length - errors.length);
-        setValidateFailureProducts(mapToProductsFailedArray(errors.map((p) => p.product.item)));
+        setValidateFailureProducts(
+          mapToProductsFailedArray(
+            errors.map((p) => ({
+              product: p.product.item,
+              availableToSell: p.status === 'error' ? p.error.availableToSell : undefined,
+            })),
+          ),
+        );
 
         if (!errors.length) {
           handleResetQuantities();
@@ -949,7 +887,9 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
       }
     } catch (e: unknown) {
       if (e instanceof Error) {
-        setValidateFailureProducts(mapToProductsFailedArray(checkedArr));
+        setValidateFailureProducts(
+          mapToProductsFailedArray(checkedArr.map((product) => ({ product }))),
+        );
         snackbar.error(e.message);
         // eslint-disable-next-line no-console
         console.error(e);
@@ -957,7 +897,7 @@ function ShoppingListDetails({ setOpenPage }: PageProps) {
     }
   };
 
-  const addToCart = backendValidationEnabled ? handleAddToCartBackend : handleAddToCartOnFrontend;
+  const addToCart = isBackorderEnabled ? handleAddToCartBackend : handleAddToCartOnFrontend;
 
   const validateRequirements = (): boolean => {
     const invalidSkus: string[] = [];

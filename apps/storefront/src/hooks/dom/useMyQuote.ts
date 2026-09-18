@@ -8,6 +8,7 @@ import {
   splitCustomCssValue,
 } from '@/components/outSideComponents/utils/b3CustomStyles';
 import { ADD_TO_QUOTE_DEFAULT_VALUE, TRANSLATION_ADD_TO_QUOTE_VARIABLE } from '@/constants';
+import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 import config from '@/lib/config';
 import { useB3Lang } from '@/lib/lang';
 import { CustomStyleContext } from '@/shared/customStyleButton';
@@ -23,9 +24,8 @@ import { CustomerRole } from '@/types';
 import { OpenPageState } from '@/types/hooks';
 import { setCartPermissions } from '@/utils/b3CheckPermissions/juniorRolePermissions';
 
-import { useFeatureFlags } from '../useFeatureFlags';
 import { useGetButtonText } from '../useGetButtonText';
-import { useIsBackorderValidationEnabled } from '../useIsBackorderValidationEnabled';
+import { useIsBackorderEnabled } from '../useIsBackorderEnabled';
 
 import useDomVariation from './useDomVariation';
 import usePurchasableQuote from './usePurchasableQuote';
@@ -57,8 +57,10 @@ interface UseMyQuoteProps {
 export const useMyQuote = ({ setOpenPage, productQuoteEnabled, role }: UseMyQuoteProps) => {
   const b3Lang = useB3Lang();
   const dispatch = useAppDispatch();
-  const isBackorderValidationEnabled = useIsBackorderValidationEnabled();
-  const featureFlags = useFeatureFlags();
+  const isBackorderEnabled = useIsBackorderEnabled();
+  const isSkuFromPdpWithTextContentEnabled = useFeatureFlag(
+    'B2B-3474.get_sku_from_pdp_with_text_content',
+  );
 
   const quoteDraftUserId = useAppSelector(({ quoteInfo }) => quoteInfo.draftQuoteInfo.userId);
   const b2bId = useAppSelector(({ company }) => company.customer.b2bId);
@@ -89,8 +91,8 @@ export const useMyQuote = ({ setOpenPage, productQuoteEnabled, role }: UseMyQuot
     setOpenPage,
     isEnableProduct,
     b3Lang,
-    isBackorderValidationEnabled,
-    featureFlags,
+    isBackorderEnabled,
+    isSkuFromPdpWithTextContentEnabled,
   );
 
   const quoteCallBack = useCallback(
@@ -112,7 +114,10 @@ export const useMyQuote = ({ setOpenPage, productQuoteEnabled, role }: UseMyQuot
   }, [role]);
 
   const [openQuickView] = useDomVariation(config['dom.setToQuote'], setCartPermissionsCallback);
-  const [isProductPurchasable] = usePurchasableQuote(openQuickView);
+  const [isProductPurchasable] = usePurchasableQuote(
+    openQuickView,
+    isSkuFromPdpWithTextContentEnabled,
+  );
 
   const cache = useRef<BtnProperties | null>(null);
   const {

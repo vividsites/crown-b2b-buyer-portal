@@ -1,7 +1,7 @@
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
-import { Box, ImageListItem, Typography } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 
 import { B3Card } from '@/components/B3Card';
 import { B3CustomForm } from '@/components/B3CustomForm';
@@ -15,9 +15,12 @@ import { GlobalContext } from '@/shared/global';
 import { getStorefrontToken, requestResetPassword } from '@/shared/service/b2b/graphql/recaptcha';
 import b2bLogger from '@/utils/b3Logger';
 
-import { getForgotPasswordFields, sendForgotPasswordEmailFor } from '../Login/config';
-import { B3ResetPassWordButton, LoginImage } from '../Login/styled';
+import { getForgotPasswordFields } from '../Login/helper';
+import LoginImage from '../Login/LoginImage';
+import { B3ResetPassWordButton } from '../Login/styled';
 import { type PageProps } from '../PageProps';
+
+import { sendForgotPasswordEmailFor } from './sendForgotPasswordEmailFor';
 
 interface ForgotPasswordProps extends PageProps {
   logo?: string;
@@ -37,6 +40,7 @@ export function ForgotPassword({
 }: ForgotPasswordProps) {
   const [isMobile] = useMobile();
   const [isLoading, setLoading] = useState<boolean>(false);
+  const isSubmittingRef = useRef(false);
   const b3Lang = useB3Lang();
   const forgotPasswordFields = getForgotPasswordFields(b3Lang);
   const [isCaptchaMissing, setIsCaptchaMissing] = useState(false);
@@ -64,13 +68,15 @@ export function ForgotPassword({
       return;
     }
 
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    setLoading(true);
+
     try {
-      setLoading(true);
       if (isEnabledOnStorefront && captchaKey) {
         try {
           await requestResetPassword(captchaKey, email);
           navigate('/login?loginFlag=receivePassword');
-          setLoading(false);
         } catch (e) {
           b2bLogger.error(e);
         }
@@ -78,11 +84,13 @@ export function ForgotPassword({
 
       if (!isEnabledOnStorefront) {
         await sendForgotPasswordEmailFor(email);
-        setLoading(false);
         navigate('/login?loginFlag=receivePassword');
       }
     } catch (e) {
       b2bLogger.error(e);
+    } finally {
+      isSubmittingRef.current = false;
+      setLoading(false);
     }
   });
 
@@ -101,18 +109,14 @@ export function ForgotPassword({
       >
         <Box sx={{ mt: '20px' }}>
           {logo && (
-            <LoginImage>
-              <ImageListItem
-                sx={{
-                  maxWidth: isMobile ? '175px' : '250px',
-                }}
-                onClick={() => {
-                  window.location.assign('/');
-                }}
-              >
-                <img src={logo} alt={b3Lang('global.tips.registerLogo')} loading="lazy" />
-              </ImageListItem>
-            </LoginImage>
+            <LoginImage
+              alt={b3Lang('global.tips.registerLogo')}
+              src={logo}
+              maxWidth={isMobile ? '175px' : '250px'}
+              onClick={() => {
+                window.location.assign('/');
+              }}
+            />
           )}
         </Box>
         <Box
@@ -179,6 +183,7 @@ export function ForgotPassword({
                 size="medium"
                 onClick={handleLoginClick}
                 variant="contained"
+                disabled={isLoading}
                 sx={{ width: 'auto' }}
               >
                 {b3Lang('forgotPassword.resetPasswordBtn')}

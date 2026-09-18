@@ -1,6 +1,7 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 
 import getTranslation from '@/shared/service/b2b/api/translation';
+import { getMultiLanguageEnabledCache } from '@/utils/multiLanguageFlagCache';
 
 import type { AppDispatch, RootState } from '.';
 
@@ -17,6 +18,7 @@ interface GetGlobalTranslationsParams {
 interface GetGlobalTranslationResponse {
   globalTranslations: Record<string, string>;
   newVersion: number;
+  multiLanguageEnabled: boolean;
 }
 
 interface GetPageTranslationsParams {
@@ -27,10 +29,26 @@ interface GetPageTranslationsParams {
 interface GetPageTranslationResponse {
   pageTranslations: Record<string, string>;
   page: string;
+  fetchedDependencyPages: string[];
+  multiLanguageEnabled: boolean;
 }
+
+// Feature flags are populated asynchronously by setStorefrontConfig, after
+// B3StoreContainer has already dispatched getGlobalTranslations, so fall back
+// to the value cached by the previous page load while they are still missing.
+const isMultiLanguageEnabled = (state: RootState) =>
+  state.global.featureFlags['LOCAL-3191.B2B_multi_language'] ?? getMultiLanguageEnabledCache();
 
 const REPEATED_PAGES: Partial<Record<string, string>> = {
   'company-orders': 'orders',
+};
+
+/**
+ * Pages that render shared components whose translation keys belong to another page.
+ * When a page is visited, translations for its dependencies are also fetched.
+ */
+const TRANSLATION_DEPENDENCIES: Partial<Record<string, string[]>> = {
+  quoteDetail: ['quoteDraft'],
 };
 
 export const getGlobalTranslations = createAppAsyncThunk<
@@ -38,14 +56,18 @@ export const getGlobalTranslations = createAppAsyncThunk<
   GetGlobalTranslationsParams
 >(
   'lang/getGlobalTranslations',
-  async ({ channelId, newVersion }, { rejectWithValue }) => {
+  async ({ channelId, newVersion }, { rejectWithValue, getState }) => {
     const { message } = await getTranslation({ channelId, page: 'global' });
 
     if (typeof message === 'string') {
       return rejectWithValue(message);
     }
 
-    return { globalTranslations: message, newVersion };
+    return {
+      globalTranslations: message,
+      newVersion,
+      multiLanguageEnabled: isMultiLanguageEnabled(getState()),
+    };
   },
   {
     condition: ({ newVersion }, { getState }) => {
@@ -65,15 +87,43 @@ export const getPageTranslations = createAppAsyncThunk<
   GetPageTranslationsParams
 >(
   'lang/getPageTranslations',
-  async ({ channelId, page: pageKey }, { rejectWithValue }) => {
+  async ({ channelId, page: pageKey }, { rejectWithValue, getState }) => {
     const page = REPEATED_PAGES[pageKey] ?? pageKey;
-    const { message } = await getTranslation({ channelId, page });
+    const { fetchedPages } = getState().lang;
+    const dependencyPages = (TRANSLATION_DEPENDENCIES[page] ?? []).filter(
+      (dep) => !fetchedPages.includes(dep),
+    );
 
-    if (typeof message === 'string') {
-      return rejectWithValue(message);
+    const primaryResult = await getTranslation({ channelId, page });
+
+    if (typeof primaryResult.message === 'string') {
+      return rejectWithValue(primaryResult.message);
     }
 
-    return { pageTranslations: message, page };
+    const dependencyResults = await Promise.allSettled(
+      dependencyPages.map((p) => getTranslation({ channelId, page: p })),
+    );
+
+    const successfulDeps = dependencyResults
+      .map((r, i) =>
+        r.status === 'fulfilled' && typeof r.value.message !== 'string'
+          ? { page: dependencyPages[i], translations: r.value.message as Record<string, string> }
+          : null,
+      )
+      .filter(Boolean) as { page: string; translations: Record<string, string> }[];
+
+    const pageTranslations = Object.assign(
+      {},
+      primaryResult.message as Record<string, string>,
+      ...successfulDeps.map((d) => d.translations),
+    );
+
+    return {
+      pageTranslations,
+      page,
+      fetchedDependencyPages: successfulDeps.map((d) => d.page),
+      multiLanguageEnabled: isMultiLanguageEnabled(getState()),
+    };
   },
   {
     condition: ({ page: pageKey }, { getState }) => {

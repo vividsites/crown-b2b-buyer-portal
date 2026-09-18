@@ -5,11 +5,13 @@ import { format } from 'date-fns/format';
 import { getTracking } from 'ts-tracking-number';
 
 import { B3ProductList } from '@/components/B3ProductList';
-import { useMobile } from '@/hooks/useMobile';
+import { useBackorderStorefrontMessaging } from '@/hooks/useBackorderStorefrontMessaging';
 import { useB3Lang } from '@/lib/lang';
+import type { BackorderDisplayFields } from '@/utils/backorderDisplayFromInventory';
 
-import { OrderShippedItem, OrderShippingsItem } from '../../../types';
+import { OrderProductItem, OrderShippedItem, OrderShippingsItem } from '../../../types';
 import { OrderDetailsContext } from '../context/OrderDetailsContext';
+import { getRemainingBackorderedQuantity } from '../shared/getRemainingBackorderedQuantity';
 
 const ShipmentTitle = styled('span')(() => ({
   fontWeight: 'bold',
@@ -22,12 +24,31 @@ type OrderShippingProps = {
 
 export function OrderShipping({ isCurrentCompany }: OrderShippingProps) {
   const {
-    state: { shippings = [], addressLabelPermission, money },
+    state: { shippings = [], addressLabelPermission, money, currencyCode },
   } = useContext(OrderDetailsContext);
 
-  const [isMobile] = useMobile();
-
   const b3Lang = useB3Lang();
+
+  const { isBackorderMessagingContextEnabled, hasAnyBackorderDisplay } =
+    useBackorderStorefrontMessaging();
+  const showOrderBackorder = isBackorderMessagingContextEnabled && hasAnyBackorderDisplay;
+
+  const backorderFieldsForProduct = (product: OrderProductItem): BackorderDisplayFields | null => {
+    const { quantity = 0, quantity_shipped: quantityShipped = 0, backorderMessage } = product;
+
+    const quantityBackordered = getRemainingBackorderedQuantity(product);
+    if (quantityBackordered <= 0) {
+      return null;
+    }
+
+    const remainingUnshipped = Math.max(0, quantity - quantityShipped);
+
+    return {
+      totalOnHand: Math.max(0, remainingUnshipped - quantityBackordered),
+      quantityBackordered,
+      backorderMessage: backorderMessage ?? undefined,
+    };
+  };
 
   const [shippingsDetail, setShippingsDetail] = useState<OrderShippingsItem[]>([]);
 
@@ -165,9 +186,9 @@ export function OrderShipping({ isCurrentCompany }: OrderShippingProps) {
                     quantityKey="current_quantity_shipped"
                     products={shipment.itemsInfo}
                     money={money}
+                    currencyCode={currencyCode}
                     totalText="Total"
                     canToProduct={isCurrentCompany}
-                    textAlign="right"
                   />
                 </Fragment>
               ) : null,
@@ -189,9 +210,12 @@ export function OrderShipping({ isCurrentCompany }: OrderShippingProps) {
                   quantityKey="not_shipping_number"
                   products={shipping.notShip.itemsInfo}
                   money={money}
+                  currencyCode={currencyCode}
                   totalText="Total"
                   canToProduct={isCurrentCompany}
-                  textAlign={isMobile ? 'left' : 'right'}
+                  backorderFieldsForProduct={
+                    showOrderBackorder ? backorderFieldsForProduct : undefined
+                  }
                 />
               </Fragment>
             ) : null}

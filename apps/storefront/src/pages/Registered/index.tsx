@@ -1,8 +1,7 @@
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Box, ImageListItem } from '@mui/material';
 
-import b2bLogo from '@/assets/b2bLogo.png';
 import { B3Card } from '@/components/B3Card';
 import B3Spin from '@/components/spin/B3Spin';
 import { LOGIN_LANDING_LOCATIONS } from '@/constants';
@@ -11,51 +10,34 @@ import { useScrollBar } from '@/hooks/useScrollBar';
 import { useB3Lang } from '@/lib/lang';
 import { CustomStyleContext } from '@/shared/customStyleButton';
 import { GlobalContext } from '@/shared/global';
-import { getB2BAccountFormFields, getB2BCountries } from '@/shared/service/b2b';
 import { bcLogin } from '@/shared/service/bc';
-import { themeFrameSelector, useAppSelector } from '@/store';
+import { useAppSelector } from '@/store';
 import b2bLogger from '@/utils/b3Logger';
 import { loginJump } from '@/utils/b3Login';
 import { B3SStorage } from '@/utils/b3Storage';
-import { platform } from '@/utils/basicConfig';
-import { getAssetUrl } from '@/utils/getAssetUrl';
+import { isCatalystPlatform } from '@/utils/basicConfig';
 import { getCurrentCustomerInfo } from '@/utils/loginInfo';
-import { getStoreConfigs } from '@/utils/storefrontConfig';
 
-import { loginCheckout, LoginConfig } from '../Login/config';
+import { loginCheckout, LoginConfig } from '../Login/helper';
 import { type PageProps } from '../PageProps';
 
-import { RegisteredContext, RegisteredProvider } from './context/RegisteredContext';
-import {
-  AccountFormFieldsItems,
-  b2bAddressRequiredFields,
-  companyAttachmentsFields,
-  getAccountFormFields,
-  RegisterFieldsItems,
-} from './config';
-import RegisterContent from './RegisterContent';
-import RegisteredStep from './RegisteredStep';
+import { RegisteredContext, RegisteredProvider } from './Context';
+import { RegisterSteps } from './RegisterSteps';
 import { RegisteredContainer, RegisteredImage } from './styled';
-// 1 bc 2 b2b
-const formType: Array<number> = [1, 2];
 
 function Registered(props: PageProps) {
   const { setOpenPage } = props;
-
-  const [activeStep, setActiveStep] = useState(0);
 
   const b3Lang = useB3Lang();
   const [isMobile] = useMobile();
 
   const navigate = useNavigate();
 
-  const IframeDocument = useAppSelector(themeFrameSelector);
   const loginLandingLocation = useAppSelector(({ global }) => global.loginLandingLocation);
   const [params] = useSearchParams();
 
   const {
-    state: { isCheckout, isCloseGotoBCHome, logo, registerEnabled },
-    dispatch: globalDispatch,
+    state: { isCheckout, isCloseGotoBCHome, logo, isLogoLoaded, registerEnabled },
   } = useContext(GlobalContext);
 
   const {
@@ -65,10 +47,8 @@ function Registered(props: PageProps) {
 
   const {
     state: {
-      accountLoginRegistration,
       portalStyle: { backgroundColor = '#FEF9F5' },
     },
-    dispatch: styleDispatch,
   } = useContext(CustomStyleContext);
 
   useEffect(() => {
@@ -76,125 +56,6 @@ function Registered(props: PageProps) {
       navigate('/login');
     }
   }, [navigate, registerEnabled]);
-
-  useEffect(() => {
-    const getBCAdditionalFields = async () => {
-      try {
-        if (dispatch) {
-          dispatch({
-            type: 'loading',
-            payload: {
-              isLoading: true,
-            },
-          });
-          dispatch({
-            type: 'finishInfo',
-            payload: {
-              submitSuccess: false,
-            },
-          });
-        }
-
-        // update the storefront config in the context
-        getStoreConfigs(styleDispatch, globalDispatch);
-
-        const accountFormAllFields = formType.map((item: number) => getB2BAccountFormFields(item));
-
-        const accountFormFields = await Promise.all(accountFormAllFields);
-
-        const newB2bAccountFormFields: AccountFormFieldsItems[] = (
-          accountFormFields[1]?.accountFormFields || []
-        ).map((fields: AccountFormFieldsItems) => {
-          const formFields = fields;
-          if (b2bAddressRequiredFields.includes(fields?.fieldId || '') && fields.groupId === 4) {
-            formFields.isRequired = true;
-            formFields.visible = true;
-          }
-
-          return fields;
-        });
-
-        const bcAccountFormFields = getAccountFormFields(
-          accountFormFields[0]?.accountFormFields || [],
-        );
-        const b2bAccountFormFields = getAccountFormFields(newB2bAccountFormFields || []);
-
-        const { countries } = await getB2BCountries();
-
-        const newAddressInformationFields =
-          b2bAccountFormFields.address?.map(
-            (addressFields: Partial<RegisterFieldsItems>): Partial<RegisterFieldsItems> => {
-              const fields = addressFields;
-              if (addressFields.name === 'country') {
-                fields.options = countries;
-                fields.replaceOptions = {
-                  label: 'countryName',
-                  value: 'countryName',
-                };
-              }
-              return addressFields;
-            },
-          ) || [];
-
-        const newBCAddressInformationFields =
-          bcAccountFormFields.address?.map(
-            (addressFields: Partial<RegisterFieldsItems>): Partial<RegisterFieldsItems> => {
-              const addressFormFields = addressFields;
-              if (addressFields.name === 'country') {
-                addressFormFields.options = countries;
-                const countryDefaultValue = countries.find(
-                  (country: CustomFieldItems) => country.countryName === addressFields.default,
-                );
-                addressFormFields.default =
-                  countryDefaultValue?.countryCode || addressFields.default;
-              }
-              return addressFields;
-            },
-          ) || [];
-        // accountLoginRegistration
-        const { b2b, b2c } = accountLoginRegistration;
-        const accountB2cEnabledInfo = b2c && !b2b;
-        if (dispatch) {
-          dispatch({
-            type: 'all',
-            payload: {
-              accountType: accountB2cEnabledInfo ? '2' : '1',
-              isLoading: false,
-              // account
-              contactInformation: [...(b2bAccountFormFields.contactInformation || [])],
-              bcContactInformation: [...(bcAccountFormFields.contactInformation || [])],
-              additionalInformation: [...(b2bAccountFormFields.additionalInformation || [])],
-              bcAdditionalInformation: [...(bcAccountFormFields.additionalInformation || [])],
-              // detail
-              companyExtraFields: [],
-              companyInformation: [...(b2bAccountFormFields?.businessDetails || [])],
-              companyAttachment: [...companyAttachmentsFields(b3Lang)],
-              addressBasicFields: [...newAddressInformationFields],
-              bcAddressBasicFields: [...newBCAddressInformationFields],
-              countryList: [...countries],
-              // password
-              passwordInformation: [...(b2bAccountFormFields.password || [])],
-              bcPasswordInformation: [...(bcAccountFormFields.password || [])],
-            },
-          });
-        }
-      } catch (e) {
-        b2bLogger.error(e);
-      }
-    };
-
-    getBCAdditionalFields();
-    // disabling as we only need to run this once and values at starting render are good enough
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleNext = async () => {
-    setActiveStep((prevActiveStep: number) => prevActiveStep + 1);
-  };
-
-  const handleBack = () => {
-    setActiveStep((prevActiveStep: number) => prevActiveStep - 1);
-  };
 
   const clearRegisterInfo = () => {
     if (dispatch) {
@@ -251,7 +112,7 @@ function Registered(props: PageProps) {
 
         clearRegisterInfo();
 
-        if (platform === 'catalyst') {
+        if (isCatalystPlatform()) {
           const landingLoginLocation =
             params.get('redirectTo') === 'check-out'
               ? LOGIN_LANDING_LOCATIONS.CHECKOUT
@@ -290,12 +151,6 @@ function Registered(props: PageProps) {
     });
   };
 
-  useEffect(() => {
-    IframeDocument?.body.scrollIntoView(true);
-    // disabling as we only need to run this when activeStep changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeStep]);
-
   useScrollBar(false);
 
   return (
@@ -311,29 +166,20 @@ function Registered(props: PageProps) {
             }}
           >
             <RegisteredImage>
-              <ImageListItem
-                sx={{
-                  maxWidth: '250px',
-                }}
-                onClick={() => {
-                  window.location.href = '/';
-                }}
-              >
-                <img
-                  src={logo || getAssetUrl(b2bLogo)}
-                  alt={b3Lang('global.tips.registerLogo')}
-                  loading="lazy"
-                />
-              </ImageListItem>
+              {isLogoLoaded && logo && (
+                <ImageListItem
+                  sx={{
+                    maxWidth: '250px',
+                  }}
+                  onClick={() => {
+                    window.location.href = '/';
+                  }}
+                >
+                  <img src={logo} alt={b3Lang('global.tips.registerLogo')} loading="lazy" />
+                </ImageListItem>
+              )}
             </RegisteredImage>
-            <RegisteredStep activeStep={activeStep} backgroundColor={backgroundColor}>
-              <RegisterContent
-                activeStep={activeStep}
-                handleBack={handleBack}
-                handleNext={handleNext}
-                handleFinish={handleFinish}
-              />
-            </RegisteredStep>
+            <RegisterSteps backgroundColor={backgroundColor} handleFinish={handleFinish} />
           </Box>
         </B3Spin>
       </RegisteredContainer>

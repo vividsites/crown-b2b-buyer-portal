@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import styled from '@emotion/styled';
 import { useProductRequirements } from '@/hooks/useProductRequirements';
 import { Delete } from '@mui/icons-material';
@@ -6,15 +6,23 @@ import { Alert, Box, Grid, Typography } from '@mui/material';
 import { cloneDeep } from 'lodash-es';
 
 import B3Dialog from '@/components/B3Dialog';
+import BackorderMessage from '@/components/BackorderMessage';
 import CustomButton from '@/components/button/CustomButton';
 import B3Spin from '@/components/spin/B3Spin';
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
+import { useBackorderStorefrontMessaging } from '@/hooks/useBackorderStorefrontMessaging';
+import { useCatalogInventoryBySku } from '@/hooks/useCatalogInventoryBySku';
 import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { activeCurrencyInfoSelector, useAppSelector } from '@/store';
 import { currencyFormat } from '@/utils/b3CurrencyFormat';
 import { setModifierQtyPrice } from '@/utils/b3Product/b3Product';
 import { getProductOptionsFields, ProductsProps } from '@/utils/b3Product/shared/config';
+import {
+  buildVariantSkuDependencyKey,
+  getCatalogBackorderFieldsForVariantSku,
+} from '@/utils/catalogBackorderDisplay';
+import { getProductListColumnAlignments } from '@/utils/getProductListColumnAlignments';
 
 import { B3QuantityTextField } from './B3QuantityTextField';
 
@@ -161,9 +169,15 @@ export default function ReAddToCart({
   const [loading, setLoading] = useState<boolean>(false);
   const [isMobile] = useMobile();
   const { decimal_places: decimalPlaces = 2 } = useAppSelector(activeCurrencyInfoSelector);
+  const { isBackorderMessagingContextEnabled, hasAnyBackorderDisplay } =
+    useBackorderStorefrontMessaging();
+  const backorderUiEnabled = isBackorderMessagingContextEnabled && hasAnyBackorderDisplay;
 
-  const textAlign = isMobile ? 'left' : 'right';
+  const { qtyTextAlign, numericTextAlign, qtyStackItemsAlignment } =
+    getProductListColumnAlignments(isMobile);
   const itemStyle = isMobile ? mobileItemStyle : defaultItemStyle;
+  const desktopQtyColumnStyle =
+    backorderUiEnabled && !isMobile ? { width: '22%', minWidth: '10rem' } : itemStyle.default;
 
   const [internalProducts, setInternalProducts] = useState<ProductsProps[]>([]);
   const { requirementsMap, fetchRequirements } = useProductRequirements();
@@ -175,6 +189,17 @@ export default function ReAddToCart({
       .filter(Boolean);
     if (productIds.length) fetchRequirements(productIds);
   }, [products, fetchRequirements]);
+
+  const variantSkuDependencyKey = useMemo(
+    () => buildVariantSkuDependencyKey(internalProducts.map((product) => product.node.variantSku)),
+    [internalProducts],
+  );
+
+  const inventoryBySku = useCatalogInventoryBySku({
+    isActive: isOpen,
+    enabled: backorderUiEnabled,
+    skuDependencyKey: variantSkuDependencyKey,
+  });
 
   const handleUpdateProductQty = async (
     index: number,
@@ -348,19 +373,21 @@ export default function ReAddToCart({
                   <FlexItem>
                     <ProductHead>{b3Lang('shoppingList.reAddToCart.product')}</ProductHead>
                   </FlexItem>
-                  <FlexItem {...itemStyle.default} textAlignLocation={textAlign}>
+                  <FlexItem
+                    {...itemStyle.default}
+                    textAlignLocation={numericTextAlign}
+                    {...(!isMobile ? { padding: '0 1rem 0 0' } : {})}
+                  >
                     <ProductHead>{b3Lang('shoppingList.reAddToCart.price')}</ProductHead>
                   </FlexItem>
                   <FlexItem
-                    sx={{
-                      justifyContent: 'center',
-                    }}
-                    {...itemStyle.default}
-                    textAlignLocation={textAlign}
+                    {...desktopQtyColumnStyle}
+                    textAlignLocation={qtyTextAlign}
+                    {...(!isMobile ? { padding: '0 0 0 1rem' } : {})}
                   >
                     <ProductHead>{b3Lang('shoppingList.reAddToCart.quantity')}</ProductHead>
                   </FlexItem>
-                  <FlexItem {...itemStyle.default} textAlignLocation={textAlign}>
+                  <FlexItem {...itemStyle.default} textAlignLocation={numericTextAlign}>
                     <ProductHead>{b3Lang('shoppingList.reAddToCart.total')}</ProductHead>
                   </FlexItem>
                   <FlexItem {...itemStyle.delete}>
@@ -397,6 +424,14 @@ export default function ReAddToCart({
                   (item) => item.valueText,
                 );
 
+                const backorderFields = backorderUiEnabled
+                  ? getCatalogBackorderFieldsForVariantSku({
+                      quantity: Number(quantity) || 0,
+                      variantSku,
+                      inventoryBySku,
+                    })
+                  : null;
+
                 return (
                   <Flex isMobile={isMobile} key={id}>
                     <FlexItem>
@@ -428,29 +463,72 @@ export default function ReAddToCart({
                           ))}
                       </Box>
                     </FlexItem>
-                    <FlexItem {...itemStyle.default} textAlignLocation={textAlign}>
+                    <FlexItem
+                      {...itemStyle.default}
+                      textAlignLocation={numericTextAlign}
+                      {...(!isMobile ? { padding: '0 1rem 0 0' } : {})}
+                    >
                       {isMobile && <span>Price: </span>}
                       {currencyFormat(price)}
                     </FlexItem>
-                    <FlexItem {...itemStyle.default} textAlignLocation={textAlign}>
+                    <FlexItem
+                      {...desktopQtyColumnStyle}
+                      textAlignLocation={qtyTextAlign}
+                      {...(!isMobile ? { padding: '0 0 0 1rem' } : {})}
+                    >
                       {(() => {
                         const reqs = requirementsMap.get((node as any).productId);
                         return (
-                          <B3QuantityTextField
-                            isStock={isStock}
-                            maxQuantity={maxQuantity || node.productsSearch?.orderQuantityMaximum}
-                            minQuantity={minQuantity || reqs?.orderQuantityMinimum || node.productsSearch?.orderQuantityMinimum || 0}
-                            increment={reqs?.orderQuantityIncrement ?? 0}
-                            stock={stock}
-                            value={quantity}
-                            onChange={(value, isValid) => {
-                              handleUpdateProductQty(index, value, isValid);
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: qtyStackItemsAlignment,
+                              width: '100%',
+                              maxWidth: '100%',
+                              minWidth: 0,
                             }}
-                          />
+                          >
+                            <B3QuantityTextField
+                              isStock={isStock}
+                              maxQuantity={maxQuantity || node.productsSearch?.orderQuantityMaximum}
+                              minQuantity={
+                                minQuantity ||
+                                reqs?.orderQuantityMinimum ||
+                                node.productsSearch?.orderQuantityMinimum ||
+                                0
+                              }
+                              increment={reqs?.orderQuantityIncrement ?? 0}
+                              stock={stock}
+                              value={quantity}
+                              onChange={(value, isValid) => {
+                                handleUpdateProductQty(index, value, isValid);
+                              }}
+                            />
+                            {backorderFields && (
+                              <Box
+                                sx={{
+                                  mt: 1,
+                                  width: '100%',
+                                  maxWidth: '100%',
+                                  minWidth: 0,
+                                  textAlign: qtyTextAlign,
+                                  alignSelf: qtyStackItemsAlignment,
+                                }}
+                              >
+                                <BackorderMessage
+                                  totalOnHand={backorderFields.totalOnHand}
+                                  quantityBackordered={backorderFields.quantityBackordered}
+                                  backorderMessage={backorderFields.backorderMessage}
+                                  visible
+                                />
+                              </Box>
+                            )}
+                          </Box>
                         );
                       })()}
                     </FlexItem>
-                    <FlexItem {...itemStyle.default} textAlignLocation={textAlign}>
+                    <FlexItem {...itemStyle.default} textAlignLocation={numericTextAlign}>
                       {isMobile && <div>Total: </div>}
                       {currencyFormat(total)}
                     </FlexItem>

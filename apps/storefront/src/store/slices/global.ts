@@ -5,26 +5,6 @@ import { LOGIN_LANDING_LOCATIONS } from '@/constants';
 import { OpenPageState } from '@/types/hooks';
 import { FeatureFlags } from '@/utils/featureFlags';
 
-export interface TaxZoneRates {
-  rate?: number;
-  taxClassId?: number;
-}
-
-interface Rates {
-  enabled: boolean;
-  id: number;
-  name: string;
-  priority: number;
-  classRates: TaxZoneRates[];
-}
-
-export interface TaxZoneRatesProps {
-  enabled: boolean;
-  id: number;
-  name: string;
-  rates: Rates[];
-}
-
 export interface StoreInfoProps {
   b2bEnabled: boolean;
   b3ChannelId: number;
@@ -60,8 +40,23 @@ interface QuoteSubmissionResponseProps {
   title: string;
 }
 
+export interface BackorderDisplaySettings {
+  showQuantityOnBackorder: boolean;
+  showQuantityOnHand: boolean;
+  showBackorderMessage: boolean;
+  showDefaultShippingExpectationPrompt: boolean;
+  defaultShippingExpectationPrompt: string;
+}
+
+export interface Locale {
+  code: string;
+  isDefault: boolean;
+  fullPath: string;
+}
+
+export type Locales = Locale[];
+
 export interface GlobalState {
-  taxZoneRates: TaxZoneRatesProps[];
   isClickEnterBtn: boolean;
   currentClickedUrl: string;
   isRegisterAndLogin: boolean;
@@ -78,11 +73,12 @@ export interface GlobalState {
   quoteSubmissionResponse: QuoteSubmissionResponseProps;
   isOpenCompanyHierarchyDropDown: boolean;
   featureFlags: FeatureFlags;
+  locales: Locales;
   backorderEnabled: boolean;
+  backorderDisplaySettings: BackorderDisplaySettings;
 }
 
 export const initialState: GlobalState = {
-  taxZoneRates: [],
   isClickEnterBtn: false,
   currentClickedUrl: '',
   isRegisterAndLogin: false,
@@ -116,6 +112,13 @@ export const initialState: GlobalState = {
   loginLandingLocation: LOGIN_LANDING_LOCATIONS.BUYER_PORTAL,
   recordOpenHash: '',
   backorderEnabled: false,
+  backorderDisplaySettings: {
+    showQuantityOnBackorder: false,
+    showQuantityOnHand: false,
+    showBackorderMessage: false,
+    showDefaultShippingExpectationPrompt: false,
+    defaultShippingExpectationPrompt: '',
+  },
   quoteSubmissionResponse: {
     value: '0',
     key: 'quote_submission_response',
@@ -124,6 +127,7 @@ export const initialState: GlobalState = {
   },
   isOpenCompanyHierarchyDropDown: false,
   featureFlags: {},
+  locales: [],
 };
 
 export const globalSlice = createSlice({
@@ -131,9 +135,6 @@ export const globalSlice = createSlice({
   initialState,
   reducers: {
     clearGlobal: () => initialState,
-    setTaxZoneRates: (state, { payload }: PayloadAction<TaxZoneRatesProps[]>) => {
-      state.taxZoneRates = payload;
-    },
     setGlobalCommonState: (state, { payload }: PayloadAction<Partial<GlobalState>>) => ({
       ...state,
       ...payload,
@@ -183,15 +184,26 @@ export const globalSlice = createSlice({
         ...payload,
       };
     },
+    setLocales: (state, { payload }: PayloadAction<Locales>) => {
+      state.locales = payload;
+    },
     setBackorderEnabled: (state, { payload }: PayloadAction<boolean>) => {
       state.backorderEnabled = payload;
+    },
+    setBackorderDisplaySettings: (
+      state,
+      { payload }: PayloadAction<Partial<BackorderDisplaySettings>>,
+    ) => {
+      state.backorderDisplaySettings = {
+        ...state.backorderDisplaySettings,
+        ...payload,
+      };
     },
   },
 });
 
 export const {
   clearGlobal,
-  setTaxZoneRates,
   setGlobalCommonState,
   setOpenPageReducer,
   setShowInclusiveTaxPrice,
@@ -203,7 +215,9 @@ export const {
   setQuoteSubmissionResponse,
   setOpenCompanyHierarchyDropDown,
   setFeatureFlags,
+  setLocales,
   setBackorderEnabled,
+  setBackorderDisplaySettings,
 } = globalSlice.actions;
 
 export default globalSlice.reducer;

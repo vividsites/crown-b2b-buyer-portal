@@ -1,5 +1,6 @@
 import { QuoteExtraFieldsType } from '@/types/quotes';
 import { channelId, storeHash } from '@/utils/basicConfig';
+import type { PicklistBackorderHistoryChild } from '@/utils/catalogBackorderDisplay';
 import { convertArrayToGraphql, convertObjectToGraphql } from '@/utils/graphqlDataConvert';
 
 import B3Request from '../../request/b3Fetch';
@@ -42,6 +43,7 @@ const getQuotesList = (data: CustomFieldItems, type: string) => `
           totalAmount,
           taxTotal,
           uuid,
+          totalIsTbd,
         }
       }
     }
@@ -229,6 +231,10 @@ const getQuoteInfo = `
         costPrice,
         inventoryTracking,
         inventoryLevel,
+        backorderMessage,
+        totalOnHand,
+        quantityBackordered,
+        picklistBackorder,
       },
       storefrontAttachFiles {
         id,
@@ -410,6 +416,7 @@ export interface QuoteEdge {
     totalAmount: string;
     taxTotal: string;
     uuid?: string;
+    totalIsTbd?: boolean;
   };
 }
 
@@ -436,6 +443,7 @@ export const createQuote = (data: CustomFieldItems) => {
     message: data.message,
     legalTerms: data.legalTerms,
     totalAmount: data.totalAmount,
+    totalIsTbd: data.totalIsTbd,
     grandTotal: data.grandTotal,
     subtotal: data.subtotal || '',
     taxTotal: data.taxTotal || '',
@@ -616,6 +624,10 @@ export interface B2BQuoteDetail {
         costPrice: string;
         inventoryTracking: string;
         inventoryLevel: number;
+        backorderMessage?: string;
+        totalOnHand?: number;
+        quantityBackordered?: number;
+        picklistBackorder?: PicklistBackorderHistoryChild[];
       }[];
       storefrontAttachFiles: unknown[];
       backendAttachFiles: unknown[];
@@ -685,14 +697,17 @@ export const exportQuotePdf = (data: {
   });
 
 export const quoteCheckout = ({ id, uuid }: { id: number; uuid?: string }) =>
-  B3Request.graphqlB2B({
-    query: getQuoteCheckoutQuery,
-    variables: {
-      id,
-      storeHash,
-      uuid: uuid || null,
+  B3Request.graphqlB2B(
+    {
+      query: getQuoteCheckoutQuery,
+      variables: {
+        id,
+        storeHash,
+        uuid: uuid || null,
+      },
     },
-  });
+    true,
+  );
 
 export const quoteDetailAttachFileCreate = (data: CustomFieldItems) =>
   B3Request.graphqlB2B({
@@ -705,10 +720,13 @@ export const quoteDetailAttachFileDelete = (data: CustomFieldItems) =>
   });
 
 export const getBCStorefrontProductSettings = () =>
-  B3Request.graphqlB2B({
-    query: getStorefrontProductSettings,
-    variables: { storeHash, channelId },
-  });
+  B3Request.graphqlB2B(
+    {
+      query: getStorefrontProductSettings,
+      variables: { storeHash, channelId },
+    },
+    true,
+  );
 
 export interface QuoteExtraFieldsConfig {
   data: {

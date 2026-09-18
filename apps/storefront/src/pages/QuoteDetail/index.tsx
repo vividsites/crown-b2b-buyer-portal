@@ -5,7 +5,8 @@ import copy from 'copy-to-clipboard';
 import { get } from 'lodash-es';
 
 import B3Spin from '@/components/spin/B3Spin';
-import { useIsBackorderValidationEnabled } from '@/hooks/useIsBackorderValidationEnabled';
+import { useFeatureFlag } from '@/hooks/useFeatureFlag';
+import { useIsBackorderEnabled } from '@/hooks/useIsBackorderEnabled';
 import { useMobile } from '@/hooks/useMobile';
 import { useScrollBar } from '@/hooks/useScrollBar';
 import { useB3Lang } from '@/lib/lang';
@@ -16,11 +17,11 @@ import {
   getBcQuoteDetail,
   searchProducts,
 } from '@/shared/service/b2b';
+import type { ProductValidationError } from '@/shared/service/request/b3Fetch';
 import {
   activeCurrencyInfoSelector,
   isB2BUserSelector,
   rolePermissionSelector,
-  TaxZoneRates,
   useAppSelector,
 } from '@/store';
 import { QuoteExtraFieldsData } from '@/types/quotes';
@@ -29,8 +30,10 @@ import { b2bPermissionsMap } from '@/utils/b3CheckPermissions/config';
 import { getVariantInfoOOSAndPurchase } from '@/utils/b3Product/b3Product';
 import { conversionProductsList } from '@/utils/b3Product/shared/config';
 import { snackbar } from '@/utils/b3Tip';
+import { buildCurrenciesMap } from '@/utils/currencyUtils';
 import { getSearchVal } from '@/utils/loginInfo';
 import {
+  VALIDATED_PRODUCT_ERROR_TYPES,
   ValidatedProductError,
   validateProductsLegacy as validateProductsApi,
 } from '@/utils/validateProducts';
@@ -44,6 +47,13 @@ import QuoteDetailTable from '../quote/components/QuoteDetailTable';
 import QuoteInfo from '../quote/components/QuoteInfo';
 import QuoteNote from '../quote/components/QuoteNote';
 import QuoteTermsAndConditions from '../quote/components/QuoteTermsAndConditions';
+import { useQuoteDetailBackorderState } from '../quote/hooks/useQuoteDetailBackorderState';
+import {
+  getQuoteValidationErrorMessage,
+  QUOTE_VALIDATION_ERROR_CODES,
+  QUOTE_VALIDATION_MESSAGE_CONTEXTS,
+} from '../quote/shared/getQuoteValidationErrorMessage';
+import { buildQuoteStockSnapshot } from '../quote/utils/buildQuoteStockSnapshot';
 import getB2BQuoteExtraFields from '../quote/utils/getQuoteExtraFields';
 import { handleQuoteCheckout } from '../quote/utils/quoteCheckout';
 
@@ -76,6 +86,9 @@ interface ProductInfoProps {
   variantId: number;
   variantSku: string;
   productsSearch: CustomFieldItems;
+  backorderMessage?: string;
+  totalOnHand?: number;
+  quantityBackordered?: number;
 }
 
 const validateProducts = (products: ProductInfoProps[]) => {
@@ -104,7 +117,6 @@ function useData() {
   const emailAddress = useAppSelector(({ company }) => company.customer.emailAddress);
   const customerGroupId = useAppSelector(({ company }) => company.customer.customerGroupId);
   const role = useAppSelector(({ company }) => company.customer.role);
-
   const isB2BUser = useAppSelector(isB2BUserSelector);
   const { selectCompanyHierarchyId } = useAppSelector(
     ({ company }) => company.companyHierarchyInfo,
@@ -113,7 +125,8 @@ function useData() {
   const isAgenting = useAppSelector(({ b2bFeatures }) => b2bFeatures.masqueradeCompany.isAgenting);
 
   const { currency_code: currencyCode } = useAppSelector(activeCurrencyInfoSelector);
-  const taxZoneRates = useAppSelector(({ global }) => global.taxZoneRates);
+  const currencies = useAppSelector(({ storeConfigs }) => storeConfigs.currencies.currencies);
+  const currenciesMap = useMemo(() => buildCurrenciesMap(currencies), [currencies]);
   const enteredInclusiveTax = useAppSelector(
     ({ storeConfigs }) => storeConfigs.currencies.enteredInclusiveTax,
   );
@@ -123,36 +136,23 @@ function useData() {
 
   const { purchasabilityPermission } = useAppSelector(rolePermissionSelector);
 
-  const handleGetProductsById = async (listProducts: ProductInfoProps[]) => {
-    if (listProducts.length > 0) {
-      const productIds: number[] = [];
+  const fetchProductsWithSearch = async (
+    listProducts: ProductInfoProps[],
+  ): Promise<ProductInfoProps[]> => {
+    if (listProducts.length === 0) return [];
 
-      listProducts.forEach((item) => {
-        if (!productIds.includes(item.productId)) {
-          productIds.push(item.productId);
-        }
-      });
+    const productIds = Array.from(new Set(listProducts.map((item) => item.productId)));
+    const options = { productIds, currencyCode, companyId, customerGroupId };
 
-      const options = { productIds, currencyCode, companyId, customerGroupId };
+    const { productsSearch } = await searchProducts(options);
+    const newProductsSearch = conversionProductsList(productsSearch);
 
-      const { productsSearch } = await searchProducts(options);
-
-      const newProductsSearch = conversionProductsList(productsSearch);
-
-      listProducts.forEach((item) => {
-        const listProduct = item;
-        const productInfo = newProductsSearch.find((search: CustomFieldItems) => {
-          const { id: productId } = search;
-
-          return Number(item.productId) === Number(productId);
-        });
-
-        listProduct.productsSearch = productInfo || {};
-      });
-
-      return listProducts;
-    }
-    return undefined;
+    return listProducts.map((item) => {
+      const productInfo = newProductsSearch.find(
+        (search: CustomFieldItems) => Number(item.productId) === Number(search.id),
+      );
+      return { ...item, productsSearch: productInfo || {} };
+    });
   };
 
   const location = useLocation();
@@ -185,11 +185,11 @@ function useData() {
     isB2BUser,
     selectCompanyHierarchyId,
     isAgenting,
-    taxZoneRates,
+    currenciesMap,
     enteredInclusiveTax,
     isEnableProduct,
     purchasabilityPermission,
-    handleGetProductsById,
+    fetchProductsWithSearch,
     getQuote,
   };
 }
@@ -263,11 +263,11 @@ function QuoteDetail() {
     isB2BUser,
     selectCompanyHierarchyId,
     isAgenting,
-    taxZoneRates,
+    currenciesMap,
     enteredInclusiveTax,
     isEnableProduct,
     purchasabilityPermission,
-    handleGetProductsById,
+    fetchProductsWithSearch,
     getQuote,
   } = useData();
 
@@ -275,8 +275,13 @@ function QuoteDetail() {
 
   const b3Lang = useB3Lang();
 
+  const isBackorderMessagingEnabled = useFeatureFlag(
+    'BACK-134.backorders_phase_1_1_control_messaging_on_storefront',
+  );
+
   const [quoteDetail, setQuoteDetail] = useState<any>({});
   const [productList, setProductList] = useState<ProductInfoProps[]>([]);
+  const { hasBackorderedItems } = useQuoteDetailBackorderState(productList, quoteDetail.status);
   const [fileList, setFileList] = useState<FileObjects[]>([]);
   const [isHideQuoteCheckout, setIsHideQuoteCheckout] = useState(true);
   const [quoteValidationErrors, setQuoteValidationErrors] = useState<
@@ -310,7 +315,7 @@ function QuoteDetail() {
 
   const location = useLocation();
 
-  const isMoveStockAndBackorderValidationToBackend = useIsBackorderValidationEnabled();
+  const isBackorderEnabled = useIsBackorderEnabled();
 
   const isAutoQuotingEnabled =
     quoteConfig.find((item) => item.key === 'quote_auto_quoting')?.value === '1';
@@ -370,9 +375,17 @@ function QuoteDetail() {
     }
 
     error.forEach((err) => {
-      if (err.error.type === 'validation') {
-        snackbar.error(err.error.message);
-      }
+      const errorCode =
+        err.error.type === VALIDATED_PRODUCT_ERROR_TYPES.NETWORK
+          ? QUOTE_VALIDATION_ERROR_CODES.NETWORK_ERROR
+          : err.error.errorCode;
+      snackbar.error(
+        getQuoteValidationErrorMessage({
+          b3Lang,
+          errorCode,
+          productName: err.product.productName || '',
+        }),
+      );
     });
 
     if (quoteReviewedBySalesRepResponse) {
@@ -428,22 +441,24 @@ function QuoteDetail() {
     });
   };
 
-  const validateQuoteProducts = isMoveStockAndBackorderValidationToBackend
+  const validateQuoteProducts = isBackorderEnabled
     ? quoteDetailBackendValidations
     : quoteDetailFrontendValidations;
 
   const hasQuoteValidationErrorsBackendFlow = () => {
     if (quoteValidationErrors.length) {
       quoteValidationErrors.forEach((err) => {
-        if (err.error.type === 'network') {
-          snackbar.error(
-            b3Lang('quotes.productValidationFailed', {
-              productName: err.product.productName || '',
-            }),
-          );
-        } else {
-          snackbar.error(err.error.message);
-        }
+        const errorCode =
+          err.error.type === VALIDATED_PRODUCT_ERROR_TYPES.NETWORK
+            ? QUOTE_VALIDATION_ERROR_CODES.NETWORK_ERROR
+            : err.error.errorCode;
+        snackbar.error(
+          getQuoteValidationErrorMessage({
+            b3Lang,
+            errorCode,
+            productName: err.product.productName || '',
+          }),
+        );
       });
 
       return true;
@@ -474,30 +489,15 @@ function QuoteDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHideQuoteCheckout, noBuyerProductName]);
 
-  const hasQuoteValidationErrors = isMoveStockAndBackorderValidationToBackend
+  const hasQuoteValidationErrors = isBackorderEnabled
     ? hasQuoteValidationErrorsBackendFlow
     : hasQuoteValidationErrorsFrontendFlow;
 
-  const classRates: TaxZoneRates[] = [];
-  if (taxZoneRates?.length) {
-    const defaultTaxZone = taxZoneRates?.find((taxZone: { id: number }) => taxZone.id === 1);
-    if (defaultTaxZone) {
-      const { rates = [] } = defaultTaxZone;
-
-      if (rates[0] && rates[0].enabled && rates[0].classRates.length) {
-        rates[0].classRates.forEach((rate) => classRates.push(rate));
-      }
-    }
-  }
-
-  const getTaxRate = (taxClassId: number, variants: any) => {
+  const getTaxRate = (variants: any) => {
     if (variants.length) {
       const taxExclusive = get(variants, '[0].bc_calculated_price.tax_exclusive', 0);
       const taxInclusive = get(variants, '[0].bc_calculated_price.tax_inclusive', 0);
       return taxExclusive > 0 ? (taxInclusive - taxExclusive) / taxExclusive : 0;
-    }
-    if (classRates.length) {
-      return (classRates.find((rate) => rate.taxClassId === taxClassId)?.rate || 0) / 100;
     }
     return 0;
   };
@@ -528,10 +528,11 @@ function QuoteDetail() {
 
     try {
       const quote = await getQuote();
-      const productsWithMoreInfo = await handleGetProductsById(quote.productsList).catch(() => {
-        return undefined;
-      });
+      const productsWithMoreInfo = await fetchProductsWithSearch(quote.productsList).catch(
+        () => undefined,
+      );
       const quoteExtraFieldInfos = await getQuoteExtraFields(quote.extraFields);
+      const productListResponse = productsWithMoreInfo ?? [];
       setQuoteDetail({
         ...quote,
         extraFields: quoteExtraFieldInfos,
@@ -544,7 +545,6 @@ function QuoteDetail() {
         totalAmount: quote.totalAmount,
       });
 
-      const productListResponse = productsWithMoreInfo ?? [];
       setProductList(productListResponse);
 
       const { salesRep, salesRepEmail } = quote;
@@ -562,10 +562,10 @@ function QuoteDetail() {
           const {
             quantity,
             offeredPrice,
-            productsSearch: { variants = [], taxClassId },
+            productsSearch: { variants = [] },
           } = product;
 
-          const taxRate = getTaxRate(taxClassId, variants);
+          const taxRate = getTaxRate(variants);
           taxPrice += enteredInclusiveTax
             ? ((Number(offeredPrice) * taxRate) / (1 + taxRate)) * Number(quantity)
             : Number(offeredPrice) * taxRate * Number(quantity);
@@ -603,7 +603,9 @@ function QuoteDetail() {
 
       setFileList(newFileList);
 
-      return quote;
+      // On enrichment failure, fall back to the original (unenriched) productsList so the
+      // table's empty-state fallback in getQuoteTableDetails still has items to render.
+      return { ...quote, productsList: productsWithMoreInfo ?? quote.productsList };
     } catch (error: unknown) {
       if (error instanceof Error) {
         snackbar.error(error.message);
@@ -736,6 +738,19 @@ function QuoteDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location, navigate, role]);
 
+  const formatQuoteValidationError = (err: ProductValidationError) =>
+    getQuoteValidationErrorMessage({
+      b3Lang,
+      errorCode: err.code,
+      productName: err.productName ?? '',
+      context: QUOTE_VALIDATION_MESSAGE_CONTEXTS.QUOTE,
+    });
+
+  const fetchCurrentStockSnapshot = async () => {
+    const refreshed = await fetchProductsWithSearch(productList);
+    return buildQuoteStockSnapshot(refreshed);
+  };
+
   const quoteGotoCheckout = async () => {
     try {
       if (hasQuoteValidationErrors()) return;
@@ -746,6 +761,11 @@ function QuoteDetail() {
         role,
         location,
         navigate,
+        b3Lang,
+        formatValidationError: formatQuoteValidationError,
+        isBackorderMessagingEnabled,
+        quoteStockSnapshot: buildQuoteStockSnapshot(productList),
+        fetchCurrentStockSnapshot,
       });
     } finally {
       setQuoteCheckoutLoading(false);
@@ -779,7 +799,7 @@ function QuoteDetail() {
     return !quoteHasWarnings || quoteReviewedBySalesRep;
   };
 
-  const enableProceedToCheckoutButton = isMoveStockAndBackorderValidationToBackend
+  const enableProceedToCheckoutButton = isBackorderEnabled
     ? isEnableProductShowCheckoutBackendFlow
     : isEnableProductShowCheckoutFrontendFlow;
 
@@ -801,14 +821,20 @@ function QuoteDetail() {
     };
   }, [quoteDetail]);
 
+  const displayCurrency = useMemo(() => {
+    if (quoteDetail.currency?.currencyCode) {
+      const currencySnapshot = currenciesMap[quoteDetail.currency.currencyCode];
+      if (currencySnapshot) return currencySnapshot;
+    }
+    return quoteDetail.currency;
+  }, [quoteDetail.currency, currenciesMap]);
+
   useScrollBar(false);
 
   const { quotePurchasabilityPermission, quoteConvertToOrderPermission } =
     quotePurchasabilityPermissionInfo;
 
-  const shouldHidePrice = isMoveStockAndBackorderValidationToBackend
-    ? shouldHidePrices
-    : isHideQuoteCheckout;
+  const shouldHidePrice = isBackorderEnabled ? shouldHidePrices : isHideQuoteCheckout;
 
   return (
     <B3Spin isSpinning={isRequestLoading || quoteCheckoutLoading}>
@@ -884,11 +910,13 @@ function QuoteDetail() {
             >
               <QuoteDetailTable
                 total={productList.length}
-                currency={quoteDetail.currency}
+                productList={productList}
+                currency={displayCurrency}
                 quoteReviewedBySalesRep={quoteReviewedBySalesRep}
                 getQuoteTableDetails={getQuoteTableDetails}
                 getTaxRate={getTaxRate}
                 displayDiscount={quoteDetail.displayDiscount}
+                status={quoteDetail.status}
               />
             </Box>
           </Grid>
@@ -917,6 +945,8 @@ function QuoteDetail() {
                 quoteDetailTax={quoteDetailTax}
                 status={quoteDetail.status}
                 quoteDetail={quoteDetail}
+                currency={displayCurrency}
+                hasBackorderedItems={hasBackorderedItems}
               />
             </Box>
 
@@ -990,6 +1020,11 @@ function QuoteDetail() {
                     quoteId: quoteDetail.id,
                     quoteUuid: quoteDetail.uuid,
                     navigate,
+                    b3Lang,
+                    formatValidationError: formatQuoteValidationError,
+                    isBackorderMessagingEnabled,
+                    quoteStockSnapshot: buildQuoteStockSnapshot(productList),
+                    fetchCurrentStockSnapshot,
                   });
                 }}
               >

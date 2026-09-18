@@ -48,21 +48,36 @@ interface CompanySubsidiariesProps {
 interface ConfigsSwitchStatus {
   storeConfigSwitchStatus: ConfigsSwitchStatusProps;
 }
-const getB2BTokenQl = (currentCustomerJWT: string, channelId: number) => `mutation {
+const getB2BTokenQl = (
+  currentCustomerJWT: string,
+  channelId: number,
+  includeLegacyFields: boolean,
+) => {
+  /*
+   * The BC-first authorisation flow only needs the token from this mutation;
+   * loginType and permissions are sourced elsewhere. Callers opt in to the
+   * legacy fields (used by the pre-BC-first login flow) via includeLegacyFields.
+   */
+  const legacyFields = includeLegacyFields
+    ? `
+			loginType
+			permissions {
+				code
+				permissionLevel
+			}`
+    : '';
+
+  return `mutation {
 	authorization(authData: {
 		bcToken: "${currentCustomerJWT}"
 		channelId: ${channelId}
 	}) {
 		result {
-			token
-			loginType
-			permissions {
-				code
-				permissionLevel
-			}
+			token${legacyFields}
 		}
 	}
 }`;
+};
 
 export interface AgentInfo {
   data: {
@@ -266,28 +281,16 @@ const storefrontConfigs = (channelId: number, keys: string[]) => `{
 	}
 }`;
 
-const taxZoneRates = () => `
-query TaxZoneRates {
-	taxZoneRates(storeHash: "${storeHash}") {
-		rates {
-			id,
-			name,
-			enabled,
-			priority,
-			classRates {
-				rate,
-				taxClassId,
-			}
-		},
-		priceDisplaySettings {
-			showInclusive,
-			showBothOnDetailView,
-			showBothOnListView,
-		},
-		enabled,
-		id,
-		name,
-	}
+const storefrontSettings = `query GetStorefrontSettings($storeHash: String!) {
+  storefrontSettings(storeHash: $storeHash) {
+    backorderDisplaySettings {
+      showQuantityOnBackorder
+      showQuantityOnHand
+      showBackorderMessage
+      showDefaultShippingExpectationPrompt
+      defaultShippingExpectationPrompt
+    }
+  }
 }`;
 
 const storefrontDefaultLanguage = (channelId: number) => `{
@@ -501,10 +504,17 @@ const storeConfigSwitchStatus = `query storeConfigSwitchStatus($key: String!){
 	}
 }`;
 
-export const getB2BToken = (currentCustomerJWT: string, channelId = 1) =>
-  B3Request.graphqlB2B<B2BTokenResponse>({
-    query: getB2BTokenQl(currentCustomerJWT, channelId),
-  }).catch(mapToCompanyError);
+export const getB2BToken = (
+  currentCustomerJWT: string,
+  channelId = 1,
+  includeLegacyFields = false,
+) =>
+  B3Request.graphqlB2B<B2BTokenResponse>(
+    {
+      query: getB2BTokenQl(currentCustomerJWT, channelId, includeLegacyFields),
+    },
+    true,
+  ).catch(mapToCompanyError);
 
 export const getAgentInfo = (customerId: string | number) =>
   B3Request.graphqlB2B({
@@ -552,9 +562,10 @@ export const getStorefrontConfigs = (channelId: number, keys: string[]) =>
     query: storefrontConfigs(channelId, keys),
   });
 
-export const getTaxZoneRates = () =>
+export const getStorefrontSettings = () =>
   B3Request.graphqlB2B({
-    query: taxZoneRates(),
+    query: storefrontSettings,
+    variables: { storeHash },
   });
 
 export const getStorefrontDefaultLanguages = (channelId: number) =>

@@ -1,8 +1,10 @@
 import Cookies from 'js-cookie';
 
+import { getStorefrontLanguageCode } from '@/lib/lang/getStorefrontLanguageCode';
 import { store } from '@/store';
 import { snackbar } from '@/utils/b3Tip';
 import { BigCommerceStorefrontAPIBaseURL, channelId, storeHash } from '@/utils/basicConfig';
+import { logoutSession } from '@/utils/logoutSession';
 
 import { getAPIBaseURL, queryParse, RequestType, RequestTypeKeys } from './base';
 import b3Fetch from './fetch';
@@ -59,12 +61,13 @@ function graphqlRequest<T, Y>(type: RequestTypeKeys, data: T, config?: Y) {
   return b3Fetch(url, init);
 }
 
-type ProductValidationError = {
+export type ProductValidationError = {
   itemId: string;
   productId: number;
   variantId: number;
   responseType: string;
   code: string;
+  productName?: string;
 };
 
 interface B2bGQLResponse {
@@ -93,12 +96,18 @@ const B3Request = {
    */
   graphqlB2B: function post<T extends DataWrapper | CustomFieldItems = CustomFieldItems>(
     data: GQLRequest,
-    customMessage = false,
+    suppressSnackbar = false,
   ): Promise<T extends DataWrapper ? T['data'] : T> {
     const { B2BToken } = store.getState().company.tokens;
-    const config = {
+    const locale = getStorefrontLanguageCode();
+
+    const config: Record<string, string> = {
       Authorization: `Bearer  ${B2BToken}`,
     };
+
+    if (locale) {
+      config['Accept-Language'] = locale;
+    }
 
     return graphqlRequest(RequestType.B2BGraphql, data, config).then((value: B2bGQLResponse) => {
       const error = value.errors?.[0];
@@ -107,6 +116,9 @@ const B3Request = {
       const extensions = error?.extensions;
 
       if (extensions?.code === 40101) {
+        window.sessionStorage.clear();
+        logoutSession();
+
         if (window.location.hash.startsWith('#/')) {
           window.location.href = '#/login?loginFlag=loggedOutLogin&showTip=false';
         }
@@ -115,7 +127,7 @@ const B3Request = {
           snackbar.error(message);
         }
 
-        return new Promise(() => {});
+        return Promise.reject(message);
       }
 
       if (extensions && extensions?.productValidationErrors) {
@@ -123,11 +135,13 @@ const B3Request = {
       }
 
       if (message) {
-        if (!customMessage) {
+        if (!suppressSnackbar) {
           snackbar.error(message);
         }
 
-        throw new Error(message);
+        const err = new Error(message);
+        (err as Error & { extensions?: typeof extensions }).extensions = extensions;
+        throw err;
       }
 
       return value.data;
@@ -138,9 +152,16 @@ const B3Request = {
    */
   graphqlBC: function post<T = any>(data: GQLRequest): Promise<T> {
     const { bcGraphqlToken } = store.getState().company.tokens;
-    const config = {
+    const locale = getStorefrontLanguageCode();
+
+    const config: Record<string, string> = {
       Authorization: `Bearer  ${bcGraphqlToken}`,
     };
+
+    if (locale) {
+      config['Accept-Language'] = locale;
+    }
+
     return graphqlRequest(RequestType.BCGraphql, data, config);
   },
   /**

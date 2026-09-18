@@ -9,11 +9,14 @@ import {
 } from 'react';
 import { Box, Card, CardContent, Grid, Typography } from '@mui/material';
 
+import ShippingExpectationPrompt from '@/components/ShippingExpectationPrompt';
+import { useBackorderStorefrontMessaging } from '@/hooks/useBackorderStorefrontMessaging';
 import { useB3Lang } from '@/lib/lang';
 import { useAppSelector } from '@/store';
 import { currencyFormat } from '@/utils/b3CurrencyFormat';
 import { getBCPrice } from '@/utils/b3Product/b3Product';
 
+import { useDraftQuoteBackorderState } from '../hooks/useDraftQuoteBackorderState';
 import getQuoteDraftShowPriceTBD from '../shared/utils';
 import { CustomerRole } from '@/types';
 
@@ -43,6 +46,21 @@ const QuoteSummary = forwardRef((_, ref: Ref<unknown>) => {
   const [isHideQuoteDraftPrice, setHideQuoteDraftPrice] = useState<boolean>(false);
   const showInclusiveTaxPrice = useAppSelector(({ global }) => global.showInclusiveTaxPrice);
   const draftQuoteList = useAppSelector(({ quoteInfo }) => quoteInfo.draftQuoteList);
+  const {
+    isBackorderEnabled,
+    isBackorderMessagingEnabled,
+    isBackorderMessagingContextEnabled,
+    hasAnyBackorderDisplay,
+  } = useBackorderStorefrontMessaging();
+  const { showDefaultShippingExpectationPrompt, defaultShippingExpectationPrompt } = useAppSelector(
+    ({ global }) => global.backorderDisplaySettings,
+  );
+
+  const { hasBackorderedItems } = useDraftQuoteBackorderState({
+    items: draftQuoteList,
+    isBackorderMessagingEnabled,
+    draftQuoteBackorderContextEnabled: isBackorderMessagingContextEnabled && hasAnyBackorderDisplay,
+  });
 
   const priceCalc = (price: number) => parseFloat(String(price));
 
@@ -139,6 +157,15 @@ const QuoteSummary = forwardRef((_, ref: Ref<unknown>) => {
                 {b3Lang('quoteDraft.quoteSummary.tbd')}
               </Typography>
             </Grid>
+
+            {isBackorderMessagingEnabled && (
+              <ShippingExpectationPrompt
+                backorderEnabled={isBackorderEnabled}
+                hasBackorderedItems={hasBackorderedItems}
+                showDefaultShippingExpectationPrompt={showDefaultShippingExpectationPrompt}
+                defaultShippingExpectationPrompt={defaultShippingExpectationPrompt}
+              />
+            )}
 
             <Grid
               container

@@ -4,12 +4,20 @@ import { Warning as WarningIcon } from '@mui/icons-material';
 import { Box, Button, Checkbox, FormControlLabel, TextField, Typography } from '@mui/material';
 import noop from 'lodash-es/noop';
 
+import BackorderMessage from '@/components/BackorderMessage';
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
 import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
+import type { CatalogQuickVariantSku } from '@/shared/service/b2b/graphql/product';
 import { useAppSelector } from '@/store';
 import { currencyFormat, ordersCurrencyFormat } from '@/utils/b3CurrencyFormat';
 import { getDisplayPrice, judgmentBuyerProduct } from '@/utils/b3Product/b3Product';
+import type { BackorderDisplayFields } from '@/utils/backorderDisplayFromInventory';
+import {
+  getCatalogProductRowDisplayState,
+  productRequiresChooseOptionsBeforeAdd,
+} from '@/utils/catalogBackorderDisplay';
+import { getProductListColumnAlignments } from '@/utils/getProductListColumnAlignments';
 
 import { CustomerRole, MoneyFormat, ProductItem } from '../types';
 import { ProductRequirements } from '@/shared/service/vs/api/product';
@@ -111,9 +119,58 @@ const mobileItemStyle = {
   },
 };
 
-interface ProductProps<T> {
+type ProductListItemStyle = typeof defaultItemStyle;
+
+interface BackorderLayoutStyles {
+  qtyColumn: ProductListItemStyle['qty'];
+  qtyColumnSx: FlexItemProps['sx'];
+  numericColumn: ProductListItemStyle['default'];
+  priceColumnSx: FlexItemProps['sx'];
+  productColumnPadding: string;
+  productColumnSx: FlexItemProps['sx'];
+}
+
+function getBackorderLayoutStyles(
+  desktopBackorderLayoutEnabled: boolean,
+  isMobile: boolean,
+  itemStyle: ProductListItemStyle,
+): BackorderLayoutStyles {
+  let productColumnPadding = '0 6% 0 0';
+  if (isMobile) {
+    productColumnPadding = '0';
+  } else if (desktopBackorderLayoutEnabled) {
+    productColumnPadding = '0 1rem 0 0';
+  }
+
+  const desktopPriceQtyGapSx = isMobile
+    ? undefined
+    : {
+        paddingRight: '1rem',
+      };
+  const desktopQtyGapSx = isMobile
+    ? undefined
+    : {
+        paddingLeft: '1rem',
+      };
+
+  return {
+    qtyColumn: desktopBackorderLayoutEnabled ? { width: '16%' } : itemStyle.qty,
+    qtyColumnSx: {
+      ...(desktopBackorderLayoutEnabled ? { minWidth: '8.75rem' } : {}),
+      ...desktopQtyGapSx,
+    },
+    numericColumn: desktopBackorderLayoutEnabled ? { width: '12%' } : itemStyle.default,
+    priceColumnSx: desktopPriceQtyGapSx,
+    productColumnPadding,
+    productColumnSx: desktopBackorderLayoutEnabled ? { flex: '1 1 42%', minWidth: 0 } : undefined,
+  };
+}
+
+interface ProductProps<T extends ProductItem = ProductItem> {
   products: Array<T & ProductItem>;
   money?: MoneyFormat;
+  /** Order currency code (e.g. "USD"). When provided without `money`, uses Intl.NumberFormat. */
+  currencyCode?: string;
   renderAction?: (item: T & ProductItem) => ReactElement;
   actionWidth?: string;
   quantityKey?: string;
@@ -124,18 +181,27 @@ interface ProductProps<T> {
   selectAllText?: string;
   totalText?: string;
   canToProduct?: boolean;
-  textAlign?: string;
   type?: string;
   getCurrentProductUrls?: (productId: number | undefined) => void;
   requirementsMap?: Map<number, ProductRequirements>;
+  catalogBackorderUiEnabled?: boolean;
+  catalogInventoryBySku?: Record<string, CatalogQuickVariantSku>;
+  showAvailableToSellHelper?: boolean;
+  formatOnlyAvailable?: (availableToSell: number) => string;
+  backorderFieldsForProduct?: (product: T & ProductItem) => BackorderDisplayFields | null;
 }
 
-export function B3ProductList<T>(props: ProductProps<T>) {
+function getProductVariantSku(product: ProductItem): string {
+  // List backorder UI only runs for no-options rows; the sole variant is always variants[0].
+  return product.variants?.[0]?.sku ?? product.sku;
+}
+
+export function B3ProductList<T extends ProductItem>(props: ProductProps<T>) {
   const {
     products,
     renderAction,
     quantityKey = 'quantity',
-    actionWidth = '100px',
+    actionWidth = '6.25rem',
     quantityEditable = false,
     onProductQuantityChange = noop,
     showCheckbox = false,
@@ -143,17 +209,28 @@ export function B3ProductList<T>(props: ProductProps<T>) {
     selectAllText = 'Select all products',
     totalText = 'Total',
     canToProduct = false,
-    textAlign = 'left',
     money,
+    currencyCode,
     type,
     getCurrentProductUrls,
     requirementsMap,
+    catalogBackorderUiEnabled = false,
+    catalogInventoryBySku,
+    showAvailableToSellHelper = false,
+    formatOnlyAvailable = () => '',
+    backorderFieldsForProduct,
   } = props;
 
   const [list, setList] = useState<ProductItem[]>([]);
   const [isMobile] = useMobile();
   const b3Lang = useB3Lang();
   const showInclusiveTaxPrice = useAppSelector(({ global }) => global.showInclusiveTaxPrice);
+  const {
+    qtyTextAlign,
+    numericTextAlign,
+    qtyStackItemsAlignment: quantityStackItemsAlignment,
+    numericStackItemsAlignment,
+  } = getProductListColumnAlignments(isMobile);
 
   const role = useAppSelector(({ company }) => company.customer.role);
 
@@ -221,6 +298,15 @@ export function B3ProductList<T>(props: ProductProps<T>) {
   }, [products]);
 
   const itemStyle = isMobile ? mobileItemStyle : defaultItemStyle;
+  const backorderLayoutEnabled = catalogBackorderUiEnabled || Boolean(backorderFieldsForProduct);
+  const {
+    qtyColumn: desktopQtyColumnStyle,
+    qtyColumnSx: desktopQtyColumnExtraSx,
+    numericColumn: desktopNumericColumnStyle,
+    priceColumnSx: desktopPriceColumnExtraSx,
+    productColumnPadding: desktopProductColumnPadding,
+    productColumnSx: desktopProductColumnSx,
+  } = getBackorderLayoutStyles(backorderLayoutEnabled && !isMobile, isMobile, itemStyle);
 
   const showTypePrice = (newMoney: string | number, product: CustomFieldItems): string | number => {
     if (type === 'quote') {
@@ -250,21 +336,29 @@ export function B3ProductList<T>(props: ProductProps<T>) {
           {showCheckbox && (
             <Checkbox checked={list.length === products.length} onChange={handleSelectAllChange} />
           )}
-          <FlexItem padding={isMobile ? '0' : '0 6% 0 0'}>
+          <FlexItem padding={desktopProductColumnPadding} sx={desktopProductColumnSx}>
             <ProductHead>{b3Lang('global.searchProduct.product')}</ProductHead>
           </FlexItem>
-          <FlexItem textAlignLocation={textAlign} {...itemStyle.default}>
+          <FlexItem
+            textAlignLocation={numericTextAlign}
+            {...desktopNumericColumnStyle}
+            sx={desktopPriceColumnExtraSx}
+          >
             <ProductHead>{b3Lang('global.searchProduct.price')}</ProductHead>
           </FlexItem>
-          <FlexItem textAlignLocation={textAlign} {...itemStyle.qty}>
+          <FlexItem
+            textAlignLocation={qtyTextAlign}
+            {...desktopQtyColumnStyle}
+            sx={desktopQtyColumnExtraSx}
+          >
             <ProductHead>{b3Lang('global.searchProduct.qty')}</ProductHead>
           </FlexItem>
-          <FlexItem textAlignLocation={textAlign} {...itemStyle.default}>
+          <FlexItem textAlignLocation={numericTextAlign} {...desktopNumericColumnStyle}>
             <ProductHead>{b3Lang('global.searchProduct.total')}</ProductHead>
           </FlexItem>
           {renderAction && (
             <FlexItem
-              {...itemStyle.default}
+              {...desktopNumericColumnStyle}
               textAlignLocation="right"
               width={isMobile ? '100%' : actionWidth}
             />
@@ -327,52 +421,104 @@ export function B3ProductList<T>(props: ProductProps<T>) {
         const discountedPrice = Number(productPrice) - Number(discountAccountForSingleProduct);
         const discountedTotalPrice = getProductTotals(quantity, discountedPrice);
 
-        const getDisplayPrice = (priceValue: number) => {
-          const newMoney = money
-            ? ordersCurrencyFormat(money, priceValue)
-            : currencyFormat(priceValue);
+        const variantSku = getProductVariantSku(product);
+        const inventoryRow = productRequiresChooseOptionsBeforeAdd(product)
+          ? undefined
+          : catalogInventoryBySku?.[variantSku.toUpperCase()];
+        const { qtyHelperText, backorderFields: catalogBackorderFields } =
+          getCatalogProductRowDisplayState({
+            qty: Number(quantity) || 0,
+            productHelperText: product.helperText,
+            showAvailableToSellHelper,
+            inventoryRow,
+            backorderUiEnabled: catalogBackorderUiEnabled,
+            formatOnlyAvailable,
+          });
+        const backorderFields = backorderFieldsForProduct?.(product) ?? catalogBackorderFields;
 
-          return showTypePrice(newMoney, product);
+        const quantityLabel = (
+          <>
+            {isMobile && <span>Qty: </span>}
+            {quantity}
+          </>
+        );
+
+        const backorderMessageElement = backorderFields && (
+          <BackorderMessage
+            totalOnHand={backorderFields.totalOnHand}
+            quantityBackordered={backorderFields.quantityBackordered}
+            backorderMessage={backorderFields.backorderMessage}
+            visible
+          />
+        );
+
+        const getDisplayPrice = (priceValue: number, preFormatted?: string) => {
+          if (preFormatted) return showTypePrice(preFormatted, product);
+
+          let formatted: string;
+          if (money) {
+            formatted = ordersCurrencyFormat(money, priceValue);
+          } else if (currencyCode) {
+            formatted = new Intl.NumberFormat('en', {
+              style: 'currency',
+              currency: currencyCode,
+            }).format(priceValue);
+          } else {
+            formatted = currencyFormat(priceValue);
+          }
+
+          return showTypePrice(formatted, product);
         };
+
+        const hasDiscounts = discountAccountForSingleProduct > 0;
+        // formattedTotal is only valid when qty matches the original order quantity
+        // (partial shipments show a different qty via quantityKey)
+        const qtyMatchesOriginal = quantity === originQuantity;
+        const safeFormattedPrice = hasDiscounts ? undefined : product.formattedPrice;
+        const safeFormattedTotal =
+          hasDiscounts || !qtyMatchesOriginal ? undefined : product.formattedTotal;
 
         const renderPrice = (
           priceLabel: string,
           priceValue: number,
           priceDiscountedValue: number,
+          preFormatted?: string,
+          columnSx?: FlexItemProps['sx'],
         ) => {
           return (
             <FlexItem
-              textAlignLocation={textAlign}
-              padding={quantityEditable ? '10px 0 0' : ''}
-              {...itemStyle.default}
-              sx={
-                isMobile
+              textAlignLocation={numericTextAlign}
+              padding={quantityEditable ? '0.625rem 0 0' : ''}
+              {...desktopNumericColumnStyle}
+              sx={{
+                ...columnSx,
+                ...(isMobile
                   ? {
                       fontSize: '14px',
                     }
-                  : {}
-              }
+                  : {}),
+              }}
             >
               {role !== CustomerRole.GUEST ? ( 
               <Box
                 sx={{
                   display: 'flex',
                   flexDirection: 'column',
-                  alignItems: 'flex-end',
-                  justifyContent: textAlign === 'right' ? 'flex-end' : 'flex-start',
+                  alignItems: numericStackItemsAlignment,
+                  justifyContent: numericStackItemsAlignment,
                 }}
               >
                 <Box
                   sx={{
                     '& #product-price': {
-                      textDecoration: discountAccountForSingleProduct > 0 ? 'line-through' : 'none',
+                      textDecoration: hasDiscounts ? 'line-through' : 'none',
                     },
                   }}
                 >
                   {isMobile && <span>{priceLabel}: </span>}
-                  <span id="product-price">{getDisplayPrice(priceValue)}</span>
+                  <span id="product-price">{getDisplayPrice(priceValue, preFormatted)}</span>
                 </Box>
-                {discountAccountForSingleProduct > 0 ? (
+                {hasDiscounts ? (
                   <Box
                     sx={{
                       color: '#2E7D32',
@@ -403,11 +549,17 @@ export function B3ProductList<T>(props: ProductProps<T>) {
             {showCheckbox && (
               <Checkbox checked={isChecked(product)} onChange={() => handleSelectChange(product)} />
             )}
-            <FlexItem padding={isMobile ? '0' : '0 6% 0 0'}>
+            <FlexItem padding={desktopProductColumnPadding} sx={desktopProductColumnSx}>
               <ProductImage src={product.imageUrl || PRODUCT_DEFAULT_IMAGE} />
               <Box
                 sx={{
                   marginLeft: '16px',
+                  ...(isMobile
+                    ? {}
+                    : {
+                        flex: 1,
+                        minWidth: 0,
+                      }),
                 }}
               >
                 <Typography
@@ -484,55 +636,107 @@ export function B3ProductList<T>(props: ProductProps<T>) {
               </Box>
             </FlexItem>
 
-            {renderPrice('Price', productPrice, discountedPrice)}
+            {renderPrice(
+              'Price',
+              productPrice,
+              discountedPrice,
+              safeFormattedPrice,
+              desktopPriceColumnExtraSx,
+            )}
             <FlexItem
-              textAlignLocation={textAlign}
-              {...itemStyle.qty}
-              sx={
-                isMobile
+              textAlignLocation={qtyTextAlign}
+              {...desktopQtyColumnStyle}
+              sx={{
+                ...desktopQtyColumnExtraSx,
+                ...(isMobile
                   ? {
                       fontSize: '14px',
                     }
-                  : {}
-              }
+                  : {}),
+              }}
             >
-              {quantityEditable ? (
-                <TextField
-                  type="number"
-                  variant="filled"
-                  hiddenLabel={!isMobile}
-                  label={isMobile ? 'Qty' : ''}
-                  value={quantity}
-                  onChange={handleProductQuantityChange(product.id)}
-                  onKeyDown={handleNumberInputKeyDown}
-                  onBlur={handleNumberInputBlur(product)}
-                  size="small"
-                  inputProps={{
-                    inputMode: 'numeric',
-                    pattern: '[0-9]*',
-                    min: qtyMin > 0 ? qtyMin : 1,
-                    step: qtyIncrement > 1 ? qtyIncrement : 1,
-                  }}
+              {quantityEditable && (
+                <Box
                   sx={{
-                    width: isMobile ? '110px' : '72px',
-                    '& .MuiFormHelperText-root': {
-                      marginLeft: '0',
-                      marginRight: '0',
-                    },
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: quantityStackItemsAlignment,
+                    width: '100%',
+                    maxWidth: '100%',
+                    minWidth: 0,
                   }}
-                />
-              ) : (
-                <>
-                  {isMobile && <span>Qty: </span>}
-                  {quantity}
-                </>
+                >
+                  <TextField
+                    type="number"
+                    variant="filled"
+                    hiddenLabel={!isMobile}
+                    label={isMobile ? 'Qty' : ''}
+                    value={quantity}
+                    onChange={handleProductQuantityChange(product.id)}
+                    onKeyDown={handleNumberInputKeyDown}
+                    onBlur={handleNumberInputBlur(product)}
+                    size="small"
+                    inputProps={{
+                      inputMode: 'numeric',
+                      pattern: '[0-9]*',
+                      min: qtyMin > 0 ? qtyMin : 1,
+                      step: qtyIncrement > 1 ? qtyIncrement : 1,
+                    }}
+                    sx={{
+                      width: isMobile ? '6.875rem' : '100%',
+                      '& .MuiFormHelperText-root': {
+                        marginLeft: '0',
+                        marginRight: '0',
+                      },
+                    }}
+                    error={Boolean(qtyHelperText)}
+                    helperText={qtyHelperText || undefined}
+                  />
+                  {backorderMessageElement && (
+                    <Box
+                      sx={{
+                        mt: 1,
+                        width: '100%',
+                        maxWidth: '100%',
+                        minWidth: 0,
+                        textAlign: qtyTextAlign,
+                        alignSelf: quantityStackItemsAlignment,
+                      }}
+                    >
+                      {backorderMessageElement}
+                    </Box>
+                  )}
+                </Box>
               )}
+              {!quantityEditable && backorderFields && (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: quantityStackItemsAlignment,
+                    width: '100%',
+                  }}
+                >
+                  <Box>{quantityLabel}</Box>
+                  <Box
+                    sx={{
+                      mt: 1,
+                      width: '100%',
+                      textAlign: qtyTextAlign,
+                      alignSelf: quantityStackItemsAlignment,
+                    }}
+                  >
+                    {backorderMessageElement}
+                  </Box>
+                </Box>
+              )}
+              {!quantityEditable && !backorderFields && quantityLabel}
             </FlexItem>
 
-            {renderPrice(totalText, totalPrice, discountedTotalPrice)}
+            {renderPrice(totalText, totalPrice, discountedTotalPrice, safeFormattedTotal)}
             {renderAction && (
               <FlexItem
-                {...itemStyle.default}
+                {...desktopNumericColumnStyle}
                 textAlignLocation="right"
                 width={isMobile ? '100%' : actionWidth}
               >

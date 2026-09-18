@@ -1,4 +1,11 @@
+import { isNativeLinkInterceptionCached } from './utils/nativeStorefrontLinks';
+import { injectPreMountLoginMask, shouldUseDefaultLoginStyling } from './utils/preMountLoginMask';
 import { bindLinks, initApp, requestIdleCallbackFunction, unbindLinks } from './load-functions';
+
+// Paint the pre-mount mask as early as possible (before React mounts) so the
+// merchant never sees BC's native login.php form before the buyer-portal iframe
+// takes over. See utils/preMountLoginMask for the masking/removal contract.
+injectPreMountLoginMask();
 
 export enum Environment {
   Production = 'production',
@@ -36,19 +43,32 @@ window.b2b = {
 };
 
 (async function bootstrap() {
-  // check if the accessed url contains a hashtag
-  if (window.location.hash.startsWith('#/')) {
+  // check if the accessed url contains a hashtag, or if the buyer portal is
+  // taking over the login page (eager init avoids the idle-callback delay while
+  // the masked BC native form is visible). The login-page branch is gated on the
+  // default-login-styling feature flag via shouldUseDefaultLoginStyling().
+  if (window.location.hash.startsWith('#/') || shouldUseDefaultLoginStyling()) {
     initApp();
   } else {
     // load the app when the browser is free
     requestIdleCallbackFunction(initApp);
     // and bind links to load the app
-    bindLinks();
-    window.addEventListener('beforeunload', unbindLinks);
+    // TODO(B2B-4912): once buyer_portal_native_link_interception is fully rolled
+    // out and the flag is removed, drop isNativeLinkInterceptionCached() and the
+    // nativeLinkInterceptionEnabled param from bindLinks/unbindLinks (see
+    // nativeStorefrontLinks.ts for the matching cache-write side to remove too).
+    const nativeLinkInterceptionEnabled = isNativeLinkInterceptionCached();
+    bindLinks(nativeLinkInterceptionEnabled);
+    window.addEventListener('beforeunload', () => unbindLinks(nativeLinkInterceptionEnabled));
     // and observe global flag to simulate click
     window.b2b.initializationEnvironment.isInitListener = () => {
-      unbindLinks();
-      setTimeout(() => window.b2b.initializationEnvironment.clickedLinkElement?.click(), 0);
+      unbindLinks(nativeLinkInterceptionEnabled);
+      setTimeout(() => {
+        // consume once so later isInit assignments don't replay a stale click
+        const { clickedLinkElement } = window.b2b.initializationEnvironment;
+        window.b2b.initializationEnvironment.clickedLinkElement = undefined;
+        clickedLinkElement?.click();
+      }, 0);
     };
   }
 })();

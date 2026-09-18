@@ -1,4 +1,4 @@
-import { ChangeEvent, KeyboardEvent, useCallback, useContext } from 'react';
+import { ChangeEvent, KeyboardEvent, useCallback, useContext, useMemo } from 'react';
 import { Search as SearchIcon } from '@mui/icons-material';
 import { Box, InputAdornment, TextField, Typography } from '@mui/material';
 
@@ -6,6 +6,8 @@ import B3Dialog from '@/components/B3Dialog';
 import { B3ProductList } from '@/components/B3ProductList';
 import CustomButton from '@/components/button/CustomButton';
 import B3Spin from '@/components/spin/B3Spin';
+import { useBackorderStorefrontMessaging } from '@/hooks/useBackorderStorefrontMessaging';
+import { useCatalogInventoryBySku } from '@/hooks/useCatalogInventoryBySku';
 import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { ShoppingListDetailsContext } from '@/pages/ShoppingListDetails/context/ShoppingListDetailsContext';
@@ -13,6 +15,10 @@ import { useAppSelector } from '@/store';
 import { ShoppingListProductItem } from '@/types';
 import { snackbar } from '@/utils/b3Tip';
 import { ProductRequirements } from '@/shared/service/vs/api/product';
+import {
+  buildVariantSkuDependencyKey,
+  productRequiresChooseOptionsBeforeAdd,
+} from '@/utils/catalogBackorderDisplay';
 
 interface ProductTableActionProps {
   product: ShoppingListProductItem;
@@ -107,6 +113,25 @@ export default function ProductListDialog(props: ProductListDialogProps) {
   );
 
   const [isMobile] = useMobile();
+  const { isBackorderMessagingContextEnabled, hasAnyBackorderDisplay } =
+    useBackorderStorefrontMessaging();
+  const backorderUiEnabled = isBackorderMessagingContextEnabled && hasAnyBackorderDisplay;
+
+  const variantSkuDependencyKey = useMemo(
+    () =>
+      buildVariantSkuDependencyKey(
+        productList
+          .filter((product) => !productRequiresChooseOptionsBeforeAdd(product))
+          .map((product) => product.variants?.[0]?.sku ?? product.sku),
+      ),
+    [productList],
+  );
+
+  const inventoryBySku = useCatalogInventoryBySku({
+    isActive: isOpen,
+    enabled: backorderUiEnabled,
+    skuDependencyKey: variantSkuDependencyKey,
+  });
 
   const handleCancelClicked = () => {
     onCancel();
@@ -131,6 +156,12 @@ export default function ProductListDialog(props: ProductListDialogProps) {
       return true;
     },
     [b3Lang, isEnableProduct],
+  );
+
+  const formatOnlyAvailable = useCallback(
+    (count: number) =>
+      b3Lang('purchasedProducts.quickAdd.inlineErrors.insufficientStockSku', { count }),
+    [b3Lang],
   );
 
   const handleAddToList = (id: number) => {
@@ -213,8 +244,11 @@ export default function ProductListDialog(props: ProductListDialogProps) {
               products={productList}
               quantityEditable
               type="quickOrder"
-              textAlign={isMobile ? 'left' : 'right'}
               canToProduct
+              catalogBackorderUiEnabled={backorderUiEnabled}
+              catalogInventoryBySku={inventoryBySku}
+              showAvailableToSellHelper
+              formatOnlyAvailable={formatOnlyAvailable}
               onProductQuantityChange={onProductQuantityChange}
               requirementsMap={requirementsMap}
               renderAction={(product) => (

@@ -48,6 +48,11 @@ interface VariantInfo {
   purchasingDisabled: '1' | '0';
   variantSku: string;
   imageUrl: string;
+  inventoryTracking?: string;
+  availableToSell?: number;
+  unlimitedBackorder?: boolean;
+  totalOnHand?: number | null;
+  backorderMessage?: string | null;
 }
 
 interface VariantInfoResponse {
@@ -394,12 +399,8 @@ it('displays a summary of products within the shopping list', async () => {
 
   await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
-  expect(screen.getByText('2 products')).toBeVisible();
-
-  // This is a workaround for the fact that the total price is not immediately available.
-  // The price is set after a useEffect and can fail during tests.
   await waitFor(() => {
-    expect(screen.getByText('$460.00')).toBeVisible();
+    expect(screen.getByText(/2 products \(\$460\.00\)/)).toBeVisible();
   });
 
   expect(screen.getByRole('row', { name: /Lovely socks/ })).toBeVisible();
@@ -1345,9 +1346,6 @@ describe('Add to quote', () => {
   });
 
   it('calls validateProducts query when NP/OOS flag is enabled', async () => {
-    const featureFlags = {
-      'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-    };
     const backorderEnabled = true;
 
     vitest.mocked(useParams).mockReturnValue({ id: '272989' });
@@ -1457,7 +1455,6 @@ describe('Add to quote', () => {
         company: b2bCompanyWithShoppingListPermissions,
         global: buildGlobalStateWith({
           backorderEnabled,
-          featureFlags,
           blockPendingQuoteNonPurchasableOOS: { isEnableProduct: true },
         }),
       },
@@ -1485,10 +1482,6 @@ describe('Add to quote', () => {
   });
 
   it('adds to quote when threshold error occurs and NP/OOS flag is enabled', async () => {
-    const featureFlags = {
-      'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-    };
-
     vitest.mocked(useParams).mockReturnValue({ id: '272989' });
 
     const getVariantInfoBySkus = vi.fn();
@@ -1602,7 +1595,7 @@ describe('Add to quote', () => {
       preloadedState: {
         company: b2bCompanyWithShoppingListPermissions,
         global: buildGlobalStateWith({
-          featureFlags,
+          backorderEnabled: true,
           blockPendingQuoteNonPurchasableOOS: { isEnableProduct: true },
         }),
       },
@@ -1622,10 +1615,6 @@ describe('Add to quote', () => {
   });
 
   it('adds to quote when threshold error occurs and NP/OOS flag is disabled', async () => {
-    const featureFlags = {
-      'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-    };
-
     vitest.mocked(useParams).mockReturnValue({ id: '272989' });
 
     const getVariantInfoBySkus = vi.fn();
@@ -1739,7 +1728,7 @@ describe('Add to quote', () => {
       preloadedState: {
         company: b2bCompanyWithShoppingListPermissions,
         global: buildGlobalStateWith({
-          featureFlags,
+          backorderEnabled: true,
           blockPendingQuoteNonPurchasableOOS: { isEnableProduct: false },
         }),
       },
@@ -2045,8 +2034,15 @@ describe('when backend validation is enabled', () => {
     company: b2bCompanyWithShoppingListPermissions,
     global: buildGlobalStateWith({
       backorderEnabled: true,
+      backorderDisplaySettings: {
+        showQuantityOnBackorder: true,
+        showQuantityOnHand: true,
+        showBackorderMessage: true,
+        showDefaultShippingExpectationPrompt: false,
+        defaultShippingExpectationPrompt: '',
+      },
       featureFlags: {
-        'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
+        'BACK-134.backorders_phase_1_1_control_messaging_on_storefront': true,
       },
     }),
   };
@@ -2054,7 +2050,14 @@ describe('when backend validation is enabled', () => {
   it('errors on exceed product inventory', async () => {
     vitest.mocked(useParams).mockReturnValue({ id: '272989' });
 
-    const variantInfo = buildVariantInfoWith({ variantSku: 'LVLY-SK-123' });
+    const variantInfo = buildVariantInfoWith({
+      variantSku: 'LVLY-SK-123',
+      inventoryTracking: 'product',
+      availableToSell: 4,
+      unlimitedBackorder: false,
+      totalOnHand: 2,
+      backorderMessage: 'Lead time: 2-4 weeks',
+    });
 
     const getVariantInfoBySkus = when(vi.fn())
       .calledWith(expect.stringContaining('variantSkus: ["LVLY-SK-123"]'))
@@ -2106,6 +2109,7 @@ describe('when backend validation is enabled', () => {
             productOptions: expect.any(Array),
           },
         ],
+        target: 'CART',
       })
       .thenReturn({
         data: {
@@ -2115,7 +2119,7 @@ describe('when backend validation is enabled', () => {
                 responseType: 'ERROR',
                 message: 'Out of stock',
                 errorCode: 'OOS',
-                product: { availableToSell: faker.number.int() }, // this is not used atm for the UI
+                product: { availableToSell: 1 },
               },
             ],
           },
@@ -2149,7 +2153,8 @@ describe('when backend validation is enabled', () => {
 
     await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
-    await userEvent.click(screen.getAllByRole('checkbox')[0]); // select-all checkbox
+    const table = screen.getByRole('table');
+    await userEvent.click(within(table).getAllByRole('checkbox')[0]); // select-all checkbox
 
     await userEvent.click(screen.getByRole('button', { name: /Add selected to/ }));
 
@@ -2161,7 +2166,10 @@ describe('when backend validation is enabled', () => {
       within(dialog).getByText('1 product(s) were not added to cart, please change the quantity'),
     ).toBeVisible();
 
-    expect(within(dialog).getByText('2 in stock')).toBeVisible();
+    expect(within(dialog).getByText('1 available')).toBeVisible();
+    expect(within(dialog).getByText('2 ready to ship')).toBeVisible();
+    expect(within(dialog).getByText('2 will be backordered')).toBeVisible();
+    expect(within(dialog).getByText('Lead time: 2-4 weeks')).toBeVisible();
   });
 
   it('respects unlimited backorder stock', async () => {
@@ -2213,6 +2221,7 @@ describe('when backend validation is enabled', () => {
             productOptions: expect.any(Array),
           },
         ],
+        target: 'CART',
       })
       .thenReturn({
         data: {
@@ -2222,7 +2231,7 @@ describe('when backend validation is enabled', () => {
                 responseType: 'ERROR',
                 message: 'Failed validation',
                 errorCode: 'OTHER',
-                product: { availableToSell: faker.number.int() }, // this is not used atm for the UI
+                product: { availableToSell: 1 },
               },
             ],
           },
@@ -2271,7 +2280,8 @@ describe('when backend validation is enabled', () => {
       expect.stringContaining('productIds: [73737]'),
     );
 
-    await userEvent.click(screen.getAllByRole('checkbox')[0]); // select-all checkbox
+    const table = screen.getByRole('table');
+    await userEvent.click(within(table).getAllByRole('checkbox')[0]); // select-all checkbox
 
     await userEvent.click(screen.getByRole('button', { name: /Add selected to/ }));
 
@@ -2283,7 +2293,7 @@ describe('when backend validation is enabled', () => {
       within(dialog).getByText('1 product(s) were not added to cart, please change the quantity'),
     ).toBeVisible();
 
-    expect(within(dialog).queryByText('2 in stock')).not.toBeInTheDocument();
+    expect(within(dialog).queryByText('1 available')).not.toBeInTheDocument();
   });
 
   it('errors on min quantity not reached', async () => {
@@ -2341,6 +2351,7 @@ describe('when backend validation is enabled', () => {
             productOptions: expect.any(Array),
           },
         ],
+        target: 'CART',
       })
       .thenReturn({
         data: {
@@ -2350,7 +2361,7 @@ describe('when backend validation is enabled', () => {
                 responseType: 'ERROR',
                 message: 'Min quantity not reached',
                 errorCode: 'OTHER',
-                product: { availableToSell: faker.number.int() }, // this is not used atm for the UI
+                product: { availableToSell: 20 },
               },
             ],
           },
@@ -2384,7 +2395,8 @@ describe('when backend validation is enabled', () => {
 
     await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
-    await userEvent.click(screen.getAllByRole('checkbox')[0]); // select-all checkbox
+    const table = screen.getByRole('table');
+    await userEvent.click(within(table).getAllByRole('checkbox')[0]); // select-all checkbox
 
     await userEvent.click(screen.getByRole('button', { name: /Add selected to/ }));
 
@@ -2455,6 +2467,7 @@ describe('when backend validation is enabled', () => {
             productOptions: expect.any(Array),
           },
         ],
+        target: 'CART',
       })
       .thenReturn({
         data: {
@@ -2464,7 +2477,7 @@ describe('when backend validation is enabled', () => {
                 responseType: 'ERROR',
                 message: 'Max quantity exceeded',
                 errorCode: 'OTHER',
-                product: { availableToSell: faker.number.int() }, // this is not used atm for the UI
+                product: { availableToSell: 0 },
               },
             ],
           },
@@ -2498,7 +2511,8 @@ describe('when backend validation is enabled', () => {
 
     await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
-    await userEvent.click(screen.getAllByRole('checkbox')[0]); // select-all checkbox
+    const table = screen.getByRole('table');
+    await userEvent.click(within(table).getAllByRole('checkbox')[0]); // select-all checkbox
 
     await userEvent.click(screen.getByRole('button', { name: /Add selected to/ }));
 
@@ -2568,6 +2582,7 @@ describe('when backend validation is enabled', () => {
             productOptions: expect.any(Array),
           },
         ],
+        target: 'CART',
       })
       .thenReturn({
         data: {
@@ -2577,7 +2592,7 @@ describe('when backend validation is enabled', () => {
                 responseType: 'ERROR',
                 message: 'Lovely socks, out of stock',
                 errorCode: 'OOS',
-                product: { availableToSell: faker.number.int() }, // this is not used atm for the UI
+                product: { availableToSell: 0 },
               },
             ],
           },
@@ -2611,7 +2626,8 @@ describe('when backend validation is enabled', () => {
 
     await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
-    await userEvent.click(screen.getAllByRole('checkbox')[0]); // select-all checkbox
+    const table = screen.getByRole('table');
+    await userEvent.click(within(table).getAllByRole('checkbox')[0]); // select-all checkbox
 
     await userEvent.click(screen.getByRole('button', { name: /Add selected to/ }));
 
@@ -2625,20 +2641,23 @@ describe('when backend validation is enabled', () => {
   it('shows only the most recent error for the product added to the cart', async () => {
     vi.mocked(useParams).mockReturnValue({ id: '272989' });
 
+    const outOfStockVariantSku = 'OOS-SK-123';
+
     const variantInfo = buildVariantInfoWith({
-      variantSku: 'LVLY-SK-123',
+      variantSku: outOfStockVariantSku,
       minQuantity: 0,
     });
 
-    const getVariantInfoBySkus = when(vi.fn())
-      .calledWith(expect.stringContaining('variantSkus: ["LVLY-SK-123"]'))
-      .thenReturn(buildVariantInfoResponseWith({ data: { variantSku: [variantInfo] } }));
+    const getVariantInfoBySkus = vi.fn(() =>
+      buildVariantInfoResponseWith({ data: { variantSku: [variantInfo] } }),
+    );
 
     const outOfStockProduct = buildShoppingListProductEdgeWith({
       node: {
         productName: 'Out of stock socks',
         productId: 73737,
         variantId: 737,
+        variantSku: outOfStockVariantSku,
         quantity: 2,
       },
     });
@@ -2722,6 +2741,7 @@ describe('when backend validation is enabled', () => {
             productOptions: expect.any(Array),
           },
         ],
+        target: 'CART',
       })
       .thenReturn({
         data: {
@@ -2731,7 +2751,7 @@ describe('when backend validation is enabled', () => {
                 responseType: 'ERROR',
                 message: 'Out of stock',
                 errorCode: 'OOS',
-                product: { availableToSell: faker.number.int() }, // this is not used atm for the UI
+                product: { availableToSell: 0 },
               },
             ],
           },
@@ -2743,9 +2763,7 @@ describe('when backend validation is enabled', () => {
       graphql.query('SearchProducts', ({ query }) =>
         HttpResponse.json(searchProductsQuerySpy(query)),
       ),
-      graphql.query('GetVariantInfoBySkus', ({ query }) =>
-        HttpResponse.json(getVariantInfoBySkus(query)),
-      ),
+      graphql.query('GetVariantInfoBySkus', () => HttpResponse.json(getVariantInfoBySkus())),
       graphql.query('getCart', () => HttpResponse.json({ data: { site: { cart } } })),
       graphql.mutation('addCartLineItemsTwo', ({ variables }) =>
         addCartLineItemsMutation(variables),
@@ -2847,7 +2865,8 @@ describe('when backend validation is enabled', () => {
 
     await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
-    await userEvent.click(screen.getAllByRole('checkbox')[0]); // select-all checkbox
+    const table = screen.getByRole('table');
+    await userEvent.click(within(table).getAllByRole('checkbox')[0]); // select-all checkbox
 
     await userEvent.click(screen.getByRole('button', { name: /Add selected to/ }));
     await userEvent.click(screen.getByRole('menuitem', { name: /Add selected to cart/ }));
@@ -2925,6 +2944,7 @@ describe('when backend validation is enabled', () => {
             productOptions: [{ optionId: 202, optionValue: 'Large' }],
           },
         ],
+        target: 'CART',
       })
       .thenReturn({
         data: {
@@ -2980,7 +3000,8 @@ describe('when backend validation is enabled', () => {
 
     await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
-    await userEvent.click(screen.getAllByRole('checkbox')[0]); // select-all checkbox
+    const table = screen.getByRole('table');
+    await userEvent.click(within(table).getAllByRole('checkbox')[0]); // select-all checkbox
 
     await userEvent.click(screen.getByRole('button', { name: /Add selected to/ }));
     await userEvent.click(screen.getByRole('menuitem', { name: /Add selected to cart/ }));
@@ -3063,6 +3084,7 @@ describe('when backend validation is enabled', () => {
             productOptions: expect.any(Array),
           },
         ],
+        target: 'CART',
       })
       .thenReturn({
         data: {
@@ -3109,7 +3131,8 @@ describe('when backend validation is enabled', () => {
 
     await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
-    await userEvent.click(screen.getAllByRole('checkbox')[0]); // select-all checkbox
+    const table = screen.getByRole('table');
+    await userEvent.click(within(table).getAllByRole('checkbox')[0]); // select-all checkbox
 
     await userEvent.click(screen.getByRole('button', { name: /Add selected to/ }));
     await userEvent.click(screen.getByRole('menuitem', { name: /Add selected to cart/ }));
@@ -3166,6 +3189,7 @@ describe('when backend validation is enabled', () => {
             productOptions: expect.any(Array),
           },
         ],
+        target: 'CART',
       })
       .thenReturn({
         data: {
@@ -3204,7 +3228,8 @@ describe('when backend validation is enabled', () => {
 
     await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
-    await userEvent.click(screen.getAllByRole('checkbox')[0]); // select-all checkbox
+    const table = screen.getByRole('table');
+    await userEvent.click(within(table).getAllByRole('checkbox')[0]); // select-all checkbox
 
     await userEvent.click(screen.getByRole('button', { name: /Add selected to/ }));
     await userEvent.click(screen.getByRole('menuitem', { name: /Add selected to cart/ }));
@@ -3266,6 +3291,7 @@ describe('when backend validation is enabled', () => {
             productOptions: [{ optionId: 303, optionValue: 'Blue' }],
           },
         ],
+        target: 'CART',
       })
       .thenReturn({
         data: {
@@ -3302,7 +3328,8 @@ describe('when backend validation is enabled', () => {
 
     await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
-    await userEvent.click(screen.getAllByRole('checkbox')[0]); // select-all checkbox
+    const table = screen.getByRole('table');
+    await userEvent.click(within(table).getAllByRole('checkbox')[0]); // select-all checkbox
 
     await userEvent.click(screen.getByRole('button', { name: /Add selected to/ }));
     await userEvent.click(screen.getByRole('menuitem', { name: /Add selected to cart/ }));
@@ -3365,7 +3392,8 @@ describe('when backend validation is enabled', () => {
 
     await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
-    await userEvent.click(screen.getAllByRole('checkbox')[0]); // select-all checkbox
+    const table = screen.getByRole('table');
+    await userEvent.click(within(table).getAllByRole('checkbox')[0]); // select-all checkbox
 
     await userEvent.click(screen.getByRole('button', { name: /Add selected to/ }));
     await userEvent.click(screen.getByRole('menuitem', { name: /Add selected to cart/ }));
@@ -3376,5 +3404,1593 @@ describe('when backend validation is enabled', () => {
       within(dialog).getByText('1 product(s) were not added to cart, please change the quantity'),
     ).toBeVisible();
     expect(within(dialog).getByText('Happy Product')).toBeVisible();
+  });
+});
+
+describe('when backorder messaging is enabled on shopping list products', () => {
+  const variantSku = 'SL-BO-123';
+
+  const backorderPreloadedState = {
+    company: b2bCompanyWithShoppingListPermissions,
+    global: buildGlobalStateWith({
+      backorderEnabled: true,
+      backorderDisplaySettings: {
+        showQuantityOnBackorder: true,
+        showQuantityOnHand: true,
+        showBackorderMessage: true,
+        showDefaultShippingExpectationPrompt: false,
+        defaultShippingExpectationPrompt: '',
+      },
+      featureFlags: {
+        'BACK-134.backorders_phase_1_1_control_messaging_on_storefront': true,
+      },
+    }),
+  };
+
+  const setupShoppingListTable = ({
+    totalOnHand = 2,
+    availableToSell = 4,
+    backorderMessage = 'Lead time: 2-4 weeks',
+    inventoryFetchFails = false,
+  }: {
+    totalOnHand?: number;
+    availableToSell?: number;
+    backorderMessage?: string;
+    inventoryFetchFails?: boolean;
+  } = {}) => {
+    vitest.mocked(useParams).mockReturnValue({ id: '272989' });
+
+    const productEdge = buildShoppingListProductEdgeWith({
+      node: {
+        productName: 'Bistro Pro Literide Clog',
+        productId: 73737,
+        variantSku,
+        quantity: 1,
+        basePrice: '100',
+      },
+    });
+
+    const shoppingListResponse = buildShoppingListGraphQLResponseWith({
+      data: {
+        shoppingList: {
+          products: { totalCount: 1, edges: [productEdge] },
+          status: 0,
+          grandTotal: '100',
+          totalTax: '0',
+        },
+      },
+    });
+
+    const variantInfo = buildVariantInfoWith({
+      variantSku,
+      inventoryTracking: 'variant',
+      availableToSell,
+      unlimitedBackorder: false,
+      totalOnHand,
+      backorderMessage,
+    });
+
+    const getVariantInfoBySkus = when(vi.fn())
+      .calledWith(expect.stringContaining(`variantSkus: ["${variantSku}"]`))
+      .thenReturn(buildVariantInfoResponseWith({ data: { variantSku: [variantInfo] } }));
+
+    server.use(
+      graphql.query('B2BShoppingListDetails', () => HttpResponse.json(shoppingListResponse)),
+      graphql.query('SearchProducts', () =>
+        HttpResponse.json(buildSearchProductsResponseWith({ data: { productsSearch: [] } })),
+      ),
+      graphql.query('GetVariantInfoBySkus', ({ query }) =>
+        inventoryFetchFails ? HttpResponse.error() : HttpResponse.json(getVariantInfoBySkus(query)),
+      ),
+    );
+  };
+
+  it('shows backorder lines by default when qty exceeds on hand', async () => {
+    setupShoppingListTable();
+
+    renderWithProviders(<ShoppingListDetailsContent setOpenPage={() => {}} />, {
+      preloadedState: backorderPreloadedState,
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    expect(await screen.findByText('Bistro Pro Literide Clog')).toBeInTheDocument();
+
+    const table = screen.getByRole('table');
+    const quantityInput = within(table).getByRole('spinbutton');
+
+    await userEvent.type(quantityInput, '10', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: Infinity,
+    });
+
+    expect(await screen.findByRole('checkbox', { name: /Backorder details/i })).toBeChecked();
+
+    await waitFor(() => {
+      expect(screen.getByText('2 ready to ship')).toBeVisible();
+    });
+    expect(screen.getByText('2 will be backordered')).toBeVisible();
+    expect(screen.getByText('Lead time: 2-4 weeks')).toBeVisible();
+  });
+
+  it('hides backorder lines when toggle is turned off', async () => {
+    setupShoppingListTable();
+
+    renderWithProviders(<ShoppingListDetailsContent setOpenPage={() => {}} />, {
+      preloadedState: backorderPreloadedState,
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    expect(await screen.findByText('Bistro Pro Literide Clog')).toBeInTheDocument();
+
+    const table = screen.getByRole('table');
+    const quantityInput = within(table).getByRole('spinbutton');
+
+    await userEvent.type(quantityInput, '10', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: Infinity,
+    });
+
+    const backorderToggle = await screen.findByRole('checkbox', { name: /Backorder details/i });
+    expect(backorderToggle).toBeChecked();
+    expect(await screen.findByText('2 will be backordered')).toBeVisible();
+
+    await userEvent.click(backorderToggle);
+
+    expect(screen.queryByText('2 ready to ship')).not.toBeInTheDocument();
+    expect(screen.queryByText('2 will be backordered')).not.toBeInTheDocument();
+    expect(screen.queryByText('Lead time: 2-4 weeks')).not.toBeInTheDocument();
+  });
+
+  it('hides backorder toggle and lines when qty is within on hand', async () => {
+    setupShoppingListTable({ totalOnHand: 9, availableToSell: 10 });
+
+    renderWithProviders(<ShoppingListDetailsContent setOpenPage={() => {}} />, {
+      preloadedState: backorderPreloadedState,
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    expect(await screen.findByText('Bistro Pro Literide Clog')).toBeInTheDocument();
+
+    const table = screen.getByRole('table');
+    const quantityInput = within(table).getByRole('spinbutton');
+
+    await userEvent.type(quantityInput, '2', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: Infinity,
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('checkbox', { name: /Backorder details/i }),
+      ).not.toBeInTheDocument();
+    });
+    expect(screen.queryByText('will be backordered', { exact: false })).not.toBeInTheDocument();
+  });
+
+  it('hides backorder toggle and lines when messaging is disabled', async () => {
+    setupShoppingListTable();
+
+    renderWithProviders(<ShoppingListDetailsContent setOpenPage={() => {}} />, {
+      preloadedState: { company: b2bCompanyWithShoppingListPermissions },
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    expect(await screen.findByText('Bistro Pro Literide Clog')).toBeInTheDocument();
+
+    const table = screen.getByRole('table');
+    const quantityInput = within(table).getByRole('spinbutton');
+
+    await userEvent.type(quantityInput, '10', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: Infinity,
+    });
+
+    expect(screen.queryByRole('checkbox', { name: /Backorder details/i })).not.toBeInTheDocument();
+    expect(screen.queryByText('will be backordered', { exact: false })).not.toBeInTheDocument();
+  });
+
+  it('still shows shopping list products without backorder UI when inventory fetch fails', async () => {
+    setupShoppingListTable({ inventoryFetchFails: true });
+
+    renderWithProviders(<ShoppingListDetailsContent setOpenPage={() => {}} />, {
+      preloadedState: backorderPreloadedState,
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    expect(await screen.findByText('Bistro Pro Literide Clog')).toBeInTheDocument();
+
+    const table = screen.getByRole('table');
+    const quantityInput = within(table).getByRole('spinbutton');
+
+    await userEvent.type(quantityInput, '10', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: Infinity,
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('checkbox', { name: /Backorder details/i }),
+      ).not.toBeInTheDocument();
+    });
+    expect(screen.queryByText('will be backordered', { exact: false })).not.toBeInTheDocument();
+  });
+
+  describe('on mobile', () => {
+    beforeEach(() => {
+      vi.spyOn(document.body, 'clientWidth', 'get').mockReturnValue(500);
+    });
+
+    it('shows backorder lines in the card view by default when qty exceeds on hand', async () => {
+      setupShoppingListTable();
+
+      renderWithProviders(<ShoppingListDetailsContent setOpenPage={() => {}} />, {
+        preloadedState: backorderPreloadedState,
+      });
+
+      await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+      expect(await screen.findByText('Bistro Pro Literide Clog')).toBeInTheDocument();
+
+      await waitFor(() => {
+        expect(screen.queryByRole('table')).not.toBeInTheDocument();
+      });
+
+      const productCard = screen
+        .getByText('Bistro Pro Literide Clog')
+        .closest('.MuiCardContent-root');
+      const quantityInput = within(productCard as HTMLElement).getByRole('spinbutton');
+
+      await userEvent.type(quantityInput, '10', {
+        initialSelectionStart: 0,
+        initialSelectionEnd: Infinity,
+      });
+
+      expect(await screen.findByRole('checkbox', { name: /Backorder details/i })).toBeChecked();
+
+      await waitFor(() => {
+        expect(screen.getByText('2 ready to ship')).toBeVisible();
+      });
+      expect(screen.getByText('2 will be backordered')).toBeVisible();
+      expect(screen.getByText('Lead time: 2-4 weeks')).toBeVisible();
+    });
+  });
+});
+
+describe('when a shopping list product is a picklist with a backordered child', () => {
+  const parentVariantSku = 'SL-PICK-PARENT';
+  const parentProductId = 73737;
+  const modifierId = 70;
+  const optionValueId = 501;
+  const picklistProductId = 70000;
+
+  const backorderPreloadedState = {
+    company: b2bCompanyWithShoppingListPermissions,
+    global: buildGlobalStateWith({
+      backorderEnabled: true,
+      backorderDisplaySettings: {
+        showQuantityOnBackorder: true,
+        showQuantityOnHand: true,
+        showBackorderMessage: true,
+        showDefaultShippingExpectationPrompt: false,
+        defaultShippingExpectationPrompt: '',
+      },
+      featureFlags: {
+        'BACK-134.backorders_phase_1_1_control_messaging_on_storefront': true,
+      },
+    }),
+  };
+
+  const setupPicklistShoppingList = ({
+    parentTotalOnHand = 20,
+    childTotalOnHand = 3,
+  }: { parentTotalOnHand?: number; childTotalOnHand?: number } = {}) => {
+    vitest.mocked(useParams).mockReturnValue({ id: '272989' });
+
+    const productEdge = buildShoppingListProductEdgeWith({
+      node: {
+        productName: 'PICKLE KIT',
+        productId: parentProductId,
+        variantSku: parentVariantSku,
+        quantity: 7,
+        basePrice: '22.00',
+        optionList: JSON.stringify([
+          { option_id: `attribute[${modifierId}]`, option_value: `${optionValueId}` },
+        ]),
+      },
+    });
+
+    const shoppingListResponse = buildShoppingListGraphQLResponseWith({
+      data: {
+        shoppingList: {
+          products: { totalCount: 1, edges: [productEdge] },
+          status: 0,
+          grandTotal: '154.00',
+          totalTax: '0',
+        },
+      },
+    });
+
+    const parentProduct = buildSearchB2BProductWith({
+      id: parentProductId,
+      name: 'PICKLE KIT',
+      sku: 'PK',
+      optionsV3: [],
+      isPriceHidden: false,
+      variants: [],
+      modifiers: [
+        {
+          id: modifierId,
+          type: 'product_list',
+          display_name: 'Pickly Picky',
+          option_values: [
+            {
+              id: optionValueId,
+              label: 'Mining Pick',
+              is_default: true,
+              option_id: modifierId,
+              value_data: { product_id: picklistProductId },
+            },
+          ],
+        },
+      ],
+    });
+
+    const picklistChildProduct = buildSearchB2BProductWith({
+      id: picklistProductId,
+      name: 'Mining Pick',
+      inventoryTracking: 'product',
+      availableToSell: 20,
+      unlimitedBackorder: false,
+      totalOnHand: childTotalOnHand,
+      backorderMessage: 'Backorders Schmackorders',
+      variants: [],
+    });
+
+    const parentVariantInfo = buildVariantInfoWith({
+      variantSku: parentVariantSku,
+      inventoryTracking: 'product',
+      availableToSell: 20,
+      unlimitedBackorder: false,
+      totalOnHand: parentTotalOnHand,
+      backorderMessage: 'Parent lead time: 2-4 weeks',
+    });
+
+    server.use(
+      graphql.query('B2BShoppingListDetails', () => HttpResponse.json(shoppingListResponse)),
+      graphql.query('SearchProducts', () =>
+        HttpResponse.json(
+          buildSearchProductsResponseWith({
+            data: { productsSearch: [parentProduct, picklistChildProduct] },
+          }),
+        ),
+      ),
+      graphql.query('GetVariantInfoBySkus', () =>
+        HttpResponse.json(
+          buildVariantInfoResponseWith({ data: { variantSku: [parentVariantInfo] } }),
+        ),
+      ),
+    );
+  };
+
+  it('shows the picklist child backorder lines by default', async () => {
+    setupPicklistShoppingList();
+
+    renderWithProviders(<ShoppingListDetailsContent setOpenPage={() => {}} />, {
+      preloadedState: backorderPreloadedState,
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    expect(await screen.findByText('PICKLE KIT')).toBeVisible();
+
+    expect(await screen.findByRole('checkbox', { name: /Backorder details/i })).toBeChecked();
+
+    expect(await screen.findByText('Pickly Picky:')).toBeVisible();
+    expect(screen.getByText('3 ready to ship')).toBeVisible();
+    expect(screen.getByText('4 will be backordered')).toBeVisible();
+    expect(screen.getByText('Backorders Schmackorders')).toBeVisible();
+  });
+
+  it('hides the picklist child backorder lines when the toggle is turned off', async () => {
+    setupPicklistShoppingList();
+
+    renderWithProviders(<ShoppingListDetailsContent setOpenPage={() => {}} />, {
+      preloadedState: backorderPreloadedState,
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    expect(await screen.findByText('PICKLE KIT')).toBeVisible();
+
+    const backorderToggle = await screen.findByRole('checkbox', { name: /Backorder details/i });
+    expect(backorderToggle).toBeChecked();
+    expect(await screen.findByText('Pickly Picky:')).toBeVisible();
+
+    await userEvent.click(backorderToggle);
+
+    expect(screen.queryByText('Pickly Picky:')).toBeNull();
+    expect(screen.queryByText('4 will be backordered')).toBeNull();
+    expect(screen.queryByText('Backorders Schmackorders')).toBeNull();
+  });
+
+  it('shows both the parent and the child backorder lines when both are backordered', async () => {
+    setupPicklistShoppingList({ parentTotalOnHand: 3 });
+
+    renderWithProviders(<ShoppingListDetailsContent setOpenPage={() => {}} />, {
+      preloadedState: backorderPreloadedState,
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    expect(await screen.findByText('PICKLE KIT')).toBeVisible();
+
+    await screen.findByText('Pickly Picky:');
+    expect(screen.getAllByText('3 ready to ship')).toHaveLength(2);
+    expect(screen.getAllByText('4 will be backordered')).toHaveLength(2);
+    expect(screen.getByText('Parent lead time: 2-4 weeks')).toBeVisible();
+    expect(screen.getByText('Backorders Schmackorders')).toBeVisible();
+  });
+
+  it('hides the picklist child backorder lines when messaging is disabled', async () => {
+    setupPicklistShoppingList();
+
+    renderWithProviders(<ShoppingListDetailsContent setOpenPage={() => {}} />, {
+      preloadedState: { company: b2bCompanyWithShoppingListPermissions },
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    expect(await screen.findByText('PICKLE KIT')).toBeVisible();
+
+    expect(screen.queryByRole('checkbox', { name: /Backorder details/i })).toBeNull();
+    expect(screen.queryByText('Pickly Picky:')).toBeNull();
+    expect(screen.queryByText('Backorders Schmackorders')).toBeNull();
+  });
+
+  describe('on mobile', () => {
+    beforeEach(() => {
+      vi.spyOn(document.body, 'clientWidth', 'get').mockReturnValue(500);
+    });
+
+    it('shows the picklist child backorder lines in the card view by default', async () => {
+      setupPicklistShoppingList();
+
+      renderWithProviders(<ShoppingListDetailsContent setOpenPage={() => {}} />, {
+        preloadedState: backorderPreloadedState,
+      });
+
+      await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+      expect(await screen.findByText('PICKLE KIT')).toBeVisible();
+
+      await waitFor(() => {
+        expect(screen.queryByRole('table')).toBeNull();
+      });
+
+      expect(await screen.findByRole('checkbox', { name: /Backorder details/i })).toBeChecked();
+
+      expect(await screen.findByText('Pickly Picky:')).toBeVisible();
+      expect(screen.getByText('3 ready to ship')).toBeVisible();
+      expect(screen.getByText('4 will be backordered')).toBeVisible();
+      expect(screen.getByText('Backorders Schmackorders')).toBeVisible();
+    });
+  });
+});
+
+describe('when backorder messaging is enabled in add to list search modal', () => {
+  const variantSku = 'SL-SEARCH-123';
+  const productName = 'Cast Iron Skillet';
+  const searchTerm = 'Skillet';
+
+  const backorderPreloadedState = {
+    company: b2bCompanyWithShoppingListPermissions,
+    global: buildGlobalStateWith({
+      backorderEnabled: true,
+      backorderDisplaySettings: {
+        showQuantityOnBackorder: true,
+        showQuantityOnHand: true,
+        showBackorderMessage: true,
+        showDefaultShippingExpectationPrompt: false,
+        defaultShippingExpectationPrompt: '',
+      },
+      featureFlags: {
+        'BACK-134.backorders_phase_1_1_control_messaging_on_storefront': true,
+      },
+    }),
+  };
+
+  const setupSearchAddToListModal = ({
+    totalOnHand = 2,
+    availableToSell = 4,
+    backorderMessage = 'Lead time: 2-4 weeks',
+    inventoryFetchFails = false,
+  }: {
+    totalOnHand?: number;
+    availableToSell?: number;
+    backorderMessage?: string;
+    inventoryFetchFails?: boolean;
+  } = {}) => {
+    vitest.mocked(useParams).mockReturnValue({ id: '272989' });
+
+    const listProductEdge = buildShoppingListProductEdgeWith({
+      node: {
+        productName: 'Existing list item',
+        productId: 8000,
+        variantSku: 'LIST-SKU-001',
+        quantity: 1,
+        basePrice: '10.00',
+      },
+    });
+
+    const variant = buildSearchB2BProductVariantWith({
+      sku: variantSku,
+      purchasing_disabled: false,
+      bc_calculated_price: {
+        as_entered: 199.95,
+        tax_inclusive: 199.95,
+        tax_exclusive: 199.95,
+        entered_inclusive: false,
+      },
+    });
+
+    const searchProduct = buildSearchB2BProductWith({
+      id: 9001,
+      name: productName,
+      sku: variantSku,
+      optionsV3: [],
+      isPriceHidden: false,
+      variants: [variant],
+    });
+
+    const shoppingListResponse = buildShoppingListGraphQLResponseWith({
+      data: {
+        shoppingList: {
+          products: { totalCount: 1, edges: [listProductEdge] },
+          status: 0,
+          grandTotal: '10.00',
+          totalTax: '0',
+        },
+      },
+    });
+
+    const searchVariantInfo = buildVariantInfoWith({
+      variantSku,
+      inventoryTracking: 'variant',
+      availableToSell,
+      unlimitedBackorder: false,
+      totalOnHand,
+      backorderMessage,
+    });
+
+    const getVariantInfoBySkus = vi.fn(({ query }: { query: string }) => {
+      if (inventoryFetchFails) {
+        return HttpResponse.error();
+      }
+
+      if (query.includes(`"${variantSku}"`)) {
+        return HttpResponse.json(
+          buildVariantInfoResponseWith({ data: { variantSku: [searchVariantInfo] } }),
+        );
+      }
+
+      return HttpResponse.json(buildVariantInfoResponseWith({ data: { variantSku: [] } }));
+    });
+
+    server.use(
+      graphql.query('B2BShoppingListDetails', () => HttpResponse.json(shoppingListResponse)),
+      graphql.query('SearchProducts', ({ query }) => {
+        if (/productIds: \[\d/.test(query)) {
+          return HttpResponse.json(
+            buildSearchProductsResponseWith({ data: { productsSearch: [] } }),
+          );
+        }
+
+        return HttpResponse.json(
+          buildSearchProductsResponseWith({ data: { productsSearch: [searchProduct] } }),
+        );
+      }),
+      graphql.query('GetVariantInfoBySkus', ({ query }) => getVariantInfoBySkus({ query })),
+    );
+  };
+
+  const openAddToListSearchDialog = async () => {
+    await screen.findByRole('heading', { name: /add to list/i });
+
+    const searchBox = screen.getByPlaceholderText('Search products');
+    await userEvent.type(searchBox, searchTerm);
+    await userEvent.click(screen.getByRole('button', { name: /Search product/i }));
+
+    return screen.findByRole('dialog', { name: 'Add to list' });
+  };
+
+  it('shows backorder lines when qty exceeds on hand', async () => {
+    setupSearchAddToListModal();
+
+    renderWithProviders(<ShoppingListDetailsContent setOpenPage={() => {}} />, {
+      preloadedState: backorderPreloadedState,
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    const dialog = await openAddToListSearchDialog();
+    const quantityInput = within(dialog).getByRole('spinbutton');
+
+    await userEvent.type(quantityInput, '10', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: Infinity,
+    });
+
+    await waitFor(() => {
+      expect(within(dialog).getByText('2 ready to ship')).toBeVisible();
+    });
+    expect(within(dialog).getByText('2 will be backordered')).toBeVisible();
+    expect(within(dialog).getByText('Lead time: 2-4 weeks')).toBeVisible();
+  });
+
+  it('does not show ATS error helper when qty exceeds available to sell', async () => {
+    setupSearchAddToListModal();
+
+    renderWithProviders(<ShoppingListDetailsContent setOpenPage={() => {}} />, {
+      preloadedState: backorderPreloadedState,
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    const dialog = await openAddToListSearchDialog();
+    const quantityInput = within(dialog).getByRole('spinbutton');
+
+    await userEvent.type(quantityInput, '10', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: Infinity,
+    });
+
+    await waitFor(() => {
+      expect(within(dialog).getByText('2 will be backordered')).toBeVisible();
+    });
+
+    expect(within(dialog).queryByText('4 available')).not.toBeInTheDocument();
+    expect(quantityInput.closest('.MuiTextField-root')).not.toHaveClass('Mui-error');
+  });
+
+  it('hides backorder lines when qty is within on hand', async () => {
+    setupSearchAddToListModal({ totalOnHand: 9, availableToSell: 10 });
+
+    renderWithProviders(<ShoppingListDetailsContent setOpenPage={() => {}} />, {
+      preloadedState: backorderPreloadedState,
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    const dialog = await openAddToListSearchDialog();
+    const quantityInput = within(dialog).getByRole('spinbutton');
+
+    await userEvent.type(quantityInput, '2', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: Infinity,
+    });
+
+    await waitFor(() => {
+      expect(
+        within(dialog).queryByText('will be backordered', { exact: false }),
+      ).not.toBeInTheDocument();
+    });
+    expect(within(dialog).queryByText('ready to ship', { exact: false })).not.toBeInTheDocument();
+  });
+
+  it('hides backorder lines when messaging is disabled', async () => {
+    setupSearchAddToListModal();
+
+    renderWithProviders(<ShoppingListDetailsContent setOpenPage={() => {}} />, {
+      preloadedState: { company: b2bCompanyWithShoppingListPermissions },
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    const dialog = await openAddToListSearchDialog();
+    const quantityInput = within(dialog).getByRole('spinbutton');
+
+    await userEvent.type(quantityInput, '10', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: Infinity,
+    });
+
+    await waitFor(() => {
+      expect(within(dialog).getByText(productName)).toBeVisible();
+    });
+    expect(
+      within(dialog).queryByText('will be backordered', { exact: false }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('still shows search results without backorder UI when inventory fetch fails', async () => {
+    setupSearchAddToListModal({ inventoryFetchFails: true });
+
+    renderWithProviders(<ShoppingListDetailsContent setOpenPage={() => {}} />, {
+      preloadedState: backorderPreloadedState,
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    const dialog = await openAddToListSearchDialog();
+    const quantityInput = within(dialog).getByRole('spinbutton');
+
+    await userEvent.type(quantityInput, '10', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: Infinity,
+    });
+
+    await waitFor(() => {
+      expect(within(dialog).getByText(productName)).toBeVisible();
+    });
+    expect(
+      within(dialog).queryByText('will be backordered', { exact: false }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('clears stale backorder inventory while refetching after a new search', async () => {
+    const sharedSku = 'SL-SHARED-SKU';
+    const otherSku = 'SL-OTHER-SKU';
+    const secondProductName = 'Cast Iron Pan';
+    let resolveSecondInventoryFetch!: (value: HttpResponse<VariantInfoResponse>) => void;
+    let sharedSkuFetchCount = 0;
+
+    const pendingSecondInventoryFetch = new Promise<HttpResponse<VariantInfoResponse>>(
+      (resolve) => {
+        resolveSecondInventoryFetch = resolve;
+      },
+    );
+
+    vitest.mocked(useParams).mockReturnValue({ id: '272989' });
+
+    const listProductEdge = buildShoppingListProductEdgeWith({
+      node: {
+        productName: 'Existing list item',
+        productId: 8000,
+        variantSku: 'LIST-SKU-001',
+        quantity: 1,
+        basePrice: '10.00',
+      },
+    });
+
+    const buildSearchVariant = (sku: string) =>
+      buildSearchB2BProductVariantWith({
+        sku,
+        purchasing_disabled: false,
+        bc_calculated_price: {
+          as_entered: 199.95,
+          tax_inclusive: 199.95,
+          tax_exclusive: 199.95,
+          entered_inclusive: false,
+        },
+      });
+
+    const firstSearchProduct = buildSearchB2BProductWith({
+      id: 9001,
+      name: productName,
+      sku: sharedSku,
+      optionsV3: [],
+      isPriceHidden: false,
+      variants: [buildSearchVariant(sharedSku)],
+    });
+
+    const secondSearchProduct = buildSearchB2BProductWith({
+      id: 9002,
+      name: secondProductName,
+      sku: sharedSku,
+      optionsV3: [],
+      isPriceHidden: false,
+      variants: [buildSearchVariant(sharedSku)],
+    });
+
+    const otherSearchProduct = buildSearchB2BProductWith({
+      id: 9003,
+      name: 'Silicone Spatula',
+      sku: otherSku,
+      optionsV3: [],
+      isPriceHidden: false,
+      variants: [buildSearchVariant(otherSku)],
+    });
+
+    const lowInventoryVariantInfo = buildVariantInfoWith({
+      variantSku: sharedSku,
+      inventoryTracking: 'variant',
+      availableToSell: 4,
+      unlimitedBackorder: false,
+      totalOnHand: 2,
+      backorderMessage: 'Lead time: 2-4 weeks',
+    });
+
+    const highInventoryVariantInfo = buildVariantInfoWith({
+      variantSku: sharedSku,
+      inventoryTracking: 'variant',
+      availableToSell: 10,
+      unlimitedBackorder: false,
+      totalOnHand: 9,
+      backorderMessage: 'Lead time: 2-4 weeks',
+    });
+
+    const otherInventoryVariantInfo = buildVariantInfoWith({
+      variantSku: otherSku,
+      inventoryTracking: 'variant',
+      availableToSell: 10,
+      unlimitedBackorder: false,
+      totalOnHand: 9,
+    });
+
+    const getVariantInfoBySkus = vi.fn(
+      ({
+        query,
+      }: {
+        query: string;
+      }): HttpResponse<VariantInfoResponse> | Promise<HttpResponse<VariantInfoResponse>> => {
+        if (!query.includes(`"${sharedSku}"`)) {
+          return HttpResponse.json(buildVariantInfoResponseWith({ data: { variantSku: [] } }));
+        }
+
+        sharedSkuFetchCount += 1;
+
+        if (sharedSkuFetchCount === 1) {
+          return HttpResponse.json(
+            buildVariantInfoResponseWith({ data: { variantSku: [lowInventoryVariantInfo] } }),
+          );
+        }
+
+        return pendingSecondInventoryFetch;
+      },
+    );
+
+    server.use(
+      graphql.query('B2BShoppingListDetails', () =>
+        HttpResponse.json(
+          buildShoppingListGraphQLResponseWith({
+            data: {
+              shoppingList: {
+                products: { totalCount: 1, edges: [listProductEdge] },
+                status: 0,
+                grandTotal: '10.00',
+                totalTax: '0',
+              },
+            },
+          }),
+        ),
+      ),
+      graphql.query('SearchProducts', ({ query }) => {
+        if (/productIds: \[\d/.test(query)) {
+          return HttpResponse.json(
+            buildSearchProductsResponseWith({ data: { productsSearch: [] } }),
+          );
+        }
+
+        if (query.includes('Pan')) {
+          return HttpResponse.json(
+            buildSearchProductsResponseWith({
+              data: { productsSearch: [secondSearchProduct, otherSearchProduct] },
+            }),
+          );
+        }
+
+        return HttpResponse.json(
+          buildSearchProductsResponseWith({ data: { productsSearch: [firstSearchProduct] } }),
+        );
+      }),
+      graphql.query('GetVariantInfoBySkus', ({ query }) => getVariantInfoBySkus({ query })),
+    );
+
+    renderWithProviders(<ShoppingListDetailsContent setOpenPage={() => {}} />, {
+      preloadedState: backorderPreloadedState,
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    const dialog = await openAddToListSearchDialog();
+    const quantityInput = within(dialog).getByRole('spinbutton');
+
+    await userEvent.type(quantityInput, '10', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: Infinity,
+    });
+
+    await waitFor(() => {
+      expect(within(dialog).getByText('2 ready to ship')).toBeVisible();
+    });
+
+    const dialogSearchBox = within(dialog).getByDisplayValue(searchTerm);
+    await userEvent.clear(dialogSearchBox);
+    await userEvent.type(dialogSearchBox, 'Pan{Enter}');
+
+    await waitFor(() => {
+      expect(within(dialog).getByText(secondProductName)).toBeVisible();
+    });
+
+    const refreshedQuantityInput = within(dialog).getAllByRole('spinbutton')[0];
+    await userEvent.type(refreshedQuantityInput, '10', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: Infinity,
+    });
+
+    expect(within(dialog).queryByText('2 ready to ship')).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByText('will be backordered', { exact: false }),
+    ).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(sharedSkuFetchCount).toBeGreaterThan(1);
+    });
+
+    resolveSecondInventoryFetch(
+      HttpResponse.json(
+        buildVariantInfoResponseWith({
+          data: { variantSku: [highInventoryVariantInfo, otherInventoryVariantInfo] },
+        }),
+      ),
+    );
+
+    await waitFor(() => {
+      expect(
+        within(dialog).queryByText('will be backordered', { exact: false }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it('does not show backorder lines for complex products before choosing options', async () => {
+    const complexSearchTerm = 'Fog Towel';
+    const productId = 9001;
+    const optionId = 50;
+    const sizeM = 102;
+
+    vitest.mocked(useParams).mockReturnValue({ id: '272989' });
+
+    const listProductEdge = buildShoppingListProductEdgeWith({
+      node: {
+        productName: 'Existing list item',
+        productId: 8000,
+        variantSku: 'LIST-SKU-001',
+        quantity: 1,
+        basePrice: '10.00',
+      },
+    });
+
+    const variantM = buildSearchB2BProductVariantWith({
+      product_id: productId,
+      sku: 'TOWEL-M',
+      purchasing_disabled: false,
+      available_to_sell: 10,
+      unlimited_backorder: false,
+      total_on_hand: 2,
+      backorder_message: 'Lead time: 2-4 weeks',
+      option_values: [
+        {
+          id: sizeM,
+          label: 'M',
+          option_id: optionId,
+          option_display_name: 'Size',
+        },
+      ],
+      bc_calculated_price: {
+        tax_exclusive: 50,
+        tax_inclusive: 55,
+        as_entered: 50,
+        entered_inclusive: false,
+      },
+    });
+
+    const variantS = buildSearchB2BProductVariantWith({
+      product_id: productId,
+      sku: 'TOWEL-S',
+      purchasing_disabled: false,
+      option_values: [
+        {
+          id: 101,
+          label: 'S',
+          option_id: optionId,
+          option_display_name: 'Size',
+        },
+      ],
+      bc_calculated_price: {
+        tax_exclusive: 45,
+        tax_inclusive: 50,
+        as_entered: 45,
+        entered_inclusive: false,
+      },
+    });
+
+    const sizeOption = buildSearchB2BProductV3OptionWith({
+      id: optionId,
+      product_id: productId,
+      type: 'rectangles',
+      display_name: 'Size',
+      option_values: [
+        buildSearchB2BProductV3OptionValueWith({
+          id: 101,
+          label: 'S',
+          is_default: false,
+        }),
+        buildSearchB2BProductV3OptionValueWith({
+          id: sizeM,
+          label: 'M',
+          is_default: true,
+        }),
+      ],
+    });
+
+    const searchProduct = buildSearchB2BProductWith({
+      id: productId,
+      name: 'Fog Towel',
+      sku: 'TOWEL-BASE',
+      inventoryTracking: 'variant',
+      optionsV3: [sizeOption],
+      isPriceHidden: false,
+      orderQuantityMinimum: 0,
+      orderQuantityMaximum: 0,
+      variants: [variantS, variantM],
+    });
+
+    const shoppingListResponse = buildShoppingListGraphQLResponseWith({
+      data: {
+        shoppingList: {
+          products: { totalCount: 1, edges: [listProductEdge] },
+          status: 0,
+          grandTotal: '10.00',
+          totalTax: '0',
+        },
+      },
+    });
+
+    server.use(
+      graphql.query('B2BShoppingListDetails', () => HttpResponse.json(shoppingListResponse)),
+      graphql.query('SearchProducts', ({ query }) => {
+        if (/productIds: \[\d/.test(query)) {
+          return HttpResponse.json(
+            buildSearchProductsResponseWith({ data: { productsSearch: [] } }),
+          );
+        }
+
+        return HttpResponse.json(
+          buildSearchProductsResponseWith({ data: { productsSearch: [searchProduct] } }),
+        );
+      }),
+    );
+
+    renderWithProviders(<ShoppingListDetailsContent setOpenPage={() => {}} />, {
+      preloadedState: backorderPreloadedState,
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    await screen.findByRole('heading', { name: /add to list/i });
+
+    const searchBox = screen.getByPlaceholderText('Search products');
+    await userEvent.type(searchBox, complexSearchTerm);
+    await userEvent.click(screen.getByRole('button', { name: /Search product/i }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Add to list' });
+    const quantityInput = within(dialog).getByRole('spinbutton');
+
+    expect(within(dialog).getByRole('button', { name: 'Choose options' })).toBeVisible();
+
+    await userEvent.type(quantityInput, '10', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: Infinity,
+    });
+
+    await waitFor(() => {
+      expect(within(dialog).getByText('Fog Towel')).toBeVisible();
+    });
+    expect(
+      within(dialog).queryByText('will be backordered', { exact: false }),
+    ).not.toBeInTheDocument();
+    expect(within(dialog).queryByText('ready to ship', { exact: false })).not.toBeInTheDocument();
+    expect(within(dialog).queryByText('Lead time: 2-4 weeks')).not.toBeInTheDocument();
+  });
+});
+
+describe('when backorder messaging is enabled in choose options dialog', () => {
+  const searchTerm = 'Fog Towel';
+  const productId = 9001;
+  const optionId = 50;
+  const sizeM = 102;
+  const variantSku = 'TOWEL-M';
+  const variantId = 5001;
+
+  const backorderPreloadedState = {
+    company: b2bCompanyWithShoppingListPermissions,
+    global: buildGlobalStateWith({
+      backorderEnabled: true,
+      backorderDisplaySettings: {
+        showQuantityOnBackorder: true,
+        showQuantityOnHand: true,
+        showBackorderMessage: true,
+        showDefaultShippingExpectationPrompt: false,
+        defaultShippingExpectationPrompt: '',
+      },
+      featureFlags: {
+        'BACK-134.backorders_phase_1_1_control_messaging_on_storefront': true,
+      },
+    }),
+  };
+
+  const setupChooseOptionsModal = () => {
+    vitest.mocked(useParams).mockReturnValue({ id: '272989' });
+
+    const listProductEdge = buildShoppingListProductEdgeWith({
+      node: {
+        productName: 'Existing list item',
+        productId: 8000,
+        variantSku: 'LIST-SKU-001',
+        quantity: 1,
+        basePrice: '10.00',
+      },
+    });
+
+    const variantM = buildSearchB2BProductVariantWith({
+      variant_id: variantId,
+      product_id: productId,
+      sku: variantSku,
+      purchasing_disabled: false,
+      option_values: [
+        {
+          id: sizeM,
+          label: 'M',
+          option_id: optionId,
+          option_display_name: 'Size',
+        },
+      ],
+      available_to_sell: 10,
+      unlimited_backorder: false,
+      total_on_hand: 2,
+      backorder_message: 'Lead time: 2-4 weeks',
+      bc_calculated_price: {
+        tax_exclusive: 50,
+        tax_inclusive: 55,
+        as_entered: 50,
+        entered_inclusive: false,
+      },
+    });
+
+    const variantS = buildSearchB2BProductVariantWith({
+      product_id: productId,
+      sku: 'TOWEL-S',
+      purchasing_disabled: false,
+      option_values: [
+        {
+          id: 101,
+          label: 'S',
+          option_id: optionId,
+          option_display_name: 'Size',
+        },
+      ],
+      available_to_sell: 5,
+      unlimited_backorder: false,
+      total_on_hand: 5,
+      bc_calculated_price: {
+        tax_exclusive: 45,
+        tax_inclusive: 50,
+        as_entered: 45,
+        entered_inclusive: false,
+      },
+    });
+
+    const sizeOption = buildSearchB2BProductV3OptionWith({
+      id: optionId,
+      product_id: productId,
+      type: 'rectangles',
+      display_name: 'Size',
+      option_values: [
+        buildSearchB2BProductV3OptionValueWith({
+          id: 101,
+          label: 'S',
+          is_default: false,
+        }),
+        buildSearchB2BProductV3OptionValueWith({
+          id: sizeM,
+          label: 'M',
+          is_default: true,
+        }),
+      ],
+    });
+
+    const searchProduct = buildSearchB2BProductWith({
+      id: productId,
+      name: 'Fog Towel',
+      sku: 'TOWEL-BASE',
+      inventoryTracking: 'variant',
+      optionsV3: [sizeOption],
+      isPriceHidden: false,
+      orderQuantityMinimum: 0,
+      orderQuantityMaximum: 0,
+      variants: [variantS, variantM],
+    });
+
+    const shoppingListResponse = buildShoppingListGraphQLResponseWith({
+      data: {
+        shoppingList: {
+          products: { totalCount: 1, edges: [listProductEdge] },
+          status: 0,
+          grandTotal: '10.00',
+          totalTax: '0',
+        },
+      },
+    });
+
+    server.use(
+      graphql.query('B2BShoppingListDetails', () => HttpResponse.json(shoppingListResponse)),
+      graphql.query('SearchProducts', ({ query }) => {
+        if (/productIds: \[\d/.test(query)) {
+          return HttpResponse.json(
+            buildSearchProductsResponseWith({ data: { productsSearch: [] } }),
+          );
+        }
+
+        return HttpResponse.json(
+          buildSearchProductsResponseWith({ data: { productsSearch: [searchProduct] } }),
+        );
+      }),
+      graphql.query('priceProducts', () =>
+        HttpResponse.json({
+          data: {
+            priceProducts: [
+              buildProductPriceWith({
+                productId,
+                variantId,
+              }),
+            ],
+          },
+        }),
+      ),
+    );
+  };
+
+  const openChooseOptionsDialog = async () => {
+    await screen.findByRole('heading', { name: /add to list/i });
+
+    const searchBox = screen.getByPlaceholderText('Search products');
+    await userEvent.type(searchBox, searchTerm);
+    await userEvent.click(screen.getByRole('button', { name: /Search product/i }));
+
+    const listDialog = await screen.findByRole('dialog', { name: 'Add to list' });
+    await userEvent.click(within(listDialog).getByRole('button', { name: 'Choose options' }));
+
+    return screen.findByRole('dialog', { name: 'Choose options' });
+  };
+
+  it('shows backorder prompts when a variant is selected', async () => {
+    setupChooseOptionsModal();
+
+    renderWithProviders(<ShoppingListDetailsContent setOpenPage={() => {}} />, {
+      preloadedState: backorderPreloadedState,
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    const chooseOptionsDialog = await openChooseOptionsDialog();
+    const quantityInput = within(chooseOptionsDialog).getByRole('spinbutton');
+
+    await waitFor(() => {
+      expect(within(chooseOptionsDialog).getByText(variantSku)).toBeInTheDocument();
+    });
+
+    await userEvent.type(quantityInput, '4', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: Infinity,
+    });
+
+    await waitFor(() => {
+      expect(within(chooseOptionsDialog).getByText('2 ready to ship')).toBeVisible();
+    });
+    expect(within(chooseOptionsDialog).getByText('2 will be backordered')).toBeVisible();
+    expect(within(chooseOptionsDialog).getByText('Lead time: 2-4 weeks')).toBeVisible();
+
+    await userEvent.type(quantityInput, '15', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: Infinity,
+    });
+
+    await waitFor(() => {
+      expect(within(chooseOptionsDialog).getByText('2 ready to ship')).toBeVisible();
+    });
+    expect(within(chooseOptionsDialog).getByText('8 will be backordered')).toBeVisible();
+    expect(within(chooseOptionsDialog).queryByText('10 available')).not.toBeInTheDocument();
+    expect(quantityInput.closest('.MuiTextField-root')).not.toHaveClass('Mui-error');
+
+    await userEvent.type(quantityInput, '2', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: Infinity,
+    });
+
+    await waitFor(() => {
+      expect(within(chooseOptionsDialog).queryByText('2 ready to ship')).not.toBeInTheDocument();
+    });
+    expect(
+      within(chooseOptionsDialog).queryByText('2 will be backordered'),
+    ).not.toBeInTheDocument();
+    expect(within(chooseOptionsDialog).queryByText('Lead time: 2-4 weeks')).not.toBeInTheDocument();
+    expect(within(chooseOptionsDialog).queryByText('10 available')).not.toBeInTheDocument();
+  });
+
+  it('hides backorder lines when messaging is disabled', async () => {
+    setupChooseOptionsModal();
+
+    renderWithProviders(<ShoppingListDetailsContent setOpenPage={() => {}} />, {
+      preloadedState: { company: b2bCompanyWithShoppingListPermissions },
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    const chooseOptionsDialog = await openChooseOptionsDialog();
+    const quantityInput = within(chooseOptionsDialog).getByRole('spinbutton');
+
+    await waitFor(() => {
+      expect(within(chooseOptionsDialog).getByText(variantSku)).toBeInTheDocument();
+    });
+
+    await userEvent.type(quantityInput, '10', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: Infinity,
+    });
+
+    await waitFor(() => {
+      expect(within(chooseOptionsDialog).getByText('Fog Towel')).toBeVisible();
+    });
+    expect(
+      within(chooseOptionsDialog).queryByText('will be backordered', { exact: false }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows the picklist child backorder details when the selected modifier option is backordered', async () => {
+    const modifierId = 70;
+    const optionValueId = 501;
+    const picklistProductId = 70000;
+
+    vitest.mocked(useParams).mockReturnValue({ id: '272989' });
+
+    const listProductEdge = buildShoppingListProductEdgeWith({
+      node: {
+        productName: 'Existing list item',
+        productId: 8000,
+        variantSku: 'LIST-SKU-001',
+        quantity: 1,
+        basePrice: '10.00',
+      },
+    });
+
+    const variant = buildSearchB2BProductVariantWith({
+      variant_id: variantId,
+      product_id: productId,
+      sku: variantSku,
+      purchasing_disabled: false,
+      option_values: [],
+      bc_calculated_price: {
+        tax_exclusive: 50,
+        tax_inclusive: 55,
+        as_entered: 50,
+        entered_inclusive: false,
+      },
+    });
+
+    const searchProduct = buildSearchB2BProductWith({
+      id: productId,
+      name: 'Fog Towel',
+      sku: 'TOWEL-BASE',
+      optionsV3: [],
+      isPriceHidden: false,
+      variants: [variant],
+      modifiers: [
+        {
+          id: modifierId,
+          type: 'product_list',
+          display_name: 'Pickly Picky',
+          option_values: [
+            {
+              id: optionValueId,
+              label: 'Mining Pick',
+              is_default: true,
+              option_id: modifierId,
+              value_data: { product_id: picklistProductId },
+            },
+          ],
+        },
+      ],
+    });
+
+    const picklistChildProduct = buildSearchB2BProductWith({
+      id: picklistProductId,
+      inventoryTracking: 'product',
+      availableToSell: 20,
+      unlimitedBackorder: false,
+      totalOnHand: 1,
+      backorderMessage: 'Backorders Schmackorders',
+      variants: [],
+    });
+
+    const shoppingListResponse = buildShoppingListGraphQLResponseWith({
+      data: {
+        shoppingList: {
+          products: { totalCount: 1, edges: [listProductEdge] },
+          status: 0,
+          grandTotal: '10.00',
+          totalTax: '0',
+        },
+      },
+    });
+
+    server.use(
+      graphql.query('B2BShoppingListDetails', () => HttpResponse.json(shoppingListResponse)),
+      graphql.query('SearchProducts', ({ query }) => {
+        if (/productIds: \[\d/.test(query)) {
+          return HttpResponse.json({ data: { productsSearch: [picklistChildProduct] } });
+        }
+
+        return HttpResponse.json(
+          buildSearchProductsResponseWith({ data: { productsSearch: [searchProduct] } }),
+        );
+      }),
+    );
+
+    renderWithProviders(<ShoppingListDetailsContent setOpenPage={() => {}} />, {
+      preloadedState: backorderPreloadedState,
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    const chooseOptionsDialog = await openChooseOptionsDialog();
+    const quantityInput = within(chooseOptionsDialog).getByRole('spinbutton');
+
+    await within(chooseOptionsDialog).findByText('Pickly Picky');
+
+    await userEvent.type(quantityInput, '7', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: Infinity,
+    });
+
+    expect(await within(chooseOptionsDialog).findByText('Pickly Picky:')).toBeVisible();
+    expect(within(chooseOptionsDialog).getByText('1 ready to ship')).toBeVisible();
+    expect(within(chooseOptionsDialog).getByText('6 will be backordered')).toBeVisible();
+    expect(within(chooseOptionsDialog).getByText('Backorders Schmackorders')).toBeVisible();
+  });
+
+  it('updates the picklist backorder information when a different modifier option is selected', async () => {
+    const modifierId = 70;
+    const miningPickOptionValueId = 501;
+    const icePickOptionValueId = 502;
+    const miningPickProductId = 70000;
+    const icePickProductId = 70001;
+
+    vitest.mocked(useParams).mockReturnValue({ id: '272989' });
+
+    const listProductEdge = buildShoppingListProductEdgeWith({
+      node: {
+        productName: 'Existing list item',
+        productId: 8000,
+        variantSku: 'LIST-SKU-001',
+        quantity: 1,
+        basePrice: '10.00',
+      },
+    });
+
+    const variant = buildSearchB2BProductVariantWith({
+      variant_id: variantId,
+      product_id: productId,
+      sku: variantSku,
+      purchasing_disabled: false,
+      option_values: [],
+      bc_calculated_price: {
+        tax_exclusive: 50,
+        tax_inclusive: 55,
+        as_entered: 50,
+        entered_inclusive: false,
+      },
+    });
+
+    const searchProduct = buildSearchB2BProductWith({
+      id: productId,
+      name: 'Fog Towel',
+      sku: 'TOWEL-BASE',
+      optionsV3: [],
+      isPriceHidden: false,
+      variants: [variant],
+      modifiers: [
+        {
+          id: modifierId,
+          type: 'product_list',
+          display_name: 'Pickly Picky',
+          option_values: [
+            {
+              id: miningPickOptionValueId,
+              label: 'Mining Pick',
+              is_default: true,
+              option_id: modifierId,
+              value_data: { product_id: miningPickProductId },
+            },
+            {
+              id: icePickOptionValueId,
+              label: 'Ice Pick',
+              is_default: false,
+              option_id: modifierId,
+              value_data: { product_id: icePickProductId },
+            },
+          ],
+        },
+      ],
+    });
+
+    const miningPickChildProduct = buildSearchB2BProductWith({
+      id: miningPickProductId,
+      inventoryTracking: 'product',
+      availableToSell: 20,
+      unlimitedBackorder: false,
+      totalOnHand: 1,
+      backorderMessage: 'Restocks in 3 weeks',
+      variants: [],
+    });
+
+    const icePickChildProduct = buildSearchB2BProductWith({
+      id: icePickProductId,
+      inventoryTracking: 'product',
+      availableToSell: 20,
+      unlimitedBackorder: false,
+      totalOnHand: 2,
+      backorderMessage: 'Restocks in 6 weeks',
+      variants: [],
+    });
+
+    const shoppingListResponse = buildShoppingListGraphQLResponseWith({
+      data: {
+        shoppingList: {
+          products: { totalCount: 1, edges: [listProductEdge] },
+          status: 0,
+          grandTotal: '10.00',
+          totalTax: '0',
+        },
+      },
+    });
+
+    server.use(
+      graphql.query('B2BShoppingListDetails', () => HttpResponse.json(shoppingListResponse)),
+      graphql.query('SearchProducts', ({ query }) => {
+        if (/productIds: \[\d/.test(query)) {
+          return HttpResponse.json({
+            data: { productsSearch: [miningPickChildProduct, icePickChildProduct] },
+          });
+        }
+
+        return HttpResponse.json(
+          buildSearchProductsResponseWith({ data: { productsSearch: [searchProduct] } }),
+        );
+      }),
+    );
+
+    renderWithProviders(<ShoppingListDetailsContent setOpenPage={() => {}} />, {
+      preloadedState: backorderPreloadedState,
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+    const chooseOptionsDialog = await openChooseOptionsDialog();
+    const quantityInput = within(chooseOptionsDialog).getByRole('spinbutton');
+
+    await within(chooseOptionsDialog).findByText('Pickly Picky');
+
+    await userEvent.type(quantityInput, '7', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: Infinity,
+    });
+
+    expect(await within(chooseOptionsDialog).findByText('6 will be backordered')).toBeVisible();
+    expect(within(chooseOptionsDialog).getByText('Restocks in 3 weeks')).toBeVisible();
+    expect(within(chooseOptionsDialog).queryByText('Restocks in 6 weeks')).not.toBeInTheDocument();
+
+    await userEvent.click(within(chooseOptionsDialog).getByRole('radio', { name: 'Ice Pick' }));
+
+    expect(await within(chooseOptionsDialog).findByText('Restocks in 6 weeks')).toBeVisible();
+    expect(within(chooseOptionsDialog).getByText('5 will be backordered')).toBeVisible();
+    expect(within(chooseOptionsDialog).queryByText('Restocks in 3 weeks')).not.toBeInTheDocument();
+    expect(
+      within(chooseOptionsDialog).queryByText('6 will be backordered'),
+    ).not.toBeInTheDocument();
   });
 });

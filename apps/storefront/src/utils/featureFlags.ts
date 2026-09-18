@@ -1,15 +1,7 @@
 export const featureFlags = [
   {
-    key: 'B2B-3318.move_stock_and_backorder_validation_to_backend',
-    name: 'moveStockAndBackorderValidationToBackend',
-  },
-  {
     key: 'B2B-3817.disable_masquerading_cleanup_on_login',
     name: 'disableMasqueradingCleanupOnLogin',
-  },
-  {
-    key: 'B2B-3857.move_tax_display_settings_to_bc_storefront_graph',
-    name: 'moveTaxDisplaySettingsToBCStorefrontGraph',
   },
   {
     key: 'B2B-3474.get_sku_from_pdp_with_text_content',
@@ -20,8 +12,56 @@ export const featureFlags = [
     name: 'passWithModifiersToProductUpload',
   },
   {
-    key: 'B2B-4231.chunk_product_searches_in_csv_upload',
-    name: 'chunkProductSearchesInCsvUpload',
+    key: 'B2B-3705.increase_graphql_limits_inline_with_platform_api',
+    name: 'increaseGraphQLLimitsInlineWithPlatformApi',
+  },
+  {
+    key: 'BACK-134.backorders_phase_1_1_control_messaging_on_storefront',
+    name: 'backordersPhase1_1ControlMessagingOnStorefront',
+  },
+  {
+    key: 'B2B-4466.use_register_company_flow',
+    name: 'useRegisterCompanyFlow',
+  },
+  {
+    key: 'B2B-4613.buyer_portal_unified_sf_gql_orders',
+    name: 'unifiedStorefrontGraphqlOrders',
+  },
+  {
+    key: 'LOCAL-3191.B2B_multi_language',
+    name: 'b2bMultiLanguage',
+  },
+  {
+    key: 'LOCAL-3280.B2B_email_multi_language',
+    name: 'b2bEmailMultiLanguage',
+  },
+  {
+    key: 'PROJECT-7920.use_bc_account_settings',
+    name: 'useBcAccountSettings',
+  },
+  {
+    key: 'PROJECT-7920.use_bc_login_and_authorisation',
+    name: 'useBcLoginAndAuthorisation',
+  },
+  {
+    key: 'B2B-4870.default_buyer_portal_styling_on_login_page',
+    name: 'defaultBuyerPortalStylingOnLoginPage',
+  },
+  {
+    key: 'B2B-4089.use_tbd_price_on_quotes_list',
+    name: 'useTbdPriceOnQuotesList',
+  },
+  {
+    key: 'B2B-4912.buyer_portal_native_link_interception',
+    name: 'buyerPortalNativeLinkInterception',
+  },
+  {
+    key: 'B2B-5309.dedupe_storefront_config_fetch_calls',
+    name: 'dedupeStorefrontConfigFetchCalls',
+  },
+  {
+    key: 'B2B-2219.fix_buyer_portal_quote_message_sender_name',
+    name: 'fixBuyerPortalQuoteMessageSenderName',
   },
 ] as const;
 

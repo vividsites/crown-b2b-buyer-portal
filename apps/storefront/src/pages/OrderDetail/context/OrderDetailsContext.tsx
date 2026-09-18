@@ -40,6 +40,7 @@ export interface OrderDetailsState {
   customerId?: number;
   digitalProducts?: OrderProductItem[];
   billingAddress?: Address;
+  shippingExpectationMessage?: string;
 }
 interface OrderDetailsAction {
   type: string;
@@ -54,15 +55,6 @@ interface OrderDetailsContextType {
 interface OrderDetailsProviderProps {
   children: ReactNode;
 }
-
-const defaultMoneyFormat: MoneyFormat = {
-  currency_location: 'left',
-  currency_token: '$',
-  decimal_token: '.',
-  decimal_places: 2,
-  thousands_token: ',',
-  currency_exchange_rate: '1.0000000000',
-};
 
 const initState = {
   shippings: [],
@@ -80,9 +72,7 @@ const initState = {
     priceSymbol: {},
   },
   customStatus: '',
-  money: {
-    ...defaultMoneyFormat,
-  },
+  money: undefined,
   payment: {},
   orderComments: '',
   products: [],

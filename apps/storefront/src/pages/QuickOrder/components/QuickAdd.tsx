@@ -7,7 +7,7 @@ import { B3ControlTextField } from '@/components/form/B3ControlTextField';
 import B3Spin from '@/components/spin/B3Spin';
 import { CART_URL } from '@/constants';
 import { useBlockPendingAccountViewPrice } from '@/hooks/useBlockPendingAccountViewPrice';
-import { useIsBackorderValidationEnabled } from '@/hooks/useIsBackorderValidationEnabled';
+import { useIsBackorderEnabled } from '@/hooks/useIsBackorderEnabled';
 import { useB3Lang } from '@/lib/lang';
 import { getVariantInfoBySkus } from '@/shared/service/b2b';
 import { getProductRequirementsBySKUs, ProductRequirements } from '@/shared/service/vs/api/product';
@@ -15,7 +15,11 @@ import { useAppSelector } from '@/store';
 import { snackbar } from '@/utils/b3Tip';
 import b3TriggerCartNumber from '@/utils/b3TriggerCartNumber';
 import { createOrUpdateExistingCart } from '@/utils/cartUtils';
-import { ValidatedProductError, validateProductsLegacy } from '@/utils/validateProducts';
+import {
+  VALIDATED_PRODUCT_ERROR_TYPES,
+  ValidatedProductError,
+  validateProductsLegacy,
+} from '@/utils/validateProducts';
 
 import { SimpleObject } from '../../../types';
 import { getCartProductInfo } from '../utils';
@@ -33,7 +37,7 @@ const INITIAL_NUM_ROWS = 3;
 export default function QuickAdd() {
   const b3Lang = useB3Lang();
   const buttonText = b3Lang('purchasedProducts.quickOrderPad.addProductsToCart');
-  const isBackorderValidationEnabled = useIsBackorderValidationEnabled();
+  const isBackorderEnabled = useIsBackorderEnabled();
 
   const companyStatus = useAppSelector(({ company }) => company.companyInfo.status);
   const [numRows, setNumRows] = useState(INITIAL_NUM_ROWS);
@@ -379,7 +383,7 @@ export default function QuickAdd() {
 
     const productsToValidate = mapCatalogToValidationPayload(variantInfoList, skuValue);
 
-    const { success, warning, error } = await validateProductsLegacy(productsToValidate);
+    const { success, warning, error } = await validateProductsLegacy(productsToValidate, 'CART');
 
     const validProducts = success.map((product) => product.product);
 
@@ -415,7 +419,7 @@ export default function QuickAdd() {
   ) => {
     const sku = error.product.node?.sku || '';
 
-    if (error.error.type === 'network') {
+    if (error.error.type === VALIDATED_PRODUCT_ERROR_TYPES.NETWORK) {
       const productName = error.product.node?.productName || '';
       snackbar.error(b3Lang('quotes.productValidationFailed', { productName }));
       if (sku) {
@@ -475,7 +479,7 @@ export default function QuickAdd() {
           // proceed without requirements if fetch fails
         }
 
-        if (isBackorderValidationEnabled) {
+        if (isBackorderEnabled) {
           const { productItems, notFoundSkus, warning, error } = await handleBackendValidation(
             variantInfoList,
             skuQuantityMap,

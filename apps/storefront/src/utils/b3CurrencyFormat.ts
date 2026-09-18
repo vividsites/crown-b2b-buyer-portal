@@ -1,4 +1,5 @@
 import { store } from '@/store';
+import { DisplayCurrency } from '@/types/currency';
 
 import b2bLogger from './b3Logger';
 import { getActiveCurrencyInfo } from './currencyUtils';
@@ -52,7 +53,7 @@ export const ordersCurrencyFormat = (
       decimalPart ? `${moneyFormat.decimal_token}${decimalPart}` : ''
     }`;
     const priceStr =
-      moneyFormat.currency_location === 'left'
+      moneyFormat.currency_location?.toLowerCase() === 'left'
         ? `${showCurrencyToken ? moneyFormat.currency_token : ''}${newPrice}`
         : `${newPrice}${showCurrencyToken ? moneyFormat.currency_token : ''}`;
     return priceStr;
@@ -63,7 +64,7 @@ export const ordersCurrencyFormat = (
 };
 
 interface CurrencyOption {
-  currency: CurrencyProps;
+  currency?: CurrencyProps | DisplayCurrency;
   showCurrencyToken?: boolean;
   isConversionRate?: boolean;
   useCurrentCurrency?: boolean;
@@ -104,7 +105,7 @@ export const currencyFormatConvert = (
         moneyFormat.thousands_token,
       )}${decimalPart ? `${moneyFormat.decimal_token}${decimalPart}` : ''}`;
       const priceStr =
-        moneyFormat.currency_location === 'left'
+        moneyFormat.currency_location?.toLowerCase() === 'left'
           ? `${showCurrencyToken ? moneyFormat.currency_token : ''}${newPrice}`
           : `${newPrice}${showCurrencyToken ? moneyFormat.currency_token : ''}`;
       return priceStr;
@@ -114,7 +115,7 @@ export const currencyFormatConvert = (
       decimalPart ? `${moneyFormat.decimal_token}${decimalPart}` : ''
     }`;
     const priceStr =
-      moneyFormat.currency_location === 'left'
+      moneyFormat.currency_location?.toLowerCase() === 'left'
         ? `${showCurrencyToken ? moneyFormat.currency_token : ''}${newPrice}`
         : `${newPrice}${showCurrencyToken ? moneyFormat.currency_token : ''}`;
     return priceStr;
@@ -140,7 +141,7 @@ export const currencyFormat = (
       decimalPart ? `${moneyFormat.decimal_token}${decimalPart}` : ''
     }`;
     const priceStr =
-      moneyFormat.currency_location === 'left'
+      moneyFormat.currency_location?.toLowerCase() === 'left'
         ? `${showCurrencyToken ? moneyFormat.currency_token : ''}${newPrice}`
         : `${newPrice}${showCurrencyToken ? moneyFormat.currency_token : ''}`;
     return priceStr;

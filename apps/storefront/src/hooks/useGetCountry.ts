@@ -4,6 +4,7 @@ import { Control, FieldValues, UseFormGetValues, UseFormSetValue, useWatch } fro
 import { GlobalContext } from '@/shared/global';
 import { Country, State } from '@/shared/global/context/config';
 import { getB2BCountries } from '@/shared/service/b2b';
+import { getIsStateRequired } from '@/utils/b2bGetIsStateRequired';
 
 const useSetCountry = () => {
   const {
@@ -89,8 +90,11 @@ const useGetCountry = ({
   // Populate state array when the user change selected country
   useEffect(() => {
     if (!countryCode || !countriesList?.length) return;
-    const stateList =
-      countriesList.find((country: Country) => country.countryCode === countryCode)?.states || [];
+    const selectedCountry = countriesList.find(
+      (country: Country) => country.countryCode === countryCode,
+    );
+    const stateList = selectedCountry?.states || [];
+    const isStateRequired = getIsStateRequired(selectedCountry, stateList);
     const stateFieldIndex = addresses.findIndex(
       (formFields: FormFieldsProps) => formFields.name === 'state',
     );
@@ -103,10 +107,10 @@ const useGetCountry = ({
                 ...addressField,
                 fieldType: 'dropdown',
                 options: stateList,
-                required: true,
+                required: isStateRequired,
               };
             }
-            return { ...addressField, fieldType: 'text', options: [], required: false };
+            return { ...addressField, fieldType: 'text', options: [], required: isStateRequired };
           }
           return addressField;
         }),

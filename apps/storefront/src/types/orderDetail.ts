@@ -67,6 +67,12 @@ export interface OrderProductItem {
   not_shipping_number?: number;
   variantImageUrl?: string;
   isVisible?: boolean;
+  /** Pre-formatted unit price — derived from subTotalListPrice via Intl.NumberFormat. */
+  formattedPrice?: string;
+  /** Pre-formatted line total from SF GQL subTotalSalePrice.formattedV2 (server-authoritative). */
+  formattedTotal?: string;
+  quantityBackordered?: number;
+  backorderMessage?: string | null;
 }
 
 export interface EditableProductItem extends OrderProductItem {

@@ -1,8 +1,11 @@
 import config from '@/lib/config';
 import { LangFormatFunction } from '@/lib/lang';
+import {
+  getQuoteValidationErrorMessage,
+  QUOTE_VALIDATION_MESSAGE_CONTEXTS,
+} from '@/pages/quote/shared/getQuoteValidationErrorMessage';
 import { type SetOpenPage } from '@/pages/SetOpenPage';
 import { searchProducts } from '@/shared/service/b2b';
-import { validateProduct } from '@/shared/service/b2b/graphql/product';
 import { GetCart, getCart } from '@/shared/service/bc/graphql/cart';
 import { getAnonymousProductRequirementsByIds, getProductRequirementsByIds } from '@/shared/service/vs/api/product';
 import { store } from '@/store';
@@ -22,7 +25,9 @@ import { serialize } from '@/utils/b3Serialize';
 import { B3LStorage, B3SStorage } from '@/utils/b3Storage';
 import { globalSnackbar } from '@/utils/b3Tip';
 import { getActiveCurrencyInfo } from '@/utils/currencyUtils';
-import { FeatureFlags } from '@/utils/featureFlags';
+import { validateProducts } from '@/utils/validateProducts';
+
+import { getPdpSku } from './getPdpSku';
 
 interface DiscountsProps {
   discountedAmount: number;
@@ -230,8 +235,8 @@ const addProductFromProductPageToQuote = (
   setOpenPage: SetOpenPage,
   isEnableProduct: boolean,
   b3Lang: LangFormatFunction,
-  isBackorderValidationEnabled: boolean,
-  featureFlags: FeatureFlags,
+  isBackorderEnabled: boolean,
+  isSkuFromPdpWithTextContentEnabled: boolean,
 ) => {
   const addToQuote = async (node?: HTMLElement) => {
     try {
@@ -240,9 +245,10 @@ const addProductFromProductPageToQuote = (
       const productId = (productView.querySelector('input[name=product_id]') as CustomFieldItems)
         ?.value;
       const qty = (productView.querySelector('[name="qty[]"]') as CustomFieldItems)?.value ?? 1;
-      const sku = featureFlags['B2B-3474.get_sku_from_pdp_with_text_content']
-        ? (productView.querySelector('[data-product-sku]')?.textContent ?? '').trim()
-        : (productView.querySelector('[data-product-sku]')?.innerHTML ?? '').trim();
+      const sku = getPdpSku(
+        productView.querySelector('[data-product-sku]'),
+        isSkuFromPdpWithTextContentEnabled,
+      );
       const form = productView.querySelector('form[data-cart-item-add]') as HTMLFormElement;
 
       if (!sku) {
@@ -276,7 +282,7 @@ const addProductFromProductPageToQuote = (
         return;
       }
 
-      if (isBackorderValidationEnabled) {
+      if (isBackorderEnabled) {
         const variantId = newProductInfo[0]?.variants.find(
           (variant: CustomFieldItems) => variant.sku === sku,
         )?.variant_id;
@@ -286,15 +292,26 @@ const addProductFromProductPageToQuote = (
           optionValue: option.optionValue,
         }));
 
-        const { responseType, message } = await validateProduct({
-          productId: Number(productId),
-          variantId: Number(variantId),
-          quantity: Number(qty),
-          productOptions,
-        });
+        const { error } = await validateProducts([
+          {
+            productId: Number(productId),
+            variantId: Number(variantId),
+            quantity: Number(qty),
+            productOptions,
+          },
+        ]);
 
-        if (responseType === 'ERROR') {
-          globalSnackbar.error(message);
+        if (error.length > 0) {
+          const [validationError] = error;
+          globalSnackbar.error(
+            getQuoteValidationErrorMessage({
+              b3Lang,
+              errorCode: validationError.error.errorCode,
+              productName: newProductInfo[0]?.name,
+              availableToSell: validationError.error.availableToSell,
+              context: QUOTE_VALIDATION_MESSAGE_CONTEXTS.PDP,
+            }),
+          );
 
           return;
         }
@@ -525,26 +542,29 @@ const addProductFromProductCardToQuote = (
         qty,
       });
 
-      const newProducts: CustomFieldItems = [quoteListitem];
-      const isSuccess = validProductQty(newProducts);
-      if (quoteListitem && isSuccess) {
-        await addQuoteDraftProduce(quoteListitem, qty, optionList || []);
-        globalSnackbar.success(b3Lang('global.notification.addProductSingular'), {
-          action: {
-            onClick: () => gotoQuoteDraft(setOpenPage),
-            label: b3Lang('quoteDraft.notification.openQuote'),
-          },
-        });
-      } else if (!isSuccess) {
+      if (!quoteListitem) {
+        globalSnackbar.error('Price error');
+        return;
+      }
+
+      const isSuccess = validProductQty([quoteListitem]);
+      if (!isSuccess) {
         globalSnackbar.error(b3Lang('global.notification.maximumPurchaseExceed'), {
           action: {
             onClick: () => gotoQuoteDraft(setOpenPage),
             label: b3Lang('quoteDraft.notification.openQuote'),
           },
         });
-      } else {
-        globalSnackbar.error('Price error');
+        return;
       }
+
+      await addQuoteDraftProduce(quoteListitem, qty, optionList || []);
+      globalSnackbar.success(b3Lang('global.notification.addProductSingular'), {
+        action: {
+          onClick: () => gotoQuoteDraft(setOpenPage),
+          label: b3Lang('quoteDraft.notification.openQuote'),
+        },
+      });
     } catch (e) {
       b2bLogger.error(e);
     } finally {

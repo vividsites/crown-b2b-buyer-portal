@@ -1,10 +1,12 @@
-import { useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowBackIosNew, InfoOutlined } from '@mui/icons-material';
 import { Box, Grid, Stack, Typography } from '@mui/material';
 
 import { b3HexToRgb, getContrastColor } from '@/components/outSideComponents/utils/b3CustomStyles';
 import B3Spin from '@/components/spin/B3Spin';
+import { useBackorderStorefrontMessaging } from '@/hooks/useBackorderStorefrontMessaging';
+import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { CustomStyleContext } from '@/shared/customStyleButton';
@@ -16,6 +18,8 @@ import {
   getBcOrderStatusType,
   getOrderStatusType,
 } from '@/shared/service/b2b';
+import type { Order as UnifiedOrder } from '@/shared/service/bc/graphql/orders';
+import { getOrderBackorderHistory, getOrderDetail } from '@/shared/service/bc/graphql/orders';
 import { isB2BUserSelector, useAppSelector } from '@/store';
 import { AddressConfigItem, CustomerRole, OrderProductItem, OrderStatusItem } from '@/types';
 import b2bLogger from '@/utils/b3Logger';
@@ -23,13 +27,16 @@ import b2bLogger from '@/utils/b3Logger';
 import OrderStatus from '../order/components/OrderStatus';
 import { orderStatusTranslationVariables } from '../order/shared/getOrderStatus';
 
+import { CursorDetailPagination } from './components/CursorDetailPagination';
 import { DetailPagination } from './components/DetailPagination';
 import { OrderAction } from './components/OrderAction';
 import { OrderBilling } from './components/OrderBilling';
 import { OrderHistory } from './components/OrderHistory';
 import { OrderShipping } from './components/OrderShipping';
 import { OrderDetailsContext, OrderDetailsProvider } from './context/OrderDetailsContext';
+import { applyOrderBackorderHistory } from './shared/applyOrderBackorderHistory';
 import convertB2BOrderDetails from './shared/B2BOrderData';
+import { convertOrderDetail } from './shared/convertOrderDetail';
 
 interface LocationState {
   isCompanyOrder: boolean;
@@ -57,21 +64,16 @@ function OrderDetail() {
 
   const b3Lang = useB3Lang();
 
+  const isUnifiedOrders = useFeatureFlag('B2B-4613.buyer_portal_unified_sf_gql_orders');
+  const { isBackorderMessagingContextEnabled } = useBackorderStorefrontMessaging();
+
   const {
     state: { addressConfig },
     dispatch: globalDispatch,
   } = useContext(GlobalContext);
 
   const {
-    state: {
-      poNumber,
-      status = '',
-      customStatus,
-      orderSummary,
-      orderStatus = [],
-      products,
-      digitalProducts,
-    },
+    state: { poNumber, status = '', customStatus, orderSummary, orderStatus = [], digitalProducts },
     state: detailsData,
     dispatch,
   } = useContext(OrderDetailsContext);
@@ -90,7 +92,8 @@ function OrderDetail() {
   const [preOrderId, setPreOrderId] = useState('');
   const [orderId, setOrderId] = useState('');
   const [isRequestLoading, setIsRequestLoading] = useState(false);
-  const [isCurrentCompany, setIsCurrentCompany] = useState(false);
+  const [isCurrentCompany, setIsCurrentCompany] = useState(true);
+  const [unifiedOrder, setUnifiedOrder] = useState<UnifiedOrder | null>(null);
 
   useEffect(() => {
     setOrderId(params.id || '');
@@ -101,72 +104,181 @@ function OrderDetail() {
   };
 
   useEffect(() => {
-    if (orderId) {
-      const getOrderDetails = async () => {
-        const id = parseInt(orderId, 10);
-        if (!id) {
-          return;
-        }
+    if (isUnifiedOrders || !orderId) {
+      return undefined;
+    }
 
-        setIsRequestLoading(true);
+    let isCurrentRequest = true;
 
-        try {
-          const order = isB2BUser ? await getB2BOrderDetails(id) : await getBCOrderDetails(id);
+    const fetchLegacyOrderDetails = async () => {
+      const id = parseInt(orderId, 10);
+      if (!id) {
+        return;
+      }
 
-          if (order) {
-            const { products, companyInfo } = order;
+      setIsRequestLoading(true);
 
-            const newOrder = {
-              ...order,
-              products: products.map((item: OrderProductItem) => {
-                return {
-                  ...item,
-                  imageUrl: item?.variantImageUrl || item.imageUrl,
-                };
-              }),
-            };
+      try {
+        const order = isB2BUser ? await getB2BOrderDetails(id) : await getBCOrderDetails(id);
 
-            setIsCurrentCompany(Number(companyInfo.companyId) === Number(currentCompanyId));
+        if (order && isCurrentRequest) {
+          const { products, companyInfo } = order;
 
-            const data = convertB2BOrderDetails(newOrder, b3Lang);
+          const newOrder = {
+            ...order,
+            products: products.map((item: OrderProductItem) => {
+              return {
+                ...item,
+                imageUrl: item?.variantImageUrl || item.imageUrl,
+              };
+            }),
+          };
+
+          setIsCurrentCompany(Number(companyInfo.companyId) === Number(currentCompanyId));
+
+          const data = convertB2BOrderDetails(newOrder, b3Lang);
+
+          let payload: ReturnType<typeof applyOrderBackorderHistory> = {
+            ...data,
+            shippingExpectationMessage: undefined,
+          };
+          if (isBackorderMessagingContextEnabled) {
+            try {
+              const backorderHistory = await getOrderBackorderHistory({ entityId: id });
+              payload = applyOrderBackorderHistory(data, backorderHistory);
+            } catch (err) {
+              b2bLogger.error(err);
+            }
+          }
+
+          if (isCurrentRequest) {
             dispatch({
               type: 'all',
-              payload: data,
+              payload,
             });
             setPreOrderId(orderId);
           }
-        } catch (err) {
-          if (err === 'order does not exist') {
-            setTimeout(() => {
-              window.location.hash = `/orderDetail/${preOrderId}`;
-            }, 1000);
-          }
-        } finally {
+        }
+      } catch (err) {
+        if (err === 'order does not exist' && isCurrentRequest) {
+          setTimeout(() => {
+            window.location.hash = `/orderDetail/${preOrderId}`;
+          }, 1000);
+        }
+      } finally {
+        if (isCurrentRequest) {
           setIsRequestLoading(false);
         }
-      };
+      }
+    };
 
-      const getOrderStatus = async () => {
-        const orderStatus = isB2BUser ? await getOrderStatusType() : await getBcOrderStatusType();
+    fetchLegacyOrderDetails();
 
-        dispatch({
-          type: 'statusType',
-          payload: {
-            orderStatus,
-          },
-        });
-      };
-
-      getOrderDetails();
-      getOrderStatus();
-    }
-    // Disabling rule since dispatch does not need to be in the dep array and b3Lang has rendering errors
+    return () => {
+      isCurrentRequest = false;
+    };
+    // dispatch is stable and b3Lang has rendering errors, so both are omitted.
+    // preOrderId is only read in the failed-navigation fallback; including it would
+    // re-run this effect after setPreOrderId on a successful load, refetching the order.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isB2BUser, orderId, preOrderId, selectCompanyHierarchyId]);
+  }, [
+    isB2BUser,
+    isUnifiedOrders,
+    orderId,
+    selectCompanyHierarchyId,
+    currentCompanyId,
+    isBackorderMessagingContextEnabled,
+  ]);
 
-  const handlePageChange = (orderId: string | number) => {
-    setOrderId(orderId.toString());
-  };
+  useEffect(() => {
+    if (!isUnifiedOrders || !orderId) {
+      setUnifiedOrder(null);
+      return undefined;
+    }
+
+    let isCurrentRequest = true;
+
+    const fetchUnifiedOrderDetails = async () => {
+      const id = parseInt(orderId, 10);
+      setUnifiedOrder(null);
+
+      if (!id) {
+        return;
+      }
+
+      setIsRequestLoading(true);
+
+      try {
+        const response = await getOrderDetail({ entityId: id });
+        const order = response.data?.site?.order;
+
+        if (order && isCurrentRequest) {
+          setUnifiedOrder(order);
+          setPreOrderId(orderId);
+        }
+      } catch (err) {
+        if (err === 'order does not exist' && isCurrentRequest) {
+          setTimeout(() => {
+            window.location.hash = `/orderDetail/${preOrderId}`;
+          }, 1000);
+        }
+      } finally {
+        if (isCurrentRequest) {
+          setIsRequestLoading(false);
+        }
+      }
+    };
+
+    fetchUnifiedOrderDetails();
+
+    return () => {
+      isCurrentRequest = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- preOrderId is only used for failed navigation fallback
+  }, [isUnifiedOrders, orderId]);
+
+  useEffect(() => {
+    if (!isUnifiedOrders || !unifiedOrder) {
+      return;
+    }
+
+    dispatch({
+      type: 'all',
+      payload: convertOrderDetail(unifiedOrder, b3Lang),
+    });
+
+    // BC omits `company` on Order — no cross-company check. B2B: compare order company to viewer context.
+    setIsCurrentCompany(
+      unifiedOrder.company
+        ? Number(unifiedOrder.company.entityId) === Number(currentCompanyId)
+        : true,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dispatch stable and b3Lang has rendering errors
+  }, [isUnifiedOrders, unifiedOrder, currentCompanyId]);
+
+  useEffect(() => {
+    if (!orderId) {
+      return;
+    }
+
+    const fetchOrderStatusTypes = async () => {
+      const orderStatus = isB2BUser ? await getOrderStatusType() : await getBcOrderStatusType();
+
+      dispatch({
+        type: 'statusType',
+        payload: {
+          orderStatus,
+        },
+      });
+    };
+
+    fetchOrderStatusTypes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isB2BUser, orderId]);
+
+  const handlePageChange = useCallback((nextOrderId: string | number) => {
+    setOrderId(nextOrderId.toString());
+  }, []);
 
   useEffect(() => {
     const getAddressLabelPermission = async () => {
@@ -291,15 +403,21 @@ function OrderDetail() {
               justifyContent: 'flex-end',
             }}
           >
-            {location?.state && (
-              <DetailPagination
-                onChange={(orderId) => handlePageChange(orderId)}
-                color={customColor}
-              />
-            )}
+            {location?.state &&
+              (isUnifiedOrders ? (
+                // key={location.key} remounts when history changes
+                // so useCursorDetailPagination re-seeds from location.state on mount.
+                <CursorDetailPagination
+                  key={location.key}
+                  onChange={handlePageChange}
+                  color={customColor}
+                />
+              ) : (
+                <DetailPagination onChange={handlePageChange} color={customColor} />
+              ))}
           </Grid>
         </Grid>
-        {products?.length && !isCurrentCompany ? (
+        {orderId && !isCurrentCompany ? (
           <Box
             sx={{
               marginTop: '24px',

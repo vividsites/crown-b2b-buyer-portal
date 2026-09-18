@@ -58,6 +58,9 @@ const buildQuoteProductWith = builder<QuoteProduct>(() => ({
   costPrice: faker.commerce.price(),
   inventoryTracking: faker.lorem.word(),
   inventoryLevel: faker.number.int(),
+  backorderMessage: undefined,
+  totalOnHand: undefined,
+  quantityBackordered: undefined,
 }));
 
 const buildProductSearchWith = builder<ProductSearch>(() => ({
@@ -243,17 +246,22 @@ describe('when the user is a B2B customer', () => {
 
     vitest.mocked(useParams).mockReturnValue({ id: '272989' });
 
-    renderWithProviders(<QuoteDetail />, { preloadedState });
+    renderWithProviders(<QuoteDetail />, {
+      preloadedState: {
+        ...preloadedState,
+        global: { ...preloadedState.global, backorderEnabled: false },
+      },
+    });
 
     expect(await screen.findByText('2 products')).toBeInTheDocument();
 
-    const rowOfWoolSocks = screen.getByRole('row', { name: /Wool Socks/ });
+    const rowOfWoolSocks = await screen.findByRole('row', { name: /Wool Socks/ });
 
     expect(within(rowOfWoolSocks).getByRole('cell', { name: '$49.00' })).toBeInTheDocument();
     expect(within(rowOfWoolSocks).getByRole('cell', { name: '10' })).toBeInTheDocument();
     expect(within(rowOfWoolSocks).getByRole('cell', { name: '$490.00' })).toBeInTheDocument();
 
-    const rowOfDenimJacket = screen.getByRole('row', { name: /Denim Jacket/ });
+    const rowOfDenimJacket = await screen.findByRole('row', { name: /Denim Jacket/ });
 
     expect(within(rowOfDenimJacket).getByRole('cell', { name: '$133.33' })).toBeInTheDocument();
     expect(within(rowOfDenimJacket).getByRole('cell', { name: '3' })).toBeInTheDocument();
@@ -289,12 +297,17 @@ describe('when the user is a B2B customer', () => {
 
     vitest.mocked(useParams).mockReturnValue({ id: '272989' });
 
-    renderWithProviders(<QuoteDetail />, { preloadedState });
+    renderWithProviders(<QuoteDetail />, {
+      preloadedState: {
+        ...preloadedState,
+        global: { ...preloadedState.global, backorderEnabled: false },
+      },
+    });
 
     expect(await screen.findByRole('heading', { name: 'Quote summary' })).toBeInTheDocument();
 
     expect(await screen.findByText('Original subtotal')).toBeInTheDocument();
-    expect(screen.getByText('$1,000.00')).toBeInTheDocument();
+    expect(await screen.findByText('$1,000.00')).toBeInTheDocument();
 
     expect(screen.getByText('Discount amount')).toBeInTheDocument();
     expect(screen.getByText('-$25.00')).toBeInTheDocument();
@@ -345,6 +358,7 @@ describe('when the user is a B2B customer', () => {
             validateProduct: {
               responseType: 'ERROR',
               message: 'A product with the id of 123 does not have sufficient stock',
+              errorCode: 'OOS',
               product: {
                 availableToSell: faker.number.int(),
               },
@@ -369,9 +383,6 @@ describe('when the user is a B2B customer', () => {
         global: {
           ...preloadedState.global,
           backorderEnabled: true,
-          featureFlags: {
-            'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-          },
         },
       },
     });
@@ -379,7 +390,7 @@ describe('when the user is a B2B customer', () => {
     await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
     expect(
-      await screen.findByText('A product with the id of 123 does not have sufficient stock'),
+      await screen.findByText(/does not have sufficient stock\. Please contact your Sales Rep/),
     ).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: /PROCEED TO CHECKOUT/i })).toBeInTheDocument();
   });
@@ -429,9 +440,6 @@ describe('when the user is a B2B customer', () => {
         global: {
           ...preloadedState.global,
           backorderEnabled: true,
-          featureFlags: {
-            'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-          },
         },
       },
     });
@@ -476,6 +484,7 @@ describe('when the user is a B2B customer', () => {
             validateProduct: {
               responseType: 'ERROR',
               message: 'A product with the id of 123 does not have sufficient stock',
+              errorCode: 'OOS',
               product: {
                 availableToSell: faker.number.int(),
               },
@@ -500,9 +509,6 @@ describe('when the user is a B2B customer', () => {
         global: {
           ...preloadedState.global,
           backorderEnabled: true,
-          featureFlags: {
-            'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-          },
         },
       },
     });
@@ -515,7 +521,7 @@ describe('when the user is a B2B customer', () => {
     // the error message is shown in a snackbar when loading the page and when user tries clicking the checkout button
     // and a product has an error
     expect(
-      await screen.findAllByText('A product with the id of 123 does not have sufficient stock'),
+      await screen.findAllByText(/does not have sufficient stock\. Please contact your Sales Rep/),
     ).toHaveLength(2);
   });
 
@@ -596,9 +602,6 @@ describe('when the user is a B2B customer', () => {
         global: {
           ...preloadedState.global,
           backorderEnabled: true,
-          featureFlags: {
-            'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-          },
         },
       },
     });
@@ -611,6 +614,183 @@ describe('when the user is a B2B customer', () => {
     expect(window.location.href).toBe(
       'https://my-store/cart.php?action=loadInCheckout&id=123&token=1234567889&isFromQuote=Y',
     );
+  });
+
+  it('shows error snackbar when quote checkout returns no checkout payload', async () => {
+    const quote = buildQuoteWith({
+      data: {
+        quote: {
+          id: '123',
+          quoteNumber: '123',
+          status: 2,
+          allowCheckout: true,
+          productsList: [buildQuoteProductWith({ productId: '123' })],
+        },
+      },
+    });
+
+    server.use(
+      graphql.query('GetQuoteInfoB2B', () => HttpResponse.json(quote)),
+      graphql.query('SearchProducts', () =>
+        HttpResponse.json(
+          buildProductSearchResponseWith({
+            data: {
+              productsSearch: [buildProductSearchWith({ id: 123 })],
+            },
+          }),
+        ),
+      ),
+      graphql.query('getQuoteExtraFields', () =>
+        HttpResponse.json(buildQuoteExtraFieldsWith('WHATEVER_VALUES')),
+      ),
+      graphql.query('ValidateProduct', () =>
+        HttpResponse.json({
+          data: {
+            validateProduct: {
+              responseType: 'SUCCESS',
+              message: 'Product is valid',
+            },
+          },
+        }),
+      ),
+      graphql.query('getStorefrontProductSettings', () =>
+        HttpResponse.json({
+          data: {
+            storefrontProductSettings: {
+              hidePriceFromGuests: false,
+            },
+          },
+        }),
+      ),
+      graphql.mutation('CheckoutQuote', () => HttpResponse.json({ data: {} })),
+    );
+
+    vitest.mocked(useParams).mockReturnValue({ id: '123' });
+
+    renderWithProviders(<QuoteDetail />, {
+      preloadedState: {
+        ...preloadedState,
+        company: {
+          ...preloadedState.company,
+          permissions: [
+            { code: 'purchase_enable', permissionLevel: 1 },
+            { code: 'checkout_with_quote', permissionLevel: 1 },
+          ],
+        },
+        global: {
+          ...preloadedState.global,
+          backorderEnabled: true,
+        },
+      },
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText('Loading...'));
+
+    const checkoutButton = screen.getByRole('button', { name: 'Proceed to checkout' });
+    await userEvent.click(checkoutButton);
+
+    expect(await screen.findByText('Product validation failed for this quote')).toBeVisible();
+  });
+
+  it('shows structured validation error snackbars when quote checkout returns productValidationErrors', async () => {
+    const quote = buildQuoteWith({
+      data: {
+        quote: {
+          id: '123',
+          quoteNumber: '123',
+          status: 2,
+          allowCheckout: true,
+          productsList: [buildQuoteProductWith({ productId: '123' })],
+        },
+      },
+    });
+
+    server.use(
+      graphql.query('GetQuoteInfoB2B', () => HttpResponse.json(quote)),
+      graphql.query('SearchProducts', () =>
+        HttpResponse.json(
+          buildProductSearchResponseWith({
+            data: {
+              productsSearch: [buildProductSearchWith({ id: 123 })],
+            },
+          }),
+        ),
+      ),
+      graphql.query('getQuoteExtraFields', () =>
+        HttpResponse.json(buildQuoteExtraFieldsWith('WHATEVER_VALUES')),
+      ),
+      graphql.query('ValidateProduct', () =>
+        HttpResponse.json({
+          data: {
+            validateProduct: {
+              responseType: 'SUCCESS',
+              message: 'Product is valid',
+            },
+          },
+        }),
+      ),
+      graphql.query('getStorefrontProductSettings', () =>
+        HttpResponse.json({
+          data: {
+            storefrontProductSettings: {
+              hidePriceFromGuests: false,
+            },
+          },
+        }),
+      ),
+      graphql.mutation('CheckoutQuote', () =>
+        HttpResponse.json({
+          data: {},
+          errors: [
+            {
+              message: 'Product validation failed',
+              extensions: {
+                productValidationErrors: [
+                  {
+                    itemId: 'item-1',
+                    productId: 101,
+                    variantId: 201,
+                    responseType: 'ERROR',
+                    code: 'OOS',
+                    productName: 'Test Product',
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      ),
+    );
+
+    vitest.mocked(useParams).mockReturnValue({ id: '123' });
+
+    renderWithProviders(<QuoteDetail />, {
+      preloadedState: {
+        ...preloadedState,
+        company: {
+          ...preloadedState.company,
+          permissions: [
+            { code: 'purchase_enable', permissionLevel: 1 },
+            { code: 'checkout_with_quote', permissionLevel: 1 },
+          ],
+        },
+        global: {
+          ...preloadedState.global,
+          backorderEnabled: true,
+        },
+      },
+    });
+
+    await waitForElementToBeRemoved(() => screen.queryByText('Loading...'));
+
+    const checkoutButton = screen.getByRole('button', { name: 'Proceed to checkout' });
+    await userEvent.click(checkoutButton);
+
+    expect(
+      await screen.findByText(
+        'Test Product does not have sufficient stock. Please contact your Sales Rep to have it re-issued.',
+      ),
+    ).toBeVisible();
   });
 
   it('renders TBD instead of price in quote summary if product has an error', async () => {
@@ -656,7 +836,7 @@ describe('when the user is a B2B customer', () => {
         HttpResponse.json(buildQuoteExtraFieldsWith('WHATEVER_VALUES')),
       ),
       graphql.query('ValidateProduct', async () => {
-        /* 
+        /*
           adding a delay to make sure we are mimicking the scenario where validateProduct api takes time
           and product error is visible immediately after loading
         */
@@ -667,6 +847,7 @@ describe('when the user is a B2B customer', () => {
             validateProduct: {
               responseType: 'ERROR',
               message: 'A product with the id of 123 does not have sufficient stock',
+              errorCode: 'OOS',
               product: {
                 availableToSell: faker.number.int(),
               },
@@ -687,16 +868,13 @@ describe('when the user is a B2B customer', () => {
             isEnableProduct: false,
           },
           backorderEnabled: true,
-          featureFlags: {
-            'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-          },
         },
       },
     });
 
     await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
     expect(
-      screen.getByText('A product with the id of 123 does not have sufficient stock'),
+      screen.getByText(/does not have sufficient stock\. Please contact your Sales Rep/),
     ).toBeInTheDocument();
     const summaryElement = screen.getByTestId('quote-summary');
     const withinSummary = within(summaryElement);
@@ -787,9 +965,9 @@ describe('when the user is a B2B customer', () => {
         HttpResponse.json(buildQuoteExtraFieldsWith('WHATEVER_VALUES')),
       ),
       graphql.query('ValidateProduct', async () => {
-        /* 
+        /*
           adding a delay to make sure we are mimicking the scenario where validateProduct api takes time
-          and still no TBD shows 
+          and still no TBD shows
         */
         await delay(200);
         return HttpResponse.json({
@@ -811,9 +989,6 @@ describe('when the user is a B2B customer', () => {
         global: {
           ...preloadedState.global,
           backorderEnabled: true,
-          featureFlags: {
-            'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-          },
         },
       },
     });
@@ -888,9 +1063,6 @@ describe('when the user is a B2B customer', () => {
       global: {
         ...preloadedState.global,
         backorderEnabled: true,
-        featureFlags: {
-          'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-        },
         quoteConfig: [
           {
             key: 'quote_auto_quoting',
@@ -958,9 +1130,6 @@ describe('when the user is a B2B customer', () => {
       global: {
         ...preloadedState.global,
         backorderEnabled: true,
-        featureFlags: {
-          'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-        },
         quoteConfig: [
           {
             key: 'quote_auto_quoting',
@@ -1091,9 +1260,6 @@ describe('when the user is a B2B customer', () => {
         ...preloadedState,
         global: buildGlobalStateWith({
           backorderEnabled: true,
-          featureFlags: {
-            'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-          },
         }),
       },
     });
@@ -1189,9 +1355,6 @@ describe('when the user is a B2B customer', () => {
             },
             global: {
               ...preloadedState.global,
-              featureFlags: {
-                'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-              },
             },
           },
           initialEntries: [`/272989?uuid=${uuid}&date=${dateString}`],
@@ -1235,9 +1398,6 @@ describe('when the user is a B2B customer', () => {
             },
             global: {
               ...preloadedState.global,
-              featureFlags: {
-                'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-              },
             },
           },
           initialEntries: [`/272989?date=${dateString}`],
@@ -1250,6 +1410,246 @@ describe('when the user is a B2B customer', () => {
         expect(sessionStorage.getItem('quoteCheckoutId')).toEqual(id);
         expect(sessionStorage.getItem('quoteDate')).toEqual(dateString);
       });
+    });
+  });
+
+  describe('backorder details toggle', () => {
+    const backorderPreloadedState = {
+      ...preloadedState,
+      global: buildGlobalStateWith({
+        backorderEnabled: true,
+        backorderDisplaySettings: {
+          showQuantityOnBackorder: true,
+          showQuantityOnHand: true,
+          showBackorderMessage: true,
+        },
+        featureFlags: {
+          'BACK-134.backorders_phase_1_1_control_messaging_on_storefront': true,
+        },
+      }),
+    };
+
+    beforeEach(() => {
+      server.use(
+        graphql.query('SearchProducts', () =>
+          HttpResponse.json(buildProductSearchResponseWith('WHATEVER_VALUES')),
+        ),
+        graphql.query('getQuoteExtraFields', () =>
+          HttpResponse.json(buildQuoteExtraFieldsWith('WHATEVER_VALUES')),
+        ),
+        graphql.query('ValidateProduct', () =>
+          HttpResponse.json({
+            data: { validateProduct: { responseType: 'SUCCESS', message: '' } },
+          }),
+        ),
+      );
+    });
+
+    it('does not show the toggle when no products have backordered quantities', async () => {
+      const quote = buildQuoteWith({
+        data: {
+          quote: {
+            id: '272989',
+            productsList: [buildQuoteProductWith({ quantityBackordered: 0 })],
+          },
+        },
+      });
+
+      server.use(graphql.query('GetQuoteInfoB2B', () => HttpResponse.json(quote)));
+      vitest.mocked(useParams).mockReturnValue({ id: '272989' });
+
+      renderWithProviders(<QuoteDetail />, { preloadedState: backorderPreloadedState });
+
+      await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+      expect(screen.queryByText(/backorder details/i)).not.toBeInTheDocument();
+    });
+
+    it('shows the toggle when at least one product has backordered quantities', async () => {
+      const quote = buildQuoteWith({
+        data: {
+          quote: {
+            id: '272989',
+            productsList: [buildQuoteProductWith({ quantityBackordered: 3 })],
+          },
+        },
+      });
+
+      server.use(graphql.query('GetQuoteInfoB2B', () => HttpResponse.json(quote)));
+      vitest.mocked(useParams).mockReturnValue({ id: '272989' });
+
+      renderWithProviders(<QuoteDetail />, { preloadedState: backorderPreloadedState });
+
+      await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+      expect(await screen.findByRole('checkbox', { name: /backorder details/i })).toBeChecked();
+    });
+
+    it('does not show the toggle when backorders are disabled', async () => {
+      const quote = buildQuoteWith({
+        data: {
+          quote: {
+            id: '272989',
+            productsList: [buildQuoteProductWith({ quantityBackordered: 3 })],
+          },
+        },
+      });
+
+      server.use(graphql.query('GetQuoteInfoB2B', () => HttpResponse.json(quote)));
+      vitest.mocked(useParams).mockReturnValue({ id: '272989' });
+
+      renderWithProviders(<QuoteDetail />, {
+        preloadedState: {
+          ...preloadedState,
+          global: buildGlobalStateWith({ backorderEnabled: false }),
+        },
+      });
+
+      await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+      expect(screen.queryByText(/backorder details/i)).not.toBeInTheDocument();
+    });
+
+    it('shows the toggle on an ordered quote with backordered items', async () => {
+      const quote = buildQuoteWith({
+        data: {
+          quote: {
+            id: '272989',
+            status: 4,
+            productsList: [buildQuoteProductWith({ quantityBackordered: 3 })],
+          },
+        },
+      });
+
+      server.use(graphql.query('GetQuoteInfoB2B', () => HttpResponse.json(quote)));
+      vitest.mocked(useParams).mockReturnValue({ id: '272989' });
+
+      renderWithProviders(<QuoteDetail />, { preloadedState: backorderPreloadedState });
+
+      await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
+
+      expect(await screen.findByRole('checkbox', { name: /backorder details/i })).toBeChecked();
+    });
+  });
+
+  describe('currency symbol placement', () => {
+    const woolSock = buildQuoteProductWith({
+      productName: 'Wool Socks',
+      quantity: 3,
+      basePrice: '49.00',
+      offeredPrice: '49.00',
+    });
+
+    const eurOnRightInQuote = {
+      token: '€',
+      location: 'right',
+      currencyCode: 'EUR',
+      decimalToken: '.',
+      decimalPlaces: 2,
+      thousandsToken: ',',
+      currencyExchangeRate: '1.0000000000',
+    };
+
+    const eurOnLeftInBcConfig = {
+      id: '2',
+      is_default: false,
+      last_updated: '2024-01-01',
+      country_iso2: 'DE',
+      default_for_country_codes: [],
+      currency_code: 'EUR',
+      currency_exchange_rate: '1.0000000000',
+      name: 'Euro',
+      token: '€',
+      auto_update: false,
+      decimal_token: '.',
+      decimal_places: 2,
+      enabled: true,
+      is_transactional: true,
+      token_location: 'left' as const,
+      thousands_token: ',',
+    };
+
+    const storeConfigsWithUpdatedEurPlacement = {
+      currencies: {
+        currencies: [eurOnLeftInBcConfig],
+        channelCurrencies: { channel_id: 1, enabled_currencies: ['EUR'], default_currency: 'EUR' },
+        enteredInclusiveTax: false,
+      },
+    };
+
+    beforeEach(() => {
+      const quote = buildQuoteWith({
+        data: {
+          quote: {
+            id: '272989',
+            productsList: [woolSock],
+            currency: eurOnRightInQuote,
+            totalAmount: '200.00',
+          },
+        },
+      });
+
+      server.use(
+        graphql.query('GetQuoteInfoB2B', () => HttpResponse.json(quote)),
+        graphql.query('SearchProducts', () =>
+          HttpResponse.json(buildProductSearchResponseWith('WHATEVER_VALUES')),
+        ),
+        graphql.query('getQuoteExtraFields', () =>
+          HttpResponse.json(buildQuoteExtraFieldsWith('WHATEVER_VALUES')),
+        ),
+      );
+
+      vitest.mocked(useParams).mockReturnValue({ id: '272989' });
+    });
+
+    it('uses the current BC currency placement for quote items and summary', async () => {
+      renderWithProviders(<QuoteDetail />, {
+        preloadedState: {
+          ...preloadedState,
+          storeConfigs: storeConfigsWithUpdatedEurPlacement,
+          global: buildGlobalStateWith({
+            backorderEnabled: false,
+          }),
+        },
+      });
+
+      const row = (await screen.findByText('Wool Socks')).closest('tr')!;
+      expect(within(row).getByRole('cell', { name: '€49.00' })).toBeInTheDocument();
+
+      const summary = screen.getByTestId('quote-summary');
+      expect(within(summary).getByText('€200.00')).toBeInTheDocument();
+    });
+
+    it('places the token on the left when BC config has uppercase token_location LEFT', async () => {
+      const eurWithUppercaseLeft = JSON.parse(
+        JSON.stringify({ ...eurOnLeftInBcConfig, token_location: 'LEFT' }),
+      );
+
+      renderWithProviders(<QuoteDetail />, {
+        preloadedState: {
+          ...preloadedState,
+          storeConfigs: {
+            currencies: {
+              currencies: [eurWithUppercaseLeft],
+              channelCurrencies: {
+                channel_id: 1,
+                enabled_currencies: ['EUR'],
+                default_currency: 'EUR',
+              },
+              enteredInclusiveTax: false,
+            },
+          },
+          global: buildGlobalStateWith({
+            backorderEnabled: false,
+          }),
+        },
+      });
+
+      const row = (await screen.findByText('Wool Socks')).closest('tr')!;
+      expect(within(row).getByRole('cell', { name: '€49.00' })).toBeInTheDocument();
+
+      const summary = screen.getByTestId('quote-summary');
+      expect(within(summary).getByText('€200.00')).toBeInTheDocument();
     });
   });
 });

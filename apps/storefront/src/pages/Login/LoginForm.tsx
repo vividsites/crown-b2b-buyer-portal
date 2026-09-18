@@ -6,7 +6,7 @@ import { B3CustomForm } from '@/components/B3CustomForm';
 import { getContrastColor } from '@/components/outSideComponents/utils/b3CustomStyles';
 import { useB3Lang } from '@/lib/lang';
 
-import { getLoginFields, LoginConfig } from './config';
+import { getLoginFields, LoginConfig } from './helper';
 import LoginWidget from './component/LoginWidget';
 
 interface LoginFormProps {
@@ -15,10 +15,12 @@ interface LoginFormProps {
   footerText?: string;
   handleLoginSubmit: (data: LoginConfig) => void;
   backgroundColor: string;
+  isLoading?: boolean;
 }
 
 function LoginForm(props: LoginFormProps) {
-  const { loginBtn, headerText, footerText, handleLoginSubmit, backgroundColor } = props;
+  const { loginBtn, headerText, footerText, handleLoginSubmit, backgroundColor, isLoading = false } =
+    props;
 
   const b3Lang = useB3Lang();
   const theme = useTheme();
@@ -37,7 +39,7 @@ function LoginForm(props: LoginFormProps) {
     handleLoginSubmit(data);
   };
 
-  const loginFields = getLoginFields(b3Lang, handleSubmit(handleLoginClick));
+  const loginFields = getLoginFields(b3Lang);
 
   return (
     <Box
@@ -85,6 +87,7 @@ function LoginForm(props: LoginFormProps) {
             control={control}
             getValues={getValues}
             setValue={setValue}
+            disabled={isLoading}
           />
           <Box
             sx={{
@@ -98,6 +101,7 @@ function LoginForm(props: LoginFormProps) {
             <Button
               type="submit"
               variant="contained"
+              disabled={isLoading}
               sx={{
                 backgroundColor: theme.palette.primary.main,
               }}

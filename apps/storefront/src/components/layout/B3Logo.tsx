@@ -1,17 +1,18 @@
 import { useContext } from 'react';
 import { Box, ImageListItem } from '@mui/material';
 
-import b2bLogo from '@/assets/b2bLogo.png';
 import { useMobile } from '@/hooks/useMobile';
+import { getHomeUrl } from '@/lib/lang/getHomeUrl';
 import { GlobalContext } from '@/shared/global';
-import { getAssetUrl } from '@/utils/getAssetUrl';
+import { useAppSelector } from '@/store';
 
 export default function B3Logo() {
   const {
-    state: { logo },
+    state: { logo, isLogoLoaded },
   } = useContext(GlobalContext);
 
   const [isMobile] = useMobile();
+  const locales = useAppSelector(({ global }) => global.locales);
 
   return (
     <Box
@@ -43,21 +44,23 @@ export default function B3Logo() {
             }
       }
     >
-      <ImageListItem
-        sx={{
-          maxWidth: '200px',
-          cursor: 'pointer',
-          '& .MuiImageListItem-img': {
-            objectFit: 'contain',
-            width: 'auto',
-          },
-        }}
-        onClick={() => {
-          window.location.href = '/';
-        }}
-      >
-        <img src={logo || getAssetUrl(b2bLogo)} alt="logo" />
-      </ImageListItem>
+      {isLogoLoaded && logo && (
+        <ImageListItem
+          sx={{
+            maxWidth: '200px',
+            cursor: 'pointer',
+            '& .MuiImageListItem-img': {
+              objectFit: 'contain',
+              width: 'auto',
+            },
+          }}
+          onClick={() => {
+            window.location.href = getHomeUrl(locales);
+          }}
+        >
+          <img src={logo} alt="logo" />
+        </ImageListItem>
+      )}
     </Box>
   );
 }

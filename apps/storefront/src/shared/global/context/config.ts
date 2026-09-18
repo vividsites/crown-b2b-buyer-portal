@@ -12,6 +12,7 @@ export interface Country {
   countryCode: string;
   countryName: string;
   id?: string;
+  stateRequired?: boolean;
   states: State[];
 }
 
@@ -30,6 +31,7 @@ export interface GlobalState {
   isCheckout: boolean;
   isCloseGotoBCHome: boolean;
   logo: string;
+  isLogoLoaded: boolean;
   isCompanyAccount: boolean;
   isAgenting: boolean;
   tipMessage: TipMessagesProps;
@@ -71,6 +73,7 @@ export const initState: GlobalState = {
   isCloseGotoBCHome: false,
   isAgenting: B3SStorage.get('isAgenting') || false,
   logo: '',
+  isLogoLoaded: false,
   bcLanguage: 'en',
   isCompanyAccount: false,
   storeEnabled: false,
