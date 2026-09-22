@@ -18,9 +18,12 @@ function LoginPanel(props: LoginPanelProps) {
   return (
     <Box
       sx={{
-        padding: isMobile ? '16px' : '20px',
         borderRadius: '4px',
-        mt: isMobile ? '0' : '-25px',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        backgroundColor: '#15296e'
       }}
     >
       <LoginWidget
@@ -41,10 +44,9 @@ function LoginPanel(props: LoginPanelProps) {
       />
       <Box
         sx={{
-          backgroundColor: '#15296e',
           padding: '12px 20px 20px 20px',
           marginTop: '0px',
-          textAlign: 'center',
+          textAlign: 'center'
         }}
       >
         <Button

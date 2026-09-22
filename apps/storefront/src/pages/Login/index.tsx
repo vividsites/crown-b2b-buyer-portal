@@ -43,6 +43,7 @@ import { performLoginCheckout } from './performLoginCheckout';
 import { LoginContainer } from './styled';
 import { useLoginInfo } from './useLoginInfo';
 import { useLogout } from './useLogout';
+import LoginWidget from './component/LoginWidget';
 
 function Login(props: PageProps) {
   const { setOpenPage } = props;
@@ -368,7 +369,9 @@ function Login(props: PageProps) {
                     backgroundColor: '#FFFFFF',
                     borderRadius: '4px',
                     margin: '20px 0',
+                    padding: '25px 0',
                     display: 'flex',
+                    alignItems: 'stretch',
                     flexDirection: isMobile ? 'column' : 'row',
                     justifyContent: 'center',
                     width: isMobile ? 'auto' : loginAndRegisterContainerWidth,
@@ -385,7 +388,6 @@ function Login(props: PageProps) {
                     <LoginForm
                       loginBtn={loginInfo.loginBtn}
                       headerText={loginInfo.widgetHeadText}
-                      footerText={loginInfo.widgetFooterText}
                       handleLoginSubmit={handleLoginSubmit}
                       backgroundColor={backgroundColor}
                       isLoading={isLoading}
@@ -396,7 +398,7 @@ function Login(props: PageProps) {
                     sx={{
                       flex: '1',
                       paddingLeft: isMobile ? 0 : '2%',
-                      mb: '20px',
+                      marginRight: '16px'
                     }}
                   >
                     <LoginPanel
@@ -405,8 +407,18 @@ function Login(props: PageProps) {
                       widgetBodyText={loginInfo.widgetBodyText}
                     />
                   </Box>
-                </Box>
-              </>
+               </Box>
+                  {loginInfo.widgetFooterText && (
+                    <LoginWidget
+                      sx={{
+                        marginTop: '20px',
+                        minHeight: '48px',
+                        width: '100%',
+                      }}
+                      html={loginInfo.widgetFooterText}
+                    />
+                  )}
+               </>
             )}
           </Box>
         </B3Spin>
