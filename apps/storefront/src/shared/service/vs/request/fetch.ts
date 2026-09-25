@@ -1,27 +1,23 @@
-const responseResult = (res: Response, resolve: (val?: unknown) => void, init: RequestInit) => {
+interface VSErrorEnvelope {
+  code?: number;
+  message?: string;
+  data?: { errMsg?: string };
+}
+
+const isErrorEnvelope = (value: unknown): value is VSErrorEnvelope =>
+  typeof value === 'object' && value !== null && 'code' in value;
+
+async function vsFetch(path: string, init: RequestInit): Promise<unknown> {
+  const res = await fetch(path, init);
   if (init.method === 'DELETE') {
-    resolve();
+    return undefined;
   }
-  return res.json();
-};
 
-function vsFetch(path: string, init: RequestInit): any {
-  return new Promise((resolve, reject) => {
-    fetch(path, init)
-      .then((res: Response) => responseResult(res, resolve, init))
-      .then(async (res) => {
-        if (res?.code === 500) {
-          const data = res?.data || {};
-          const message = data.errMsg || res.message || '';
-          reject(message);
-          return;
-        }
+  const body: unknown = await res.json();
+  if (isErrorEnvelope(body) && body.code === 500) {
+    return Promise.reject(body.data?.errMsg || body.message || '');
+  }
 
-        resolve(res);
-      })
-      .catch((err: Error) => {
-        reject(err);
-      });
-  });
+  return body;
 }
 export default vsFetch;

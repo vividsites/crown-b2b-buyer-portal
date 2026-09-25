@@ -1,13 +1,8 @@
-import {
-  store,
-} from '@/store';
-import {
-  setVSCurrentCustomerJWT,
-} from '@/store/slices/company';
-import b2bLogger from '../../../../utils/b3Logger';
-
-import { getVSAppClientId } from '@/shared/service/vs/request/base';
 import { getVSCurrentCustomerJWT } from '@/shared/service/vs/api/login';
+import { getVSAppClientId } from '@/shared/service/vs/request/base';
+import { store } from '@/store';
+import { setVSCurrentCustomerJWT } from '@/store/slices/company';
+import b2bLogger from '@/utils/b3Logger';
 
 export const ensureVSCurrentCustomerJWT = async () => {
   const prevVSCurrentCustomerJWT = store.getState().company.tokens.vsCurrentCustomerJWT;
@@ -18,7 +13,8 @@ export const ensureVSCurrentCustomerJWT = async () => {
     b2bLogger.error(error);
     return undefined;
   }
-  if (vsCurrentCustomerJWT && prevVSCurrentCustomerJWT !== vsCurrentCustomerJWT){
+  if (vsCurrentCustomerJWT && prevVSCurrentCustomerJWT !== vsCurrentCustomerJWT) {
     store.dispatch(setVSCurrentCustomerJWT(vsCurrentCustomerJWT));
   }
-}
+  return undefined;
+};

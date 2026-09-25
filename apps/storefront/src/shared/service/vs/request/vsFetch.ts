@@ -1,10 +1,10 @@
 import { store } from '@/store';
 
-import { getVSAPIBaseURL, queryParse } from './base';
+import { getVSAPIBaseURL, QueryParams, queryParse } from './base';
 import vsFetch from './fetch';
 import { ensureVSCurrentCustomerJWT } from './jwt';
 
-async function request(path: string, config?: RequestInit) {
+async function request<TResult>(path: string, config?: RequestInit): Promise<TResult> {
   const url = `${getVSAPIBaseURL()}${path}`;
 
   await ensureVSCurrentCustomerJWT();
@@ -28,57 +28,55 @@ async function request(path: string, config?: RequestInit) {
     },
   };
 
-  return vsFetch(url, init);
+  return (await vsFetch(url, init)) as TResult;
 }
 
 const VSRequest = {
-  get: function get<T, Y>(url: string, data?: T, config?: Y): Promise<any> {
+  get: function get<TResult = unknown>(
+    url: string,
+    data?: QueryParams,
+    config?: RequestInit,
+  ): Promise<TResult> {
     if (data) {
       const params = queryParse(data);
-      return request(`${url}?${params}`, {
+      return request<TResult>(`${url}?${params}`, {
         method: 'GET',
         ...config,
       });
     }
-    return request(
-      url,
-      {
-        method: 'GET',
-        ...config,
-      },
-    );
+    return request<TResult>(url, {
+      method: 'GET',
+      ...config,
+    });
   },
-  post: function post<T>(url: string, data: T): Promise<any> {
-    return request(
-      url,
-      {
-        body: JSON.stringify(data),
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-        },
+  post: function post<TResult = unknown, TBody = unknown>(
+    url: string,
+    data: TBody,
+  ): Promise<TResult> {
+    return request<TResult>(url, {
+      body: JSON.stringify(data),
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
       },
-    );
+    });
   },
-  put: function put<T>(url: string, data: T): Promise<any> {
-    return request(
-      url,
-      {
-        body: JSON.stringify(data),
-        method: 'PUT',
-        headers: {
-          'content-type': 'application/json',
-        },
+  put: function put<TResult = unknown, TBody = unknown>(
+    url: string,
+    data: TBody,
+  ): Promise<TResult> {
+    return request<TResult>(url, {
+      body: JSON.stringify(data),
+      method: 'PUT',
+      headers: {
+        'content-type': 'application/json',
       },
-    );
+    });
   },
-  delete: function deleteFn(url: string): Promise<any> {
-    return request(
-      url,
-      {
-        method: 'DELETE',
-      },
-    );
+  delete: function deleteFn<TResult = unknown>(url: string): Promise<TResult> {
+    return request<TResult>(url, {
+      method: 'DELETE',
+    });
   },
 };
 

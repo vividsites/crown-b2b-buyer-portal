@@ -14,30 +14,39 @@ const ENVIRONMENT_VS_APP_CLIENT_ID: EnvSpecificConfig<string> = {
   staging: 'rewfea6m9enlzs1elq6c5ifdhz9rme8',
   production: 'rewfea6m9enlzs1elq6c5ifdhz9rme8',
 };
+
+// Cloudflare always-pass test key for local/integration.
+// TODO(Crown): provide staging and production Turnstile site keys.
+const ENVIRONMENT_VS_TURNSTILE_SITE_KEY: EnvSpecificConfig<string> = {
+  local: '1x00000000000000000000AA',
+  integration: '1x00000000000000000000AA',
+  staging: '1x00000000000000000000AA',
+  production: '1x00000000000000000000AA',
+};
 // cspell:enable
 
 const DEFAULT_ENVIRONMENT =
   import.meta.env.VITE_IS_LOCAL_ENVIRONMENT === 'TRUE' ? Environment.Local : Environment.Production;
 
-  function isEnvironment(value?: string): value is Environment {
-    if (!value) {
-      return false;
-    }
-  
-    return Object.values<string>(Environment).includes(value);
+function isEnvironment(value?: string): value is Environment {
+  if (!value) {
+    return false;
   }
-  
-  const getEnvironment = (environment?: Environment): Environment => {
-    if (environment) {
-      return environment;
-    }
-  
-    if (isEnvironment(window.B3?.setting?.vsEnvironment)) {
-      return window.B3.setting.vsEnvironment;
-    }
-  
-    return DEFAULT_ENVIRONMENT;
-  };
+
+  return Object.values<string>(Environment).includes(value);
+}
+
+const getEnvironment = (environment?: Environment): Environment => {
+  if (environment) {
+    return environment;
+  }
+
+  if (isEnvironment(window.B3?.setting?.vsEnvironment)) {
+    return window.B3.setting.vsEnvironment;
+  }
+
+  return DEFAULT_ENVIRONMENT;
+};
 
 export function getVSAPIBaseURL(environment?: Environment) {
   return ENVIRONMENT_VS_API_URL[getEnvironment(environment)];
@@ -45,6 +54,10 @@ export function getVSAPIBaseURL(environment?: Environment) {
 
 export function getVSAppClientId(environment?: Environment) {
   return ENVIRONMENT_VS_APP_CLIENT_ID[getEnvironment(environment)];
+}
+
+export function getVSTurnstileSiteKey(environment?: Environment) {
+  return ENVIRONMENT_VS_TURNSTILE_SITE_KEY[getEnvironment(environment)];
 }
 
 export interface DataSourceRequest {
@@ -67,16 +80,14 @@ export interface FilterDescriptor {
   filters: Partial<FilterDescriptor>[];
   field: string;
   operator: string;
-  value: any;
+  value: unknown;
 }
 
-const queryParse = <T>(query: T): string => {
-  let queryText = '';
+export type QueryParams = Record<string, string | number | boolean>;
 
-  Object.keys(query || {}).forEach((key: string) => {
-    queryText += `${key}=${(query as any)[key]}&`;
-  });
-  return queryText.slice(0, -1);
-};
+const queryParse = (query: QueryParams): string =>
+  Object.entries(query)
+    .map(([key, value]) => `${key}=${value}`)
+    .join('&');
 
 export { queryParse };
