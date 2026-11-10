@@ -9,12 +9,13 @@ import {
   REGISTRATION_ERROR_CODES,
   RegistrationAddress,
   RegistrationSubmission,
+  RegistrationSubmissionAddress,
   validateAddress,
 } from './registration';
 
 const { server } = startMockServer();
 
-const buildAddressWith = builder<RegistrationAddress>(() => ({
+const buildAddressWith = builder<RegistrationSubmissionAddress>(() => ({
   address1: faker.location.streetAddress(),
   address2: '',
   city: faker.location.city(),
@@ -65,7 +66,12 @@ describe('registerBusinessAccount', () => {
   });
 
   it('sends a separate shipping address when shipping differs from billing', async () => {
-    const shippingAddress = buildAddressWith({ country: 'CA', state: 'ON', postalCode: 'K1A 0B1' });
+    const shippingAddress = buildAddressWith({
+      country: 'CA',
+      state: 'ON',
+      stateName: 'Ontario',
+      postalCode: 'K1A 0B1',
+    });
     const submission = buildSubmissionWith({
       shippingAddress: { sameAsBilling: false, ...shippingAddress },
     });
@@ -82,8 +88,32 @@ describe('registerBusinessAccount', () => {
     await registerBusinessAccount(submission);
 
     expect(captured).toHaveBeenCalledWith(
-      expect.objectContaining({ shippingAddress: { sameAsBilling: false, ...shippingAddress } }),
+      expect.objectContaining({
+        billingAddress: expect.objectContaining({ state: 'IL', stateName: 'Illinois' }),
+        shippingAddress: {
+          sameAsBilling: false,
+          ...shippingAddress,
+          state: 'ON',
+          stateName: 'Ontario',
+        },
+      }),
     );
+  });
+
+  it('surfaces ADDRESS_EXISTS for the billing address as a VSApiError', async () => {
+    const errors = [
+      {
+        field: 'billingAddress',
+        code: REGISTRATION_ERROR_CODES.addressExists,
+        message: faker.lorem.sentence(),
+      },
+    ];
+
+    server.use(http.post(registrationUrl(), () => HttpResponse.json({ errors }, { status: 400 })));
+
+    const promise = registerBusinessAccount(buildSubmissionWith('WHATEVER_VALUES'));
+
+    await expect(promise).rejects.toMatchObject({ status: 400, errors });
   });
 
   it('surfaces EMAIL_EXISTS as a VSApiError', async () => {
@@ -106,7 +136,14 @@ describe('registerBusinessAccount', () => {
 
 describe('validateAddress', () => {
   it('validateAddress posts storeHash and the address and returns the result', async () => {
-    const address = buildAddressWith('WHATEVER_VALUES');
+    const address: RegistrationAddress = {
+      address1: faker.location.streetAddress(),
+      address2: '',
+      city: faker.location.city(),
+      state: 'IL',
+      postalCode: faker.string.numeric(5),
+      country: 'US',
+    };
     const result: AddressValidationResult = {
       status: 'corrected',
       suggested: { ...address, postalCode: '62701-1234' },

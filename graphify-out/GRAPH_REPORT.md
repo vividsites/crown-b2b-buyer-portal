@@ -1,16 +1,16 @@
-# Graph Report - crown-b2b-buyer-portal-2026-registration-update  (2026-09-25)
+# Graph Report - crown-b2b-buyer-portal-2026-registration-update  (2026-11-10)
 
 ## Corpus Check
-- 757 files · ~619,619 words
+- 757 files · ~620,195 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 5087 nodes · 14139 edges · 266 communities (191 shown, 75 thin omitted)
+- 5088 nodes · 14141 edges · 270 communities (196 shown, 74 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 78 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `9d041bb3`
+- Built from commit: `2eb9a2f1`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -18,97 +18,97 @@
 - graphql.ts
 - CompleteStep/index.tsx
 - support.js
-- QuoteDetail/index.tsx
+- B3Spin.tsx
 - bulk
-- dynamicallyVariable/context/config.ts
-- ShoppingListDetails/components/ChooseOptionsDialog.tsx
-- test-utils.tsx
+- global/context/config.ts
+- b3Product.ts
+- selectors.ts
 - AddressList/index.tsx
 - OrderDialog.tsx
 - constants/index.ts
 - dom/utils.ts
 - useB3Lang
-- QuickOrderB2BTable.tsx
-- buildCompanyStateWith
-- renderWithProviders
+- b2b/graphql/product.ts
+- builder
+- index.unified.test.tsx
 - ShoppingLists/index.tsx
 - b3Tip.ts
-- types/index.ts
+- useMyQuote.ts
 - QuoteDraft/index.test.tsx
 - b3Logger.ts
-- buildGlobalStateWith
+- test-utils.tsx
 - useAppSelector
 - Login/index.tsx
-- HeadlessController/index.tsx
+- graphql/global.ts
 - useRegistrationForm.ts
 - compilerOptions
 - B3CustomForm.tsx
-- b2b/graphql/product.ts
-- UserManagement/table/B3PaginationTable.tsx
+- renderWithProviders
+- UserManagement/index.tsx
 - QuoteDetailTable.tsx
 - index.main.test.tsx
 - b2b/index.ts
-- slices/global.ts
+- LangProvider.tsx
 - types/quotes.ts
-- QuoteDraft/index.tsx
-- QuotesList/index.tsx
+- ShoppingListDetails/index.tsx
+- b3CurrencyFormat.ts
 - ShoppingDetailTable.tsx
-- order/config.ts
+- Order.tsx
 - useCompanyOrdersState.ts
 - quoteCheckout.ts
-- builder
+- reducer.ts
 - AddEditUser.tsx
 - b3Fetch.ts
 - lang/index.ts
-- Order.tsx
-- basicConfig.ts
-- quote.ts
-- B3ProductList.tsx
-- load-functions.ts
+- AddressForm.tsx
+- graphql/cart.ts
+- QuotesList/index.mobile.test.tsx
+- OrderCheckboxProduct.tsx
+- useB3AppOpen.ts
 - bc/graphql/orders.ts
 - index.d.ts
 - CustomStyleContext
-- B3Upload.tsx
+- startMockServer
 - OrderDetail/index.tsx
 - OrderDetail/index.test.tsx
-- CustomerRole
+- types/index.ts
 - AccountSetting/index.tsx
-- php-date-format.ts
+- b3DateFormat/index.ts
 - appAsyncThunks.ts
-- dom/utils.test.ts
+- Registered/index.tsx
 - loginInfo.ts
 - Commands
 - README.md
 - scripts
-- global/context/config.ts
+- B3Nav.tsx
 - TableTree.tsx
 - catalogBackorderDisplay.ts
-- CompanyStatus
+- basicConfig.ts
 - UserManagement/index.test.tsx
 - MyStorage
 - routes/index.tsx
-- mapSfGqlOrderToListItem.ts
+- B3RenderRouter.tsx
 - ShoppingListDetails/index.quickadd.test.tsx
-- useDraftQuoteBackorderState.ts
+- QuoteTable.tsx
 - tasks
 - STEP-BY-STEP TASKS
 - index.quickpad.test.tsx
-- b3Product.ts
-- App.tsx
+- Registered/index.test.tsx
+- slices/global.ts
 - graphql-schema/package.json
-- OrdersSortInput
-- applyOrderBackorderHistory.test.ts
-- OrderDetailsContext.tsx
+- graphql/register.ts
+- registerUtils.ts
+- OrderAction.tsx
 - vs/request/base.ts
 - HierarchyDialog.tsx
 - CrownRegistration/styled.ts
 - PaymentSuccess.tsx
 - CursorDetailPagination.tsx
 - convertOrderDetail.ts
-- selectors.ts
+- QuickOrderB2BTable.tsx
 - End-to-End Application Testing
 - schema.ts
-- types/invoice.ts
+- QuoteInfo.tsx
 - quoteInfo.ts
 - Handoff: Crown B2B Business Account Registration
 - QuoteDetail/index.test.tsx
@@ -117,20 +117,20 @@
 - ErrorSummary.tsx
 - additionalTypeDefs/index.ts
 - scripts
-- InvoiceItemCard.tsx
+- Invoice/index.tsx
 - HeadlessRoutes
-- products.ts
+- B3ProductList.tsx
 - Execution Instructions
 - Plan a new task
 - Submit changes
-- B3StoreContainer.tsx
-- b3CheckPermissions/base.ts
-- payment.ts
+- global/index.ts
+- Dashboard/index.tsx
+- unified-orders.test.tsx
 - order/table/B3Table.tsx
-- Registered/index.test.tsx
+- CompleteStep/registerCompany.ts
 - Captcha.tsx
-- Invoice/index.tsx
-- OrderAction.tsx
+- quote.ts
+- QuotesList/index.test.tsx
 - B2BOrderData.ts
 - Create Global Rules
 - 🧪 Testing Guidelines
@@ -138,35 +138,35 @@
 - CrownCheckbox.tsx
 - Create PRD: Generate Product Requirements Document
 - Output Report
-- getPdpSku
+- quote/shared/config.ts
 - B3Pulldown.tsx
 - DetailPagination.tsx
 - QuickOrder/index.quickadd.test.tsx
 - ValidProduct.ts
 - ForgotPassword/index.tsx
-- usePlacedByUsers.test.ts
+- loginInfo.test.ts
 - AI Agent Guide: B2B Buyer Portal
 - devDependencies
 - 7. Features
 - Migrate context stores to redux slices
 - Feature: Crown Registration, Phase 1 Foundations
-- AddEditUser
-- preMountLoginMask.ts
+- HeadlessController/index.tsx
+- QuotesList/index.tsx
 - RegistrationForm/index.tsx
 - getUserExtraFields.ts
-- lang.ts
+- getActiveLocale
 - Target Architecture (Use This)
-- b3Serialize.ts
-- react-setup.tsx
-- ShoppingListDetailsContext.tsx
+- OrderBilling.tsx
+- useQuoteDetailBackorderState.test.ts
+- Environment
 - Contributor Covenant Code of Conduct
 - PRD: Crown Business Account Registration (2026 Update)
-- buildQuoteStockSnapshot.ts
-- isAllRequiredOptionFilled
+- B3ControlPicker.tsx
+- b3CallbackManager.ts
 - IMPLEMENTATION PLAN
 - VALIDATION COMMANDS
 - storefront/package.json
-- Environment
+- B3ControlAutocomplete.tsx
 - CrownSelect.test.tsx
 - addProductsToShoppingListErrorHandler.ts
 - OrdersOrdersCreatedFromChoices
@@ -185,7 +185,7 @@
 - 🎯 Project Overview
 - 📁 File Structure Patterns
 - generate-translations-csv.ts
-- addUser.ts
+- B3ControlFileUpload.tsx
 - OrdersOrdersIpStatusChoices
 - PULL_REQUEST_TEMPLATE.md
 - 11. Success Criteria
@@ -199,8 +199,8 @@
 - OrdersOrdersIsInvoiceOrderChoices
 - .prettierrc.json
 - .babelrc.js
-- checkUserEmail.ts
-- updateUser.ts
+- graphql/quickOrder.ts
+- LangProvider.test.tsx
 - @emotion/cache
 - CrownTextField.test.tsx
 - @emotion/styled
@@ -212,7 +212,7 @@
 - pdfobject
 - react
 - react-dom
-- react-hook-form
+- CompanyNameCell/index.tsx
 - @mui/material
 - react-mui-dropzone
 - react-redux
@@ -268,6 +268,10 @@
 - ts-tracking-number
 - @types/lodash-es
 - @types/pdfobject
+- updateB2BShoppingListDetails.ts
+- updateB2CShoppingListDetails.ts
+- deleteUser.ts
+- react-intl
 
 ## God Nodes (most connected - your core abstractions)
 1. `useB3Lang()` - 326 edges
@@ -282,6 +286,8 @@
 10. `builder()` - 54 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `B3DropDown()` --calls--> `useMobile()`  [EXTRACTED]
+  apps/storefront/src/components/B3DropDown.tsx → apps/storefront/src/hooks/useMobile.ts
 - `ThemeFramePortal()` --calls--> `useAppDispatch`  [EXTRACTED]
   apps/storefront/src/components/ThemeFrame.tsx → apps/storefront/src/store/index.ts
 - `ProceedToCheckoutButton()` --calls--> `useMobile()`  [EXTRACTED]
@@ -290,261 +296,259 @@
   apps/storefront/src/pages/CompanyHierarchy/components/TableTree.tsx → apps/storefront/src/lib/lang/useB3Lang.ts
 - `SelectedBadge()` --calls--> `useB3Lang()`  [EXTRACTED]
   apps/storefront/src/pages/Dashboard/components/DashboardCard.tsx → apps/storefront/src/lib/lang/useB3Lang.ts
-- `ChatMessage()` --calls--> `useB3Lang()`  [EXTRACTED]
-  apps/storefront/src/pages/quote/components/Message.tsx → apps/storefront/src/lib/lang/useB3Lang.ts
 
 ## Import Cycles
 - None detected.
 
-## Communities (266 total, 75 thin omitted)
+## Communities (270 total, 74 thin omitted)
 
 ### Community 0 - "graphql.ts"
 Cohesion: 0.01
 Nodes (394): AccountFormFieldsType, AccountSettingType, AddressCreate, AddressDelete, AddressExtraFieldInputType, AddressExtraFieldType, AddressFormFieldsInputType, AddressFormFieldsType (+386 more)
 
 ### Community 1 - "CompleteStep/index.tsx"
-Cohesion: 0.06
-Nodes (61): B2bExtraFieldsProps, convertExtraFields(), ExtraFieldsProp, getAddressFields(), getB2BAddressFields(), getBcAddressFields(), b2bAddressRequiredFields, companyAttachmentsFields() (+53 more)
+Cohesion: 0.08
+Nodes (46): getContrastColor(), B3Select(), B3SelectProps, ConfigProps, b2bAddressRequiredFields, ContactInformationItems, Country, EmailError (+38 more)
 
 ### Community 2 - "support.js"
 Cohesion: 0.06
 Nodes (75): boot(), bundledBlob(), cdnScriptFor(), collectProps(), compileAttr(), compileTemplate(), contentKey(), createComponentFactory() (+67 more)
 
-### Community 3 - "QuoteDetail/index.tsx"
-Cohesion: 0.07
-Nodes (38): B3CollapseContainer(), CollapseContainerProps, B3SpinProps, SpinCenter, SpinCenterProps, SpinContext, SpinContextProps, SpinTip (+30 more)
+### Community 3 - "B3Spin.tsx"
+Cohesion: 0.16
+Nodes (12): B3SpinProps, SpinCenter, SpinCenterProps, SpinContext, SpinContextProps, SpinTip, AttachFile, FileListItem (+4 more)
 
 ### Community 4 - "bulk"
-Cohesion: 0.04
-Nodes (79): CompanyOrderList(), buildCompanyOrderNodeWith, buildCompanyOrderStatusesWith, buildCompanyOrdersWith, buildOrderStatusWith, preloadedState, TODO: Add company name to the UI, { server } (+71 more)
+Cohesion: 0.03
+Nodes (87): CompanyOrderList(), buildCompanyOrderNodeWith, buildCompanyOrderStatusesWith, buildCompanyOrdersWith, buildOrderStatusWith, preloadedState, TODO: Add company name to the UI, { server } (+79 more)
 
-### Community 5 - "dynamicallyVariable/context/config.ts"
-Cohesion: 0.13
-Nodes (19): B3GlobalTip(), B3Tip(), B3TipProps, B3LayoutTip(), TipBody(), TipBodyProps, useSetOpen(), AlertTip (+11 more)
-
-### Community 6 - "ShoppingListDetails/components/ChooseOptionsDialog.tsx"
+### Community 5 - "global/context/config.ts"
 Cohesion: 0.09
-Nodes (42): useBackorderStorefrontMessaging(), ChooseOptionsDialog(), defaultSummary, QuoteSummary, Summary, AvailabilityWarnings, getAvailabilityWarningsFrontend(), getProductOptionsValues() (+34 more)
+Nodes (28): B3GlobalTip(), B3Tip(), B3TipProps, TipBody(), TipBodyProps, FormFieldsProps, GetCountryProps, AlertTip (+20 more)
 
-### Community 7 - "test-utils.tsx"
-Cohesion: 0.04
-Nodes (54): permissionLevels, buildProductPurchasableWith, mockGlobalState, ProductPurchasable, { server }, buildSubsidiaryWith, { server }, buildSubsidiaryWith (+46 more)
+### Community 6 - "b3Product.ts"
+Cohesion: 0.05
+Nodes (65): UseCatalogChooseOptionsBackorderDisplayOptions, ChooseOptionsDialog(), ChooseOptionsDialogProps, ChooseOptionsProductProps, Flex, FlexItem, FlexItemProps, ProductImage (+57 more)
+
+### Community 7 - "selectors.ts"
+Cohesion: 0.05
+Nodes (38): InvoiceStatusCode, Open, Overdue, Paid, PartiallyPaid, buildInvoicePaymentHistoryResponseWith, buildInvoicePaymentNodeWith, buildInvoicesResponseWith (+30 more)
 
 ### Community 8 - "AddressList/index.tsx"
 Cohesion: 0.05
-Nodes (50): B3CustomForm(), useGetCountry(), useVerifyCreatePermission(), AddressFormProps, B3AddressForm, ShippingBillingProps, StyledCheckbox, AddressItemCard() (+42 more)
+Nodes (49): B3Tag, TagContainerProps, B3Filter(), B3FilterProps, CustomButtonProps, DeepPartial, PickerProps, SortByConfigProps (+41 more)
 
 ### Community 9 - "OrderDialog.tsx"
 Cohesion: 0.07
-Nodes (45): B3ControlTextField(), DialogData, getXsrfToken(), indexVariantRowsBySku(), OrderDialog(), ReturnListProps, validateProducts(), getReturnFormFields() (+37 more)
+Nodes (49): B3ControlTextField(), useProductRequirements(), DialogData, getXsrfToken(), indexVariantRowsBySku(), OrderDialog(), ReturnListProps, validateProducts() (+41 more)
 
 ### Community 10 - "constants/index.ts"
-Cohesion: 0.09
-Nodes (41): RedirectFallback(), RedirectFallbackProps, B3RenderRouterProps, B3CompanyHierarchyExternalButton(), B3CompanyHierarchyExternalButtonProps, bottomHeightPage, B3HoverButton(), B3HoverButtonProps (+33 more)
+Cohesion: 0.11
+Nodes (38): B3RenderRouter(), B3CompanyHierarchyExternalButton(), bottomHeightPage, B3HoverButton(), B3MasqueradeGlobalTip(), bottomHeightPage, useData(), decomposeColor() (+30 more)
 
 ### Community 11 - "dom/utils.ts"
-Cohesion: 0.19
-Nodes (22): addLoading(), addProductFromProductCardToQuote(), addProductFromProductPageToQuote(), addProductsFromCartToQuote(), addProductsToDraftQuote(), CustomItemProps, DigitalItemProps, DiscountsProps (+14 more)
+Cohesion: 0.05
+Nodes (60): getPdpSku(), ProductInfoProps, usePurchasableQuote(), addLoading(), addProductFromProductCardToQuote(), addProductFromProductPageToQuote(), addProductsFromCartToQuote(), addProductsToDraftQuote() (+52 more)
 
 ### Community 12 - "useB3Lang"
-Cohesion: 0.05
-Nodes (74): B3Dialog(), B3DialogProps, B3DropDown(), B3DropDownProps, DropDownHandle, ListItemProps, B3ProductList(), ConfirmMasqueradeDialog() (+66 more)
+Cohesion: 0.06
+Nodes (51): B3ProductList(), ConfirmMasqueradeDialog(), ConfirmMasqueradeDialogProps, GlobalDialog(), PaginationTable(), B2BAutoCompleteCheckbox(), B2BAutoCompleteCheckboxProps, B3Upload() (+43 more)
 
-### Community 13 - "QuickOrderB2BTable.tsx"
-Cohesion: 0.08
-Nodes (30): B3FilterPicker, B3FilterPickerProps, B3FilterPickers(), PickerProps, PicklistBackorderMessages(), PicklistBackorderMessagesProps, bundleOption1, bundleOption2 (+22 more)
+### Community 13 - "b2b/graphql/product.ts"
+Cohesion: 0.07
+Nodes (38): BackorderMessage(), BackorderMessageProps, messageLineSx, quantityLineSx, withAllBackorderDisplayEnabled, PicklistBackorderMessages(), PicklistBackorderMessagesProps, bundleOption1 (+30 more)
 
-### Community 14 - "buildCompanyStateWith"
-Cohesion: 0.08
-Nodes (35): b2bStateWithCurrency(), b2bStateWithFlag(), buildCompanyOrdersResponseWith, buildLegacyB2BOrderStatusesResponseWith, buildLegacyOrderStatusWith, buildPagedCompanyOrdersResponse(), buildPlacedByWith, buildSfGqlOrderWith (+27 more)
+### Community 14 - "builder"
+Cohesion: 0.06
+Nodes (48): buildSubsidiaryWith, buildSubsidiaryWith, { server }, buildSubsidiaryWith, { server }, b2bStateWithCurrency(), b2bStateWithFlag(), buildCompanyOrdersResponseWith (+40 more)
 
-### Community 15 - "renderWithProviders"
-Cohesion: 0.05
-Nodes (47): ShippingExpectationPrompt(), ShippingExpectationPromptProps, defaultProps, renderLoginPage(), DigitalDownloadElementsResponse, DigitalProduct, DigitalProductNode, buildAddressConfigResponseWith (+39 more)
+### Community 15 - "index.unified.test.tsx"
+Cohesion: 0.11
+Nodes (24): DigitalDownloadElementsResponse, DigitalProduct, DigitalProductNode, buildAddressConfigResponseWith, buildAddressConfigWith, buildCurrencyWith, buildCustomerOrderStatusesWith, buildCustomerShoppingListNodeWith (+16 more)
 
 ### Community 16 - "ShoppingLists/index.tsx"
-Cohesion: 0.04
-Nodes (65): B3Tag, TagContainerProps, B3Filter(), B3FilterProps, CustomButtonProps, DeepPartial, PickerProps, SortByConfigProps (+57 more)
+Cohesion: 0.08
+Nodes (38): PaginationTableRefProps, useTableRef(), ListItem, OrderShoppingList(), OrderShoppingListProps, AddEditShoppingLists(), AddEditUserProps, B3AddEditShoppingLists (+30 more)
 
 ### Community 17 - "b3Tip.ts"
-Cohesion: 0.06
-Nodes (83): CustomButton, CustomButtonProps, useBlockPendingAccountViewPrice(), useIsBackorderEnabled(), addProductsToShoppingList(), AddProductsToShoppingListParams, ChooseOptionsDialogProps, ChooseOptionsProductProps (+75 more)
+Cohesion: 0.10
+Nodes (50): B3CustomForm(), CustomButton, CustomButtonProps, B3Spin(), useBlockPendingAccountViewPrice(), ProductListDialogProps, QuickOrderPad(), SearchProduct() (+42 more)
 
-### Community 18 - "types/index.ts"
-Cohesion: 0.08
-Nodes (46): setMediaStyle(), ADD_TO_QUOTE_DEFAULT_VALUE, CHECKOUT_URL, TRANSLATION_ADD_TO_QUOTE_VARIABLE, DispatchProps, IsShowBlockPendingAccountOrderCreationTipProps, MutationObserverProps, useCartToQuote() (+38 more)
+### Community 18 - "useMyQuote.ts"
+Cohesion: 0.10
+Nodes (33): setMediaStyle(), DispatchProps, MutationObserverProps, useDomHooks(), useDomVariation(), B3HideGoogleCustomerReviewsProps, useHideGoogleCustomerReviews(), useMonitorBrowserBack() (+25 more)
 
 ### Community 19 - "QuoteDraft/index.test.tsx"
-Cohesion: 0.07
-Nodes (31): Address, approvedB2BCompany, buildAddressWith, buildCSVProductWith, buildCSVUploadWith, buildDraftQuoteItemWith, buildPrice, buildProductPriceWith (+23 more)
+Cohesion: 0.04
+Nodes (48): buildPriceWith, buildProductModifierWith, buildProductPriceWith, buildProductVariantWith, buildSearchB2BProductWith, buildValidateProductWith, Price, PriceProduct (+40 more)
 
 ### Community 20 - "b3Logger.ts"
 Cohesion: 0.13
-Nodes (31): CustomStyleButtonAction, DispatchProps, gotoAllowedAppPage(), setChannelStoreType(), getStoreConfigsSwitchStatus(), getStorefrontConfigs(), getStorefrontSettings(), GetCart (+23 more)
+Nodes (28): CustomStyleButtonAction, DispatchProps, gotoAllowedAppPage(), setChannelStoreType(), getStorefrontSettings(), AppDispatch, store, b2bVerifyBcLoginStatus() (+20 more)
 
-### Community 21 - "buildGlobalStateWith"
-Cohesion: 0.05
-Nodes (41): b2cCustomerState, mockedB2bVerifyBcLoginStatus, loggedInCompanyState, withNativeLinkInterception, BACKORDER_STOREFRONT_MESSAGING_FEATURE_FLAG, TEST_FEATURE_FLAG_KEY, renderUsePicklistInventory(), buildQuoteInfoWithList() (+33 more)
+### Community 21 - "test-utils.tsx"
+Cohesion: 0.07
+Nodes (26): B3LayoutTip(), ShippingExpectationPrompt(), ShippingExpectationPromptProps, defaultProps, buildProductPurchasableWith, mockGlobalState, ProductPurchasable, { server } (+18 more)
 
 ### Community 22 - "useAppSelector"
-Cohesion: 0.07
-Nodes (44): B3AccountInfo(), B3CloseAppButton(), B3Layout(), SPECIAL_PATH_TEXTS, B3LocaleSwitcher(), B3Logo(), MainHeader(), B3MobileLayout() (+36 more)
+Cohesion: 0.05
+Nodes (76): B3CollapseContainer(), CollapseContainerProps, B3Dialog(), B3DialogProps, CompanyCredit(), permissionRoles, B3AccountInfo(), B3AccountInfoProps (+68 more)
 
 ### Community 23 - "Login/index.tsx"
-Cohesion: 0.09
-Nodes (35): B3Card(), LOGIN_LANDING_LOCATIONS, LoginWidget(), LoginWidgetBox, LoginWidgetProps, COMPANY_STATUS_MAPPINGS, getLoginFields(), isLoginFlagType() (+27 more)
-
-### Community 24 - "HeadlessController/index.tsx"
 Cohesion: 0.07
-Nodes (42): getSku(), HeadlessController(), Manager, buildShoppingListsNodeWith, { server }, transformOptionSelectionsToAttributes(), setElementsListenersConfig(), Dashboard() (+34 more)
+Nodes (46): re, Args, dispatchEvent(), LoginWidget(), LoginWidgetBox, LoginWidgetProps, COMPANY_STATUS_MAPPINGS, getForgotPasswordFields() (+38 more)
+
+### Community 24 - "graphql/global.ts"
+Cohesion: 0.07
+Nodes (46): CatalystLogin(), logout(), useEndCompanyMasquerade(), useEndMasquerade(), BulkPricing, CalculatedPrice, CompanySubsidiariesProps, ConfigsSwitchStatus (+38 more)
 
 ### Community 25 - "useRegistrationForm.ts"
-Cohesion: 0.08
-Nodes (37): re, getForgotPasswordFields(), createCompany(), CreateCompanyContext, buildB2bCompanyCreatePayloadForBcToB2b(), buildCompanyUserExtraFieldsForBcToB2b(), getRegisterFieldValueForBcToB2bForm(), getRegisterFieldValueForBcToB2bFormValidation() (+29 more)
+Cohesion: 0.23
+Nodes (16): createCompany(), CreateCompanyContext, buildB2bCompanyCreatePayloadForBcToB2b(), buildCompanyUserExtraFieldsForBcToB2b(), getRegisterFieldValueForBcToB2bForm(), getRegisterFieldValueForBcToB2bFormValidation(), useRegistrationForm(), UseRegistrationFormParams (+8 more)
 
 ### Community 26 - "compilerOptions"
 Cohesion: 0.04
 Nodes (45): compilerOptions, allowJs, allowSyntheticDefaultImports, baseUrl, composite, declaration, declarationMap, esModuleInterop (+37 more)
 
 ### Community 27 - "B3CustomForm.tsx"
-Cohesion: 0.08
-Nodes (34): B2BControlMultiTextField(), B3ControlAutocomplete(), Option, B3ControlCheckbox(), CheckboxListProps, B3ControlFileUpload(), FileUploadProps, getMaxFileSizeLabel() (+26 more)
+Cohesion: 0.13
+Nodes (21): B2BControlMultiTextField(), B3ControlCheckbox(), CheckboxListProps, B3ControlProductRadio(), NoneOption, B3ControlRadioGroup(), B3ControlRectangle(), B3ControlSelect() (+13 more)
 
-### Community 28 - "b2b/graphql/product.ts"
+### Community 28 - "renderWithProviders"
+Cohesion: 0.06
+Nodes (38): LOCALES, withFlagEnabled, renderLoginPage(), baseProps, MessageComponentProps, mockedUpdateQuote, otherUserMessage, ownerMessage (+30 more)
+
+### Community 29 - "UserManagement/index.tsx"
 Cohesion: 0.10
-Nodes (20): buildProductOptionWith, buildProductWith, picklistModifier, B2BProductPurchasableResponse, B2BProductsBulkUploadCSV(), BcProductsBulkUploadCSV(), getProductPurchasable(), getSearchProductsQuery() (+12 more)
-
-### Community 29 - "UserManagement/table/B3PaginationTable.tsx"
-Cohesion: 0.19
-Nodes (11): B3PaginationTable, B3PaginationTableProps, GetRequestList, GetRequestListAsync, GetRequestListResult, GetRequestListSync, TablePagination, PossibleNodeWrapper (+3 more)
+Nodes (25): useCardListColumn(), useWindowSize(), getUserRole(), getUsers(), RoleProps, User, UserManagement(), B3PaginationTable (+17 more)
 
 ### Community 30 - "QuoteDetailTable.tsx"
-Cohesion: 0.10
-Nodes (40): getInsufficientStockWarning(), ListItemProps, OptionProps, PaginationTableRefProps, ProductInfoProps, QuoteDetailTable(), SearchProps, StyledImage (+32 more)
+Cohesion: 0.11
+Nodes (39): BACKORDER_STOREFRONT_MESSAGING_FEATURE_FLAG, useBackorderStorefrontMessaging(), EMPTY_INVENTORY, usePicklistInventory(), getInsufficientStockWarning(), ListItemProps, OptionProps, PaginationTableRefProps (+31 more)
 
 ### Community 31 - "index.main.test.tsx"
 Cohesion: 0.06
-Nodes (39): approvedB2BCompany, backorderPreloadedState, buildAddCartLineItemsResponseWith, buildCartItemWith, buildCSVErrorProductWith, buildCSVProductWith, buildCSVUploadWith, buildGetCartWith (+31 more)
+Nodes (33): approvedB2BCompany, backorderPreloadedState, buildAddCartLineItemsResponseWith, buildCartItemWith, buildCSVErrorProductWith, buildCSVProductWith, buildCSVUploadWith, buildGetCartWith (+25 more)
 
 ### Community 32 - "b2b/index.ts"
-Cohesion: 0.04
-Nodes (88): AddressForm(), useData(), createBcShoppingList(), updateB2BShoppingListDetails(), updateB2CShoppingListDetails(), validateAddressExtraFields(), customerAccountSettings(), getAccountSettings() (+80 more)
+Cohesion: 0.09
+Nodes (38): createBcShoppingList(), customerAccountSettings(), getAccountSettings(), getB2BAccountSettings(), getBCAccountSettings(), updateAccountSettings(), updateB2BAccountSettings(), updateBCAccountSettings() (+30 more)
 
-### Community 33 - "slices/global.ts"
-Cohesion: 0.07
-Nodes (29): getActiveLocale(), LOCALES, getStorefrontLanguageCode(), LOCALES, LangProvider(), LangProviderProps, withServiceTranslations, isSupportedLocale() (+21 more)
+### Community 33 - "LangProvider.tsx"
+Cohesion: 0.16
+Nodes (15): LangProvider(), LangProviderProps, isSupportedLocale(), localeLoaders, LocaleMessages, getFallbackLocale(), LocaleBundles, LocaleCode (+7 more)
 
 ### Community 34 - "types/quotes.ts"
-Cohesion: 0.08
-Nodes (34): ContactInfoProps, GetQuoteInfoProps, AddressProps, addressKeys, addressVerifyKeys, contactInfoKeys, InfoProps, Keys (+26 more)
+Cohesion: 0.13
+Nodes (23): ContactInfo(), ContactInfoProps, emailValidate, getContactInfo(), getQuoteInfo(), GetQuoteInfoProps, getB2BQuoteExtraFields(), handleConversionExtraItemFormat() (+15 more)
 
-### Community 35 - "QuoteDraft/index.tsx"
+### Community 35 - "ShoppingListDetails/index.tsx"
 Cohesion: 0.06
-Nodes (55): useSetCountry(), useProductRequirements(), useValidatePermissionWithComparisonType(), getAccountFormFields(), getQuoteValidationErrorMessage(), AddressWithMasterCopy, B2BAddress, BCAddress (+47 more)
+Nodes (54): permissionLevels, useValidatePermissionWithComparisonType(), useVerifyCreatePermission(), OrderAction(), ShoppingDetailHeader(), StyledCreateName, initState, reducer() (+46 more)
 
-### Community 36 - "QuotesList/index.tsx"
-Cohesion: 0.08
-Nodes (33): useSort(), Flex, OrderItemCard(), OrderAction(), QuoteDetailSummaryProps, addPrice(), { decimal_places: decimalPlaces = 2 }, defaultSummary (+25 more)
+### Community 36 - "b3CurrencyFormat.ts"
+Cohesion: 0.18
+Nodes (13): Flex, OrderItemCard(), QuoteDetailSummaryProps, ListItem, Flex, ListItem, QuoteItemCard(), QuoteItemCardProps (+5 more)
 
 ### Community 37 - "ShoppingDetailTable.tsx"
-Cohesion: 0.05
-Nodes (52): B3FilterSearch(), B3FilterSearchProps, B3PaginationTable, B3PaginationTableProps, GetRequestList, GetRequestListAsync, GetRequestListResult, GetRequestListSync (+44 more)
+Cohesion: 0.07
+Nodes (39): B3PaginationTable, B3PaginationTableProps, GetRequestList, GetRequestListAsync, GetRequestListResult, GetRequestListSync, TablePagination, TableRefreshConfig (+31 more)
 
-### Community 38 - "order/config.ts"
-Cohesion: 0.11
-Nodes (24): AdaptCompanyUnifiedToLegacyFilterParamsArgs, adaptUnifiedToLegacyFilterParams(), AdaptUnifiedToLegacyFilterParamsArgs, baseArgs, assertSortKey(), B3LangFn, CreatedByUsersData, FilterMoreItem (+16 more)
+### Community 38 - "Order.tsx"
+Cohesion: 0.09
+Nodes (39): adaptCompanyUnifiedToLegacyFilterParams(), AdaptCompanyUnifiedToLegacyFilterParamsArgs, adaptUnifiedToLegacyFilterParams(), AdaptUnifiedToLegacyFilterParamsArgs, baseArgs, assertSortKey(), B3LangFn, CreatedByUsersData (+31 more)
 
 ### Community 39 - "useCompanyOrdersState.ts"
-Cohesion: 0.13
-Nodes (30): formatPlacedByLabel(), getCompanyOrdersInitFilter(), getCustomerOrdersInitFilter(), normalizeString(), packDateRange(), COMPANY_SORT_MAP, CompanySortableColumnKey, useCompanyOrderSorting() (+22 more)
+Cohesion: 0.06
+Nodes (48): formatPlacedByLabel(), getCompanyOrdersInitFilter(), getCustomerOrdersInitFilter(), normalizeString(), packDateRange(), COMPANY_SORT_MAP, CompanySortableColumnKey, useCompanyOrderSorting() (+40 more)
 
 ### Community 40 - "quoteCheckout.ts"
-Cohesion: 0.12
-Nodes (20): computeFulfillableQuantity(), detectQuoteStockChange(), QuoteStockSnapshotItem, CheckoutResponse, ErrorWithExtensions, handleQuoteCheckout(), QUOTE_BACKORDER_CHANGE_STORAGE_KEY, QuoteCheckout (+12 more)
-
-### Community 41 - "builder"
 Cohesion: 0.10
-Nodes (18): LOCALES, withFlagEnabled, buildSubsidiaryWith, b2bFeaturesSlice, initialState, Masquerade, MasqueradeCompany, GlobalState (+10 more)
+Nodes (24): buildQuoteStockSnapshot(), extractTotalOnHand(), resolveTracking(), SnapshotInput, computeFulfillableQuantity(), detectQuoteStockChange(), QuoteStockSnapshotItem, CheckoutResponse (+16 more)
+
+### Community 41 - "reducer.ts"
+Cohesion: 0.12
+Nodes (12): reducer, b2bFeaturesSlice, initialState, Masquerade, MasqueradeCompany, initialState, StoreInfo, storeInfoSlice (+4 more)
 
 ### Community 42 - "AddEditUser.tsx"
-Cohesion: 0.19
-Nodes (13): AddEditUserProps, B3AddEditUser, HandleOpenAddEditUserClick, SelectedDataProps, User, EmailError, ExtraFieldsProps, FilterProps (+5 more)
+Cohesion: 0.09
+Nodes (28): AddEditUser(), AddEditUserProps, B3AddEditUser, HandleOpenAddEditUserClick, SelectedDataProps, User, addUser(), AddUserResponse (+20 more)
 
 ### Community 43 - "b3Fetch.ts"
-Cohesion: 0.04
-Nodes (52): createB2BShoppingList(), CreateShoppingListResponse, CreateShoppingListVariables, CreateCustomerShoppingListResponse, ShoppingListParams, deleteB2BShoppingList(), DeleteShoppingListResponse, deleteB2CShoppingList() (+44 more)
+Cohesion: 0.05
+Nodes (45): createB2BShoppingList(), CreateShoppingListResponse, CreateShoppingListVariables, CreateCustomerShoppingListResponse, ShoppingListParams, deleteB2BShoppingList(), DeleteShoppingListResponse, deleteB2CShoppingList() (+37 more)
 
 ### Community 44 - "lang/index.ts"
 Cohesion: 0.09
-Nodes (20): LangFormatFunction, CreateShoppingList(), CreateShoppingListProps, getList(), DownloadDigitalProductsDialog(), getFileNameFromResponseHeader(), handleBlobDownload(), handleDownleoadDigitalFile() (+12 more)
+Nodes (28): useSetCountry(), LangFormatFunction, QuoteInfo(), getOrderStatus(), OrderStatusProps, QuoteStatus, QuoteStatusObj, QuoteSubmissionResponse() (+20 more)
 
-### Community 45 - "Order.tsx"
-Cohesion: 0.20
-Nodes (19): adaptCompanyUnifiedToLegacyFilterParams(), getFilterMoreData(), getOrderStatusText(), translateFilterMoreData(), getEmail(), getName(), Order(), OrderProps (+11 more)
+### Community 45 - "AddressForm.tsx"
+Cohesion: 0.08
+Nodes (39): AddressForm(), AddressFormProps, B3AddressForm, ShippingBillingProps, StyledCheckbox, b2bAddressFields, b2bShippingBilling, B2bShippingBillingChildProps (+31 more)
 
-### Community 46 - "basicConfig.ts"
-Cohesion: 0.07
-Nodes (36): mockedGuestProductsBulkUploadCSV, graphqlRequest(), Options, ProductsWithOptionSelections, Args, OrderCard(), customerLoginAPI(), addNewLineToCart() (+28 more)
+### Community 46 - "graphql/cart.ts"
+Cohesion: 0.09
+Nodes (27): LineItemsProps, addNewLineToCart(), createNewCart(), GetCart, storefrontGQLRequest(), getActiveBcCurrency(), Locale, LocalesResponse (+19 more)
 
-### Community 47 - "quote.ts"
-Cohesion: 0.06
-Nodes (42): Address, buildAddressWith, buildDraftQuoteItemWith, buildQuoteEdgeWith, buildQuoteInfoStateWith, buildQuotesListB2BWith, buildQuotesListBCWith, buildShoppingListsCreatedByUserWith (+34 more)
+### Community 47 - "QuotesList/index.mobile.test.tsx"
+Cohesion: 0.15
+Nodes (14): Address, buildAddressWith, buildDraftQuoteItemWith, buildQuoteEdgeWith, buildQuoteInfoStateWith, buildQuotesListB2BWith, buildQuotesListBCWith, buildShoppingListsCreatedByUserWith (+6 more)
 
-### Community 48 - "B3ProductList.tsx"
-Cohesion: 0.06
-Nodes (38): BackorderLayoutStyles, defaultItemStyle, Flex, FlexItem, FlexItemProps, FlexProps, getBackorderLayoutStyles(), getProductVariantSku() (+30 more)
+### Community 48 - "OrderCheckboxProduct.tsx"
+Cohesion: 0.12
+Nodes (21): getPicklistBackorderRows(), OrderCheckboxProduct(), OrderCheckboxProductProps, ReturnListProps, getOrderPicklistSelections(), defaultItemStyle, Flex, FlexItem (+13 more)
 
-### Community 49 - "load-functions.ts"
-Cohesion: 0.19
-Nodes (16): useB3AppOpen(), bindLinks(), clickLink(), clickNativeBuyerPortalLink(), initApp(), requestIdleCallbackFunction, importLoadFunctions(), unbindLinks() (+8 more)
+### Community 49 - "useB3AppOpen.ts"
+Cohesion: 0.14
+Nodes (22): ChildNodeListProps, useB3AppOpen(), bindLinks(), clickLink(), clickNativeBuyerPortalLink(), initApp(), requestIdleCallbackFunction, importLoadFunctions() (+14 more)
 
 ### Community 50 - "bc/graphql/orders.ts"
-Cohesion: 0.10
-Nodes (29): baseOrder, CollectionInfo, DateTimeExtended, Money, PageInfo, CompanyCustomerConnection, CompanyCustomerEdge, CompanyOrdersConnection (+21 more)
+Cohesion: 0.09
+Nodes (32): mapSfGqlOrderToListItem(), baseOrder, CollectionInfo, DateTimeExtended, Money, PageInfo, CompanyCustomerConnection, CompanyCustomerEdge (+24 more)
 
 ### Community 51 - "index.d.ts"
-Cohesion: 0.14
-Nodes (17): HeadlessRoute, FormattedQuoteItem, ProductMappedAttributes, EventType, ChannelPlatform, CurrencyProps, CustomFieldItems, CustomFieldStringItems (+9 more)
+Cohesion: 0.19
+Nodes (13): HeadlessRoute, FormattedQuoteItem, ProductMappedAttributes, ChannelPlatform, CurrencyProps, CustomFieldItems, CustomFieldStringItems, Position (+5 more)
 
 ### Community 52 - "CustomStyleContext"
-Cohesion: 0.08
-Nodes (27): B3CompanyHierarchy(), chipInfo, BROWSER_LANG, B3NoData(), B3NoDataProps, NoDataContainer, NoDataText, B3Table() (+19 more)
+Cohesion: 0.09
+Nodes (26): B3FilterMore(), B3FilterMoreProps, DeepPartial, includesFilterType, PickerProps, PickerRefProps, BROWSER_LANG, LangWrapper() (+18 more)
 
-### Community 53 - "B3Upload.tsx"
-Cohesion: 0.22
-Nodes (11): B3Upload(), B3UploadProps, BulkUploadCSVProps, FileUploadContainer, B3UploadLoading(), B3UploadLoadingProps, isFileExtension(), parseEmptyData() (+3 more)
+### Community 53 - "startMockServer"
+Cohesion: 0.06
+Nodes (28): buildCustomerWith, { server }, { server }, buildProductSearchResultWith, buildShoppingListNodeWith, buildShoppingListResponseWith, { server }, buildCustomerShoppingListNodeWith (+20 more)
 
 ### Community 54 - "OrderDetail/index.tsx"
-Cohesion: 0.17
-Nodes (17): getDigitalDownloadElements(), OrderBilling(), OrderBillingProps, OrderDetailsContext, LocationState, OrderDetail(), OrderDetailsContent(), OrderDetail (+9 more)
+Cohesion: 0.11
+Nodes (26): OrderStatus(), OrderStatusProps, getOrderStatus(), orderStatusColor, OrderStatusConfig, orderStatusText, orderStatusTextColor, orderStatusTranslationVariables (+18 more)
 
 ### Community 55 - "OrderDetail/index.test.tsx"
 Cohesion: 0.06
-Nodes (46): Infos, buildAddressConfigResponseWith, buildAddressConfigWith, buildCustomerOrderResponseWith, buildCustomerOrderStatusesWith, buildOrderNodeWith, buildOrderStatusWith, buildProductWith (+38 more)
+Nodes (47): Infos, OrderDetailsContent(), buildAddressConfigResponseWith, buildAddressConfigWith, buildCustomerOrderResponseWith, buildCustomerOrderStatusesWith, buildOrderNodeWith, buildOrderStatusWith (+39 more)
 
-### Community 56 - "CustomerRole"
-Cohesion: 0.05
-Nodes (34): buildCustomerWith, { server }, buildOrderNodeWith, buildOrdersResponseWith, preloadedState, renderPagination(), { server }, buildB2BShoppingListNodeWith (+26 more)
+### Community 56 - "types/index.ts"
+Cohesion: 0.06
+Nodes (32): mockedGuestProductsBulkUploadCSV, b2cCustomerState, mockedB2bVerifyBcLoginStatus, buildOrderNodeWith, buildOrdersResponseWith, preloadedState, renderPagination(), { server } (+24 more)
 
 ### Community 57 - "AccountSetting/index.tsx"
-Cohesion: 0.08
-Nodes (42): CompanyCredit(), permissionRoles, b3HexToRgb(), useStorageState(), getAccountSettingsFields(), GetFilterMoreListProps, getPasswordModifiedFields(), AccountSetting() (+34 more)
+Cohesion: 0.09
+Nodes (35): getAccountSettingsFields(), GetFilterMoreListProps, getPasswordModifiedFields(), AccountSetting(), useData(), b2bSubmitDataProcessing(), bcSubmitDataProcessing(), emailValidate (+27 more)
 
-### Community 58 - "php-date-format.ts"
-Cohesion: 0.13
-Nodes (9): formatCreator(), AnyType, DateFormatter, DateFormatterOptions, DateSettings, Defaults, $h, Helper (+1 more)
+### Community 58 - "b3DateFormat/index.ts"
+Cohesion: 0.11
+Nodes (13): DisplayType, fmt, formatCreator(), getUTCTimestamp(), Handler, AnyType, DateFormatter, DateFormatterOptions (+5 more)
 
 ### Community 59 - "appAsyncThunks.ts"
-Cohesion: 0.16
-Nodes (14): getTranslation(), GetTranslationParams, GetTranslationResponse, createAppAsyncThunk, GetGlobalTranslationResponse, GetGlobalTranslationsParams, GetPageTranslationResponse, getPageTranslations (+6 more)
+Cohesion: 0.13
+Nodes (19): getTranslation(), GetTranslationParams, GetTranslationResponse, createAppAsyncThunk, GetGlobalTranslationResponse, getGlobalTranslations, GetGlobalTranslationsParams, GetPageTranslationResponse (+11 more)
 
-### Community 60 - "dom/utils.test.ts"
-Cohesion: 0.11
-Nodes (17): buildPriceWith, buildProductModifierWith, buildProductPriceWith, buildProductVariantWith, buildSearchB2BProductWith, buildValidateProductWith, Price, PriceProduct (+9 more)
+### Community 60 - "Registered/index.tsx"
+Cohesion: 0.13
+Nodes (22): LOGIN_LANDING_LOCATIONS, PageProps, companyAttachmentsFields(), reducer(), RegisteredProvider(), Registered(), formType, RegisterSteps() (+14 more)
 
 ### Community 61 - "loginInfo.ts"
-Cohesion: 0.07
-Nodes (49): CatalystLogin(), logout(), useEndCompanyMasquerade(), useEndMasquerade(), Login(), { server }, useLoginInfo(), LogoutOptions (+41 more)
+Cohesion: 0.12
+Nodes (26): Credentials, loginAndGetBcCustomer(), getUserMasqueradingCompany(), b2bAuthorization(), getCurrentCustomerJWT(), bcLogin(), getBcLogin(), getCustomer() (+18 more)
 
 ### Community 62 - "Commands"
 Cohesion: 0.07
@@ -558,41 +562,41 @@ Nodes (24): Deploying the project, Headless Guide, Running Project Locally, Depl
 Cohesion: 0.07
 Nodes (26): devDependencies, eslint, prettier, turbo, engines, node, eslint, turbo (+18 more)
 
-### Community 65 - "global/context/config.ts"
-Cohesion: 0.23
-Nodes (11): FormFieldsProps, GetCountryProps, Country, GlobalAction, GlobalContextValue, GlobalProviderProps, initState, OpenAPPParamsProps (+3 more)
+### Community 65 - "B3Nav.tsx"
+Cohesion: 0.10
+Nodes (25): B3Nav(), B3NavProps, getSubsidiariesPermission(), b3HexToRgb(), PAGES_SUBSIDIARIES_PERMISSION_KEYS, QuoteDetailHeader(), QuoteDetailHeaderProps, StyledCreateName (+17 more)
 
 ### Community 66 - "TableTree.tsx"
 Cohesion: 0.40
 Nodes (7): CompanyTableRowCard(), CompanyTableRowCardProps, CompanyTableProps, CompanyTableRow(), CompanyTableRowProps, RecursiveNode, TreeNodeProps
 
 ### Community 67 - "catalogBackorderDisplay.ts"
-Cohesion: 0.10
-Nodes (39): PicklistSelectionBackorderMessage(), PicklistSelectionBackorderMessageProps, bundleOption1, withAllBackorderDisplayEnabled, CatalogChooseOptionsBackorderDisplay, useCatalogChooseOptionsBackorderDisplay(), UseCatalogChooseOptionsBackorderDisplayOptions, getPicklistBackorderRows() (+31 more)
+Cohesion: 0.15
+Nodes (28): PicklistSelectionBackorderMessageProps, CatalogChooseOptionsBackorderDisplay, useCatalogChooseOptionsBackorderDisplay(), PicklistBackorderRow, QuickOrderTable(), BackorderDisplayFields, getBackorderDisplayFieldsFromOnHand(), CatalogInventorySkuSource (+20 more)
 
-### Community 68 - "CompanyStatus"
-Cohesion: 0.12
-Nodes (18): buildAgentInfoWith, buildCompanyEdgeWith, buildCompanyListWith, { server }, buildAgentInfoWith, buildCompanyEdgeWith, buildCompanyListWith, { server } (+10 more)
+### Community 68 - "basicConfig.ts"
+Cohesion: 0.13
+Nodes (19): PLATFORM, graphqlRequest(), Options, ProductsWithOptionSelections, OrderCard(), ApiTokenConfig, B2BAuthorizationInput, B2BAuthorizationPermission (+11 more)
 
 ### Community 69 - "UserManagement/index.test.tsx"
-Cohesion: 0.14
-Nodes (16): GetUsersVariables, UsersResponse, buildCompanyRoleEdgeWith, buildCompanyRolesResponseWith, buildUserEdgeWith, buildUserEmailCheckResponseWith, buildUserExtraFieldsResponseWith, buildUserExtraFieldWith (+8 more)
+Cohesion: 0.12
+Nodes (18): GetUserVariables, UserResponse, GetUsersVariables, UsersResponse, buildCompanyRoleEdgeWith, buildCompanyRolesResponseWith, buildUserEdgeWith, buildUserEmailCheckResponseWith (+10 more)
 
 ### Community 71 - "routes/index.tsx"
-Cohesion: 0.09
-Nodes (29): B3RenderRouter(), PAGES_SUBSIDIARIES_PERMISSION_KEYS, BuyerPortalRoute, getAllowedRoutesWithoutComponent(), RouteItem, RouteItemBasic, routeList, allLegacyPermission (+21 more)
+Cohesion: 0.08
+Nodes (25): allLegacyPermission, denyInvoiceRoles, legacyPermissions, AddressList, CompanyHierarchy, firstLevelRouting, HomePage, Invoice (+17 more)
 
-### Community 72 - "mapSfGqlOrderToListItem.ts"
-Cohesion: 0.14
-Nodes (16): OrderStatus(), OrderStatusProps, ListItem, mapSfGqlOrderToListItem(), OrderItemCardProps, getOrderStatus(), orderStatusColor, OrderStatusConfig (+8 more)
+### Community 72 - "B3RenderRouter.tsx"
+Cohesion: 0.13
+Nodes (19): B3Card(), RedirectFallback(), RedirectFallbackProps, B3RenderRouterProps, B3CompanyHierarchyExternalButtonProps, B3HoverButtonProps, B3MasqueradeGlobalTipProps, CloseButtonProps (+11 more)
 
 ### Community 73 - "ShoppingListDetails/index.quickadd.test.tsx"
-Cohesion: 0.13
-Nodes (16): Address, approvedB2BCompany, buildAddressWith, buildDraftQuoteItemWith, buildProductWith, buildQuoteInfoStateWith, buildVariantInfoResponseWith, buildVariantInfoWith (+8 more)
+Cohesion: 0.16
+Nodes (13): Address, approvedB2BCompany, buildAddressWith, buildDraftQuoteItemWith, buildProductWith, buildQuoteInfoStateWith, buildVariantInfoResponseWith, buildVariantInfoWith (+5 more)
 
-### Community 74 - "useDraftQuoteBackorderState.ts"
-Cohesion: 0.14
-Nodes (16): EMPTY_INVENTORY, usePicklistInventory(), QuoteTableProps, QuoteTableCardProps, DraftQuoteBackorderInput, DraftQuoteBackorderState, PicklistRow, backorderedLine (+8 more)
+### Community 74 - "QuoteTable.tsx"
+Cohesion: 0.11
+Nodes (32): PRODUCT_DEFAULT_IMAGE, defaultSummary, QuoteSummary, Summary, AvailabilityWarnings, getProductOptionsValues(), getThresholdWarning(), ProductOptionsValue (+24 more)
 
 ### Community 75 - "tasks"
 Cohesion: 0.10
@@ -606,57 +610,57 @@ Nodes (24): STEP-BY-STEP TASKS, Task 10: UPDATE `src/shared/service/vs/index.ts`
 Cohesion: 0.09
 Nodes (23): approvedB2BCompany, backorderPreloadedState, buildCartItemWith, buildGetCartWith, buildMoneyWith, buildPrice, buildProductPriceWith, buildSearchProductOptionsWith (+15 more)
 
-### Community 78 - "b3Product.ts"
-Cohesion: 0.21
-Nodes (17): getProductPricing(), calculatedDate(), calculateProductsPrice(), DisplayPriceProps, formatLineItemsToGetPrices(), formatOptionsSelections(), getBulkPrice(), getCalculatedParams() (+9 more)
+### Community 78 - "Registered/index.test.tsx"
+Cohesion: 0.09
+Nodes (18): b2bRegistrationData, formFields, mockCountries, preloadedStateCatalystWithFFOff, preloadedStateCatalystWithFFOn, RegisterPage(), buildUploadedCompanyFileWith, expectedPayloadType1 (+10 more)
 
-### Community 79 - "App.tsx"
-Cohesion: 0.11
-Nodes (21): App(), FeatureEnabled, DISABLED, ENABLED, accountTarget, getCurrentLoginUrl(), hideAccountItems, openPageByClick() (+13 more)
+### Community 79 - "slices/global.ts"
+Cohesion: 0.14
+Nodes (13): TEST_FEATURE_FLAG_KEY, LOCALES, BackorderDisplaySettings, GlobalBlockPendingQuoteNonPurchasableOOS, GlobalMessageDialog, globalSlice, GlobalState, Locale (+5 more)
 
 ### Community 80 - "graphql-schema/package.json"
 Cohesion: 0.08
 Nodes (23): concurrently, dotenv, @graphql-hive/gateway, @graphql-mesh/compose-cli, author, description, devDependencies, concurrently (+15 more)
 
-### Community 81 - "OrdersSortInput"
-Cohesion: 0.09
-Nodes (18): CursorLocationState, BASE_ORDERS, BASE_STATE, renderComponent(), { server }, OrdersSortInput, CREATED_AT_NEWEST, CREATED_AT_OLDEST (+10 more)
+### Community 81 - "graphql/register.ts"
+Cohesion: 0.13
+Nodes (17): Address, Authentication, CreateCustomer, CustomerSubscribers, FormField, getAccountFormFields(), getB2BCompanyUserInfo(), getBCForcePasswordReset() (+9 more)
 
-### Community 82 - "applyOrderBackorderHistory.test.ts"
+### Community 82 - "registerUtils.ts"
 Cohesion: 0.15
-Nodes (18): OrderDialogProps, OrderShipping(), OrderShippingProps, ShipmentTitle, applyOrderBackorderHistory(), applyToProduct(), ConvertedOrderData, buildAddressWith (+10 more)
+Nodes (17): getLineNumber(), getTextLenPX(), AccountFormFieldsItemsValueConfigs, AccountFormFieldsList, AccountFormFieldsResult, bcFieldName(), classificationType(), companyExtraFieldsType (+9 more)
 
-### Community 83 - "OrderDetailsContext.tsx"
-Cohesion: 0.16
-Nodes (22): OrderActionProps, initState, OrderDetailsAction, OrderDetailsContextType, OrderDetailsProvider(), OrderDetailsProviderProps, OrderDetailsState, reducer() (+14 more)
+### Community 83 - "OrderAction.tsx"
+Cohesion: 0.08
+Nodes (38): ListItem, OrderItemCardProps, Buttons, DialogData, ItemContainer, ItemContainerProps, OrderActionContainer, OrderActionProps (+30 more)
 
 ### Community 84 - "vs/request/base.ts"
-Cohesion: 0.05
-Nodes (55): getVSCurrentCustomerJWT(), AddressValidationResult, AddressValidationStatus, registerBusinessAccount(), REGISTRATION_ERROR_CODES, RegistrationAddress, RegistrationCountry, RegistrationRequest (+47 more)
+Cohesion: 0.06
+Nodes (49): getVSCurrentCustomerJWT(), AddressValidationResult, AddressValidationStatus, registerBusinessAccount(), REGISTRATION_ERROR_CODES, RegistrationAddress, RegistrationCountry, RegistrationRequest (+41 more)
 
 ### Community 85 - "HierarchyDialog.tsx"
-Cohesion: 0.07
-Nodes (38): COMPANY_STATUS_MAPPINGS, HierarchyDialog(), HierarchyDialogProps, CompanyHierarchy(), CompanyHierarchy, B2BTokenResponse, getCompanySubsidiaries(), startUserMasqueradingCompany() (+30 more)
+Cohesion: 0.10
+Nodes (31): B3DropDown(), B3DropDownProps, DropDownHandle, ListItemProps, B3CompanyHierarchy(), chipInfo, COMPANY_STATUS_MAPPINGS, HierarchyDialog() (+23 more)
 
 ### Community 86 - "CrownRegistration/styled.ts"
 Cohesion: 0.15
 Nodes (14): FormSection(), FormSectionProps, Card, CardBody, CardHeader, ContentColumn, FieldGrid, FullRow (+6 more)
 
 ### Community 87 - "PaymentSuccess.tsx"
-Cohesion: 0.13
-Nodes (16): B3NoData(), B3NoDataProps, NoDataContainer, NoDataText, HistoryList(), InvoiceData, PaymentsHistoryList, PaymentsHistoryProps (+8 more)
+Cohesion: 0.11
+Nodes (19): B3NoData(), B3NoDataProps, NoDataContainer, NoDataText, HistoryList(), InvoiceData, PaymentsHistory(), PaymentsHistoryList (+11 more)
 
 ### Community 88 - "CursorDetailPagination.tsx"
-Cohesion: 0.16
-Nodes (17): CursorDetailPagination(), CursorDetailPaginationProps, fetchAdjacentPage(), OrderCursorItem, OrderPageItem, CursorDetailPaginationOptions, CursorDetailPaginationResult, CursorItem (+9 more)
+Cohesion: 0.10
+Nodes (22): CursorDetailPagination(), CursorDetailPaginationProps, CursorLocationState, fetchAdjacentPage(), OrderCursorItem, OrderPageItem, BASE_ORDERS, BASE_STATE (+14 more)
 
 ### Community 89 - "convertOrderDetail.ts"
-Cohesion: 0.19
-Nodes (21): buildOrderProduct(), buildOrderSummary(), buildPayment(), convertAddress(), convertBillings(), convertDigitalLineItemToProduct(), convertLineItemToProduct(), convertOrderDetail() (+13 more)
+Cohesion: 0.14
+Nodes (25): ORDER_STATUS_SYSTEM_LABELS, OrderStatusValueKey, orderStatusValueToSystemLabel(), SYSTEM_LABEL_TO_VALUE, systemLabelToOrderStatusValue(), buildOrderProduct(), buildOrderSummary(), buildPayment() (+17 more)
 
-### Community 90 - "selectors.ts"
-Cohesion: 0.12
-Nodes (13): defaultCurrencyInfoSelector, isAgentingSelector, isValidUserTypeSelector, OptionList, defaultCurrenciesState, initialState, storeConfigSlice, StoreConfigState (+5 more)
+### Community 90 - "QuickOrderB2BTable.tsx"
+Cohesion: 0.15
+Nodes (14): B3FilterPicker, B3FilterPickerProps, B3FilterPickers(), PickerProps, ListItemProps, PaginationTableRefProps, QuickOrderTableProps, SearchProps (+6 more)
 
 ### Community 91 - "End-to-End Application Testing"
 Cohesion: 0.10
@@ -666,25 +670,25 @@ Nodes (20): 1. Platform Check, 2. Frontend Check, 3. agent-browser Installation,
 Cohesion: 0.16
 Nodes (13): AddressField, AddressPrefix, baseSchema, CA_POSTAL_PATTERN, countrySchema, defaultRegistrationValues, EMAIL_PATTERN, FREE_EMAIL_PATTERN (+5 more)
 
-### Community 93 - "types/invoice.ts"
-Cohesion: 0.20
-Nodes (9): Address, Amount, CostLine, InvoiceAdditionalDetails, InvoiceDetails, InvoiceHeader, InvoiceSuccessData, LineItem (+1 more)
+### Community 93 - "QuoteInfo.tsx"
+Cohesion: 0.16
+Nodes (15): AddressProps, addressKeys, addressVerifyKeys, contactInfoKeys, InfoProps, Keys, QuoteInfoItemProps, QuoteInfoItemType (+7 more)
 
 ### Community 94 - "quoteInfo.ts"
-Cohesion: 0.16
-Nodes (10): reducer, draftQuoteListSlice, initialState, persistConfig, SetDraftProductCalculatedValueParams, SetDraftProductQuantityParams, initialState, themeSlice (+2 more)
+Cohesion: 0.24
+Nodes (9): draftQuoteListSlice, initialState, persistConfig, QuoteInfoState, SetDraftProductCalculatedValueParams, SetDraftProductParams, SetDraftProductQuantityParams, CalculatedValue (+1 more)
 
 ### Community 95 - "Handoff: Crown B2B Business Account Registration"
 Cohesion: 0.10
 Nodes (19): 01 — Your details, 02 — Billing address, 03 — Shipping address, 04 — Tax exemption (feature flag `showTaxExemption`, default on), 05 — Submit, 1. Registration form (`editing` state), 2. Confirmation (`submitted` state), 3. USPS address verification modal (+11 more)
 
 ### Community 96 - "QuoteDetail/index.test.tsx"
-Cohesion: 0.14
-Nodes (14): useParams, buildProductSearchResponseWith, buildProductSearchWith, buildQuoteExtraFieldsWith, buildQuoteProductWith, QuoteProduct, { server }, B2BProducts (+6 more)
+Cohesion: 0.13
+Nodes (15): useParams, buildProductSearchResponseWith, buildProductSearchWith, buildQuoteExtraFieldsWith, buildQuoteProductWith, QuoteProduct, { server }, B2BProducts (+7 more)
 
 ### Community 97 - "dependencies"
 Cohesion: 0.11
-Nodes (19): dependencies, copy-to-clipboard, date-fns, dayjs, @emotion/react, graphql, @mui/icons-material, react-intl (+11 more)
+Nodes (19): dependencies, copy-to-clipboard, date-fns, dayjs, @emotion/react, graphql, @mui/icons-material, react-hook-form (+11 more)
 
 ### Community 98 - "fieldStyles.ts"
 Cohesion: 0.24
@@ -698,17 +702,17 @@ Nodes (10): Banner, BannerLabel, BannerText, ErrorSummary(), ErrorSummaryProps, 
 Cohesion: 0.11
 Nodes (18): scripts, build, build:dev, build:staging, coverage, dev, format, generate (+10 more)
 
-### Community 102 - "InvoiceItemCard.tsx"
-Cohesion: 0.21
-Nodes (11): B3PulldownProps, InvoiceStatus(), InvoiceStatusProps, StatusProps, PaginationTableRefProps, InvoiceItemCard(), InvoiceItemCardProps, StyleCheckoutContainer (+3 more)
+### Community 102 - "Invoice/index.tsx"
+Cohesion: 0.08
+Nodes (42): B3PulldownProps, InvoiceFooter(), InvoiceFooterProps, InvoiceStatus(), InvoiceStatusProps, StatusProps, FilterSearchProps, initFilter (+34 more)
 
 ### Community 103 - "HeadlessRoutes"
 Cohesion: 0.11
 Nodes (18): HeadlessRoutes, ACCOUNT_SETTINGS, ADDRESSES, CLOSE, COMPANY_HIERARCHY, COMPANY_ORDERS, DASHBOARD, DRAFT_QUOTE (+10 more)
 
-### Community 104 - "products.ts"
-Cohesion: 0.17
-Nodes (11): ALlOptionValue, AppliedDiscount, BcCalculatedPrice, CalculatedItems, CalculatedOptions, DateProps, OptionValue, OptionValueProps (+3 more)
+### Community 104 - "B3ProductList.tsx"
+Cohesion: 0.12
+Nodes (16): BackorderLayoutStyles, defaultItemStyle, Flex, FlexItem, FlexItemProps, FlexProps, getBackorderLayoutStyles(), getProductVariantSku() (+8 more)
 
 ### Community 105 - "Execution Instructions"
 Cohesion: 0.11
@@ -722,41 +726,41 @@ Nodes (17): Context Completeness ✓, Feature: $ARGUMENTS, Implementation Ready 
 Cohesion: 0.11
 Nodes (17): Coding guideline, Coding style guide, Commit guideline, Contribution Guide, Developer commands, Life cycle of the buyer portal, Project overview, Pull Requests (+9 more)
 
-### Community 108 - "B3StoreContainer.tsx"
-Cohesion: 0.22
-Nodes (11): B3StoreContainer(), B3StoreContainerProps, setZIndexVariables(), ZIndexType, B3PageMask(), usePageMask(), Loading(), LoadingProps (+3 more)
+### Community 108 - "global/index.ts"
+Cohesion: 0.11
+Nodes (22): App(), B3StoreContainer(), B3StoreContainerProps, setZIndexVariables(), ZIndexType, B3PageMask(), usePageMask(), Loading() (+14 more)
 
-### Community 109 - "b3CheckPermissions/base.ts"
-Cohesion: 0.21
-Nodes (10): hasPermission(), checkPermissionCode(), getCorrespondsConfigurationPermission(), HandleVerifyPermissionCode, pdpButtonAndOthersPermission, PermissionsCodesProp, validateBasePermissionWithComparisonType(), ValidateBasePermissionWithComparisonTypeProps (+2 more)
+### Community 109 - "Dashboard/index.tsx"
+Cohesion: 0.17
+Nodes (14): DashboardCard(), DashboardCardProps, SelectedBadge(), ConfirmState, Dashboard(), ListItem, rowsPerPage, sortKeys (+6 more)
 
-### Community 110 - "payment.ts"
-Cohesion: 0.36
-Nodes (8): InvoiceFooter(), InvoiceFooterProps, formattingNumericValues(), getInvoiceCurrency(), hasMixedInvoiceCurrencies(), BcCartData, BcCartDataLineItem, handleGetCorrespondingCurrencyToken()
+### Community 110 - "unified-orders.test.tsx"
+Cohesion: 0.17
+Nodes (14): b2bStateWithCurrency(), b2bStateWithFlag(), buildLegacyB2BOrderStatusesResponseWith, buildLegacyOrderStatusesResponseWith, buildLegacyOrderStatusWith, buildPlacedByWith, buildSfGqlB2COrderWith, buildSfGqlCustomerOrdersResponseWith (+6 more)
 
 ### Community 111 - "order/table/B3Table.tsx"
 Cohesion: 0.13
 Nodes (14): B3NoData(), NoDataContainer, NoDataText, B3Table(), CursorPageInfo, isNodeWrapper(), NodeWrapper, OrderIdRow (+6 more)
 
-### Community 112 - "Registered/index.test.tsx"
-Cohesion: 0.04
-Nodes (62): reducer(), RegisteredProvider(), b2bRegistrationData, formFields, mockCountries, preloadedStateCatalystWithFFOff, preloadedStateCatalystWithFFOn, RegisterPage() (+54 more)
+### Community 112 - "CompleteStep/registerCompany.ts"
+Cohesion: 0.09
+Nodes (35): buildAddressFieldsFromForm(), buildCompanyStandardFields(), buildCompanyUserFields(), buildGraphQLExtraFields(), buildRegisterCompanyInput(), coerceExtraFieldNumber(), CustomerDetails, filterCompanyStandardRegisterFields() (+27 more)
 
 ### Community 113 - "Captcha.tsx"
-Cohesion: 0.23
-Nodes (11): Captcha(), CaptchaProps, loadCaptchaScript(), loadCaptchaWidgetHandlers(), useWidgetId(), handleLoad(), IFrameSetContent(), ThemeFrame() (+3 more)
+Cohesion: 0.21
+Nodes (12): Captcha(), CaptchaProps, loadCaptchaScript(), loadCaptchaWidgetHandlers(), useWidgetId(), handleLoad(), IFrameSetContent(), ThemeFrame() (+4 more)
 
-### Community 114 - "Invoice/index.tsx"
-Cohesion: 0.22
-Nodes (13): FilterSearchProps, initFilter, Invoice(), useData(), defaultSortKey, exportOrderByArr, filterFormConfig, filterFormConfigsTranslationVariables (+5 more)
+### Community 114 - "quote.ts"
+Cohesion: 0.19
+Nodes (14): exportQuotePdf(), getAddresses(), getB2BCustomerAddresses(), getBCCustomerAddresses(), getCustomerAddresses(), getExportQuotePdfQuery(), quoteAttachFileCreate(), quoteAttachFileDelete() (+6 more)
 
-### Community 115 - "OrderAction.tsx"
-Cohesion: 0.18
-Nodes (10): Buttons, DialogData, ItemContainer, ItemContainerProps, OrderActionContainer, OrderCardProps, OrderData, PaymentItemContainer (+2 more)
+### Community 115 - "QuotesList/index.test.tsx"
+Cohesion: 0.16
+Nodes (13): Address, buildAddressWith, buildDraftQuoteItemWith, buildQuoteEdgeWith, buildQuoteInfoStateWith, buildQuotesListB2BWith, buildQuotesListBCWith, buildShoppingListsCreatedByUserWith (+5 more)
 
 ### Community 116 - "B2BOrderData.ts"
-Cohesion: 0.24
-Nodes (12): convertB2BOrderDetails(), CouponInfo, formatPrice(), getDigitalProducts(), getOrderBilling(), getOrderShipping(), getOrderSummary(), getPaymentData() (+4 more)
+Cohesion: 0.12
+Nodes (23): applyOrderBackorderHistory(), applyToProduct(), ConvertedOrderData, buildAddressWith, buildHistoryWith, buildOrderDataWith, buildProductWith, buildShippedItemWith (+15 more)
 
 ### Community 117 - "Create Global Rules"
 Cohesion: 0.13
@@ -767,8 +771,8 @@ Cohesion: 0.14
 Nodes (14): API Mocking with MSW, Assertion Helpers, Basic Builder Pattern, Complete Test Example, Conditional Mocking with vitest-when, Key Testing Utilities, Mocking Best Practices, State Builders (+6 more)
 
 ### Community 119 - "convertArrayToGraphql"
-Cohesion: 0.15
-Nodes (19): getCheckoutUrlAndCart(), storefrontConfigs(), getInvoiceCheckoutUrl(), getInvoiceDetail(), getInvoiceDownloadPDF(), getInvoiceList(), getInvoicePaymentHistory(), getInvoicePaymentInfo() (+11 more)
+Cohesion: 0.17
+Nodes (16): PaymentSuccess(), exportInvoicesAsCSV(), getInvoiceDetail(), getInvoiceDownloadPDF(), getInvoiceList(), getInvoicePaymentInfo(), getInvoiceStats(), invoiceCreateBcCart() (+8 more)
 
 ### Community 120 - "CrownCheckbox.tsx"
 Cohesion: 0.20
@@ -782,9 +786,13 @@ Nodes (13): 1. Extract Requirements, 2. Synthesize Information, 3. Write the PRD
 Cohesion: 0.14
 Nodes (13): 1. Analyze Project Structure, 2. Read Core Documentation, 3. Identify Key Files, 4. Understand Current State, Architecture, Core Principles, Current State, Objective (+5 more)
 
+### Community 123 - "quote/shared/config.ts"
+Cohesion: 0.21
+Nodes (11): addPrice(), { decimal_places: decimalPlaces = 2 }, defaultSummary, priceCalc(), Summary, buildDraftQuoteItemWith(), buildProductSearchWith(), buildQuoteInfoWithList() (+3 more)
+
 ### Community 124 - "B3Pulldown.tsx"
 Cohesion: 0.26
-Nodes (10): B3Pulldown(), StyledMenu, PrintTemplate(), PrintTemplateProps, RowList, triggerPdfDownload(), gotoInvoiceCheckoutUrl(), analyzePDFUrl() (+2 more)
+Nodes (10): B3Pulldown(), StyledMenu, PrintTemplate(), PrintTemplateProps, RowList, triggerPdfDownload(), analyzePDFUrl(), getInvoiceDownloadPDFUrl() (+2 more)
 
 ### Community 125 - "DetailPagination.tsx"
 Cohesion: 0.27
@@ -799,8 +807,12 @@ Cohesion: 0.25
 Nodes (7): Adjusters, ModifierConfig, ModifierOptionValue, ProductDetails, ProductModifier, ProductOption, PurchasingDisabledInfo
 
 ### Community 128 - "ForgotPassword/index.tsx"
-Cohesion: 0.14
-Nodes (15): ForgotPassword(), ForgotPasswordProps, FormFields, Page(), sendForgotPasswordEmailFor(), LoginImage(), LoginImageProps, B3ResetPassWordButton (+7 more)
+Cohesion: 0.13
+Nodes (16): ForgotPassword(), ForgotPasswordProps, FormFields, Page(), now, { server }, sendForgotPasswordEmailFor(), LoginImage() (+8 more)
+
+### Community 129 - "loginInfo.test.ts"
+Cohesion: 0.17
+Nodes (7): COMPANY_STATUS_MESSAGE_MAPPINGS, CompanyError, CompanyStatusKey, CompanyStatusMapping, BC_PERMISSIONS, QUERY_PERMISSIONS, { server }
 
 ### Community 130 - "AI Agent Guide: B2B Buyer Portal"
 Cohesion: 0.18
@@ -822,13 +834,13 @@ Nodes (10): Architecture Diagram, Benefits, Dependencies, How are you trying to 
 Cohesion: 0.20
 Nodes (9): ACCEPTANCE CRITERIA, COMPLETION CHECKLIST, Feature: Crown Registration, Phase 1 Foundations, Feature Description, Feature Metadata, NOTES, Problem Statement, Solution Statement (+1 more)
 
-### Community 135 - "AddEditUser"
-Cohesion: 0.29
-Nodes (5): AddEditUser(), getUser(), GetUserVariables, UserResponse, isKeyOf()
+### Community 135 - "HeadlessController/index.tsx"
+Cohesion: 0.27
+Nodes (10): getSku(), HeadlessController(), Manager, buildShoppingListsNodeWith, { server }, transformOptionSelectionsToAttributes(), setElementsListenersConfig(), addProductsToShoppingListErrorHandler() (+2 more)
 
-### Community 136 - "preMountLoginMask.ts"
-Cohesion: 0.50
-Nodes (5): injectPreMountLoginMask(), isDefaultLoginStylingActive(), isLoginPage(), removePreMountLoginMask(), shouldUseDefaultLoginStyling()
+### Community 136 - "QuotesList/index.tsx"
+Cohesion: 0.26
+Nodes (11): FilterSearchProps, QuotesList(), quotesStatuses, sortKeys, useColumnList(), useData(), QuotesList, getB2BQuotesList() (+3 more)
 
 ### Community 137 - "RegistrationForm/index.tsx"
 Cohesion: 0.29
@@ -838,25 +850,25 @@ Nodes (8): RegistrationForm(), RegistrationFormProps, RegistrationFieldsSection(
 Cohesion: 0.29
 Nodes (8): FIELD_TYPE, FieldsOptionProps, FormattedItemsProps, getB2BUserExtraFields(), handleConversionExtraItemFormat(), UserExtraFields, getUsersExtraFieldsInfo(), UserExtraFieldsInfoResponse
 
-### Community 139 - "lang.ts"
-Cohesion: 0.43
-Nodes (4): initialState, langSlice, LangState, replacePageTranslations()
+### Community 139 - "getActiveLocale"
+Cohesion: 0.24
+Nodes (4): getActiveLocale(), LOCALES, getStorefrontLanguageCode(), LOCALES
 
 ### Community 140 - "Target Architecture (Use This)"
 Cohesion: 0.22
 Nodes (9): 1. **Matroska-Style Structure**, 2. **Prefer Props Over Context/Redux**, 3. **Co-located Files**, 4. **URL-Driven State**, 5. **Local Component State**, 6. **Domain-Agnostic Helpers Only**, 🏛 Architecture Philosophy & Patterns, Legacy Patterns (Avoid These) (+1 more)
 
-### Community 141 - "b3Serialize.ts"
+### Community 141 - "OrderBilling.tsx"
 Cohesion: 0.33
-Nodes (6): denyInputType, FromArrValues, serialize(), serializeAction(), Serializer, serializeType
+Nodes (7): DownloadDigitalProductsDialog(), getFileNameFromResponseHeader(), handleBlobDownload(), handleDownleoadDigitalFile(), getDigitalDownloadElements(), OrderBilling(), OrderBillingProps
 
-### Community 142 - "react-setup.tsx"
-Cohesion: 0.40
-Nodes (4): LangWrapper(), container, queryClient, persistor
+### Community 142 - "useQuoteDetailBackorderState.test.ts"
+Cohesion: 0.20
+Nodes (9): backorderedLine, lineWithBackorderedPicklistChild, messaging, picklistModifier, renderState(), QuoteStatus, EXPIRED, OPEN (+1 more)
 
-### Community 143 - "ShoppingListDetailsContext.tsx"
-Cohesion: 0.29
-Nodes (7): initState, reducer(), ShoppingListDetailsAction, ShoppingListDetailsContextType, ShoppingListDetailsProvider(), ShoppingListDetailsProviderProps, ShoppingListDetailsState
+### Community 143 - "Environment"
+Cohesion: 0.20
+Nodes (7): Environment, Integration, Local, Production, Staging, EnvSpecificConfig, TODO: These warn in production, will have to be fixed in the future.
 
 ### Community 144 - "Contributor Covenant Code of Conduct"
 Cohesion: 0.25
@@ -866,13 +878,13 @@ Nodes (7): Attribution, Contributor Covenant Code of Conduct, Enforcement, Our P
 Cohesion: 0.25
 Nodes (7): 13. Future Considerations, 14. Risks & Mitigations, 1. Executive Summary, 2. Mission, 5. User Stories, 8. Technology Stack, PRD: Crown Business Account Registration (2026 Update)
 
-### Community 146 - "buildQuoteStockSnapshot.ts"
-Cohesion: 0.53
-Nodes (4): buildQuoteStockSnapshot(), extractTotalOnHand(), resolveTracking(), SnapshotInput
+### Community 146 - "B3ControlPicker.tsx"
+Cohesion: 0.33
+Nodes (6): B3ControlPicker(), PickerFormControl, B3Picker(), B3PickerProps, SUPPORT_LANGUAGE, getDayjsLocale()
 
-### Community 147 - "isAllRequiredOptionFilled"
-Cohesion: 0.53
-Nodes (5): getProductOptionList(), isAllRequiredOptionFilled(), isModifierMultiLineTextValid(), isModifierNumberTextValid(), isModifierTextValid()
+### Community 147 - "b3CallbackManager.ts"
+Cohesion: 0.36
+Nodes (4): EventType, Callback, CallbackEvent, CallbackManager
 
 ### Community 148 - "IMPLEMENTATION PLAN"
 Cohesion: 0.33
@@ -886,9 +898,9 @@ Nodes (6): Level 1: Syntax and style, Level 2: Unit and component tests, Level 3
 Cohesion: 0.33
 Nodes (5): name, prettier, private, type, version
 
-### Community 151 - "Environment"
-Cohesion: 0.40
-Nodes (5): Environment, Integration, Local, Production, Staging
+### Community 151 - "B3ControlAutocomplete.tsx"
+Cohesion: 0.38
+Nodes (5): B3ControlAutocomplete(), Option, CompanyRolesResponse, getB2BRoleList(), getRoles()
 
 ### Community 152 - "CrownSelect.test.tsx"
 Cohesion: 0.40
@@ -958,9 +970,9 @@ Nodes (4): 📁 File Structure Patterns, Key Principles, Pages Structure, Shared
 Cohesion: 0.50
 Nodes (3): data, locales, result
 
-### Community 171 - "addUser.ts"
-Cohesion: 0.50
-Nodes (4): addUser(), AddUserResponse, AddUserVariables, toNumberSafely()
+### Community 171 - "B3ControlFileUpload.tsx"
+Cohesion: 0.33
+Nodes (5): B3ControlFileUpload(), FileUploadProps, getMaxFileSizeLabel(), DropzoneBox, FILE_UPLOAD_ACCEPT_TYPE
 
 ### Community 172 - "OrdersOrdersIpStatusChoices"
 Cohesion: 0.50
@@ -1002,33 +1014,45 @@ Nodes (3): Import Rules, 📦 Import Rules & Path Aliases, Path Aliases
 Cohesion: 0.67
 Nodes (3): OrdersOrdersIsInvoiceOrderChoices, A_0, A_1
 
-### Community 185 - "checkUserEmail.ts"
-Cohesion: 0.50
-Nodes (4): checkUserEmail(), CheckUserEmailVariables, toNumberSafely(), UserEmailCheckResponse
+### Community 185 - "graphql/quickOrder.ts"
+Cohesion: 0.33
+Nodes (6): getOrderedProducts(), OptionList, OptionSelection, OrderedProductNode, orderedProducts(), RecentlyOrderedProductsResponse
 
-### Community 186 - "updateUser.ts"
+### Community 198 - "CompanyNameCell/index.tsx"
 Cohesion: 0.50
-Nodes (4): toNumberSafely(), updateUser(), UpdateUserResponse, UpdateUserVariables
+Nodes (3): CompanyNameCell(), Props, SelectedBadge()
+
+### Community 266 - "updateB2BShoppingListDetails.ts"
+Cohesion: 0.40
+Nodes (4): B2BShoppingListUpdateResponse, ShoppingListVariables, updateB2BShoppingListDetails(), updateShoppingList()
+
+### Community 267 - "updateB2CShoppingListDetails.ts"
+Cohesion: 0.40
+Nodes (4): B2CShoppingListUpdateResponse, ShoppingListVariables, updateB2CShoppingListDetails(), updateCustomerShoppingList()
+
+### Community 268 - "deleteUser.ts"
+Cohesion: 0.50
+Nodes (4): deleteUser(), DeleteUserResponse, DeleteUserVariables, toNumberSafely()
 
 ## Knowledge Gaps
 - **2106 isolated node(s):** `semi`, `singleQuote`, `plugins`, `useParams`, `envs` (+2101 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **75 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **74 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `useB3Lang()` connect `useB3Lang` to `ForgotPassword/index.tsx`, `CompleteStep/index.tsx`, `QuoteDetail/index.tsx`, `ShoppingListDetails/components/ChooseOptionsDialog.tsx`, `AddEditUser`, `AddressList/index.tsx`, `OrderDialog.tsx`, `constants/index.ts`, `RegistrationForm/index.tsx`, `QuickOrderB2BTable.tsx`, `ShoppingLists/index.tsx`, `b3Tip.ts`, `types/index.ts`, `useAppSelector`, `Login/index.tsx`, `HeadlessController/index.tsx`, `CrownSelect.test.tsx`, `useRegistrationForm.ts`, `B3CustomForm.tsx`, `QuoteDetailTable.tsx`, `b2b/index.ts`, `types/quotes.ts`, `QuoteDraft/index.tsx`, `QuotesList/index.tsx`, `ShoppingDetailTable.tsx`, `AddEditUser.tsx`, `lang/index.ts`, `Order.tsx`, `basicConfig.ts`, `B3ProductList.tsx`, `CustomStyleContext`, `B3Upload.tsx`, `OrderDetail/index.tsx`, `AccountSetting/index.tsx`, `CrownTextField.test.tsx`, `loginInfo.ts`, `TableTree.tsx`, `catalogBackorderDisplay.ts`, `applyOrderBackorderHistory.test.ts`, `HierarchyDialog.tsx`, `PaymentSuccess.tsx`, `CursorDetailPagination.tsx`, `fieldStyles.ts`, `ErrorSummary.tsx`, `InvoiceItemCard.tsx`, `B3StoreContainer.tsx`, `payment.ts`, `order/table/B3Table.tsx`, `Invoice/index.tsx`, `OrderAction.tsx`, `CrownCheckbox.tsx`, `B3Pulldown.tsx`, `DetailPagination.tsx`?**
+- **Why does `useB3Lang()` connect `useB3Lang` to `ForgotPassword/index.tsx`, `CompleteStep/index.tsx`, `B3Spin.tsx`, `b3Product.ts`, `HeadlessController/index.tsx`, `AddressList/index.tsx`, `OrderDialog.tsx`, `constants/index.ts`, `QuotesList/index.tsx`, `RegistrationForm/index.tsx`, `b2b/graphql/product.ts`, `OrderBilling.tsx`, `ShoppingLists/index.tsx`, `b3Tip.ts`, `B3ControlPicker.tsx`, `useMyQuote.ts`, `useAppSelector`, `B3ControlAutocomplete.tsx`, `CrownSelect.test.tsx`, `Login/index.tsx`, `useRegistrationForm.ts`, `B3CustomForm.tsx`, `UserManagement/index.tsx`, `QuoteDetailTable.tsx`, `types/quotes.ts`, `ShoppingListDetails/index.tsx`, `b3CurrencyFormat.ts`, `ShoppingDetailTable.tsx`, `Order.tsx`, `AddEditUser.tsx`, `B3ControlFileUpload.tsx`, `lang/index.ts`, `AddressForm.tsx`, `OrderCheckboxProduct.tsx`, `CustomStyleContext`, `OrderDetail/index.tsx`, `types/index.ts`, `AccountSetting/index.tsx`, `CrownTextField.test.tsx`, `Registered/index.tsx`, `B3Nav.tsx`, `TableTree.tsx`, `catalogBackorderDisplay.ts`, `basicConfig.ts`, `CompanyNameCell/index.tsx`, `QuoteTable.tsx`, `OrderAction.tsx`, `HierarchyDialog.tsx`, `PaymentSuccess.tsx`, `CursorDetailPagination.tsx`, `QuickOrderB2BTable.tsx`, `QuoteInfo.tsx`, `fieldStyles.ts`, `ErrorSummary.tsx`, `Invoice/index.tsx`, `B3ProductList.tsx`, `global/index.ts`, `Dashboard/index.tsx`, `order/table/B3Table.tsx`, `convertArrayToGraphql`, `CrownCheckbox.tsx`, `B3Pulldown.tsx`, `DetailPagination.tsx`?**
   _High betweenness centrality (0.057) - this node is a cross-community bridge._
-- **Why does `useAppSelector` connect `useAppSelector` to `ForgotPassword/index.tsx`, `CompleteStep/index.tsx`, `QuoteDetail/index.tsx`, `ShoppingListDetails/components/ChooseOptionsDialog.tsx`, `AddEditUser`, `AddressList/index.tsx`, `OrderDialog.tsx`, `constants/index.ts`, `useB3Lang`, `QuickOrderB2BTable.tsx`, `ShoppingLists/index.tsx`, `b3Tip.ts`, `types/index.ts`, `Login/index.tsx`, `HeadlessController/index.tsx`, `useRegistrationForm.ts`, `UserManagement/table/B3PaginationTable.tsx`, `QuoteDetailTable.tsx`, `b2b/index.ts`, `slices/global.ts`, `QuoteDraft/index.tsx`, `QuotesList/index.tsx`, `ShoppingDetailTable.tsx`, `AddEditUser.tsx`, `lang/index.ts`, `Order.tsx`, `basicConfig.ts`, `B3ProductList.tsx`, `load-functions.ts`, `CustomStyleContext`, `B3Upload.tsx`, `OrderDetail/index.tsx`, `AccountSetting/index.tsx`, `loginInfo.ts`, `catalogBackorderDisplay.ts`, `routes/index.tsx`, `useDraftQuoteBackorderState.ts`, `App.tsx`, `HierarchyDialog.tsx`, `payment.ts`, `Captcha.tsx`, `Invoice/index.tsx`, `OrderAction.tsx`, `B3Pulldown.tsx`, `DetailPagination.tsx`?**
-  _High betweenness centrality (0.029) - this node is a cross-community bridge._
-- **Why does `CustomerRole` connect `CustomerRole` to `QuoteDetail/index.tsx`, `bulk`, `ShoppingListDetails/components/ChooseOptionsDialog.tsx`, `test-utils.tsx`, `AddressList/index.tsx`, `useB3Lang`, `buildCompanyStateWith`, `renderWithProviders`, `ShoppingLists/index.tsx`, `types/index.ts`, `QuoteDraft/index.test.tsx`, `b3Logger.ts`, `buildGlobalStateWith`, `useAppSelector`, `Login/index.tsx`, `HeadlessController/index.tsx`, `QuoteDetailTable.tsx`, `index.main.test.tsx`, `QuoteDraft/index.tsx`, `order/config.ts`, `builder`, `Order.tsx`, `basicConfig.ts`, `B3ProductList.tsx`, `B3Upload.tsx`, `OrderDetail/index.tsx`, `OrderDetail/index.test.tsx`, `AccountSetting/index.tsx`, `loginInfo.ts`, `routes/index.tsx`, `App.tsx`, `HierarchyDialog.tsx`, `selectors.ts`, `b3CheckPermissions/base.ts`, `Registered/index.test.tsx`, `Invoice/index.tsx`?**
+- **Why does `useAppSelector` connect `useAppSelector` to `CompleteStep/index.tsx`, `b3Product.ts`, `HeadlessController/index.tsx`, `AddressList/index.tsx`, `OrderDialog.tsx`, `constants/index.ts`, `dom/utils.ts`, `useB3Lang`, `b2b/graphql/product.ts`, `QuotesList/index.tsx`, `ShoppingLists/index.tsx`, `b3Tip.ts`, `useMyQuote.ts`, `Login/index.tsx`, `graphql/global.ts`, `useRegistrationForm.ts`, `UserManagement/index.tsx`, `QuoteDetailTable.tsx`, `LangProvider.tsx`, `types/quotes.ts`, `ShoppingListDetails/index.tsx`, `b3CurrencyFormat.ts`, `ShoppingDetailTable.tsx`, `Order.tsx`, `AddEditUser.tsx`, `lang/index.ts`, `useB3AppOpen.ts`, `OrderDetail/index.tsx`, `AccountSetting/index.tsx`, `Registered/index.tsx`, `B3Nav.tsx`, `catalogBackorderDisplay.ts`, `basicConfig.ts`, `B3RenderRouter.tsx`, `QuoteTable.tsx`, `OrderAction.tsx`, `HierarchyDialog.tsx`, `QuickOrderB2BTable.tsx`, `Invoice/index.tsx`, `B3ProductList.tsx`, `global/index.ts`, `Dashboard/index.tsx`, `Captcha.tsx`, `B3Pulldown.tsx`, `DetailPagination.tsx`?**
+  _High betweenness centrality (0.030) - this node is a cross-community bridge._
+- **Why does `OrdersSortInput` connect `useCompanyOrdersState.ts` to `Order.tsx`, `bc/graphql/orders.ts`, `CursorDetailPagination.tsx`, `builder`?**
   _High betweenness centrality (0.019) - this node is a cross-community bridge._
 - **What connects `semi`, `singleQuote`, `plugins` to the rest of the system?**
   _2106 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `graphql.ts` be split into smaller, more focused modules?**
   _Cohesion score 0.005063291139240506 - nodes in this community are weakly interconnected._
 - **Should `CompleteStep/index.tsx` be split into smaller, more focused modules?**
-  _Cohesion score 0.06227106227106227 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08022598870056497 - nodes in this community are weakly interconnected._
 - **Should `support.js` be split into smaller, more focused modules?**
   _Cohesion score 0.060678962844159315 - nodes in this community are weakly interconnected._

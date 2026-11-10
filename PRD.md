@@ -385,10 +385,9 @@ A boxed checkbox, "Shipping address is the same as billing", is checked by defau
 - ✅ **Required of the VS API (documented here):**
   - Turnstile verification
   - Server-side re-validation
-  - Duplicate-email enforcement
-  - IP rate limiting on both endpoints
+  - Duplicate-email and duplicate-address enforcement
   - A CORS allowlist of storefront domains
-  - The validate-address endpoint isn't covered by Turnstile, so it needs rate limiting
+- ✅ **Handled by Cloudflare, not the VS API code:** IP rate limiting on both endpoints. The validate-address endpoint isn't covered by Turnstile, so its Cloudflare rule matters most.
 - ❌ **Out of scope:** WAF rules, the BC customer password policy (the client rule matches the spec; the server should enforce BC's policy if it's stricter).
 
 ### Deployment considerations
@@ -434,6 +433,8 @@ Both endpoints are on `getVSAPIBaseURL()`, use JSON, and **don't require authent
 ```
 When shipping differs from billing: `"shippingAddress": { "sameAsBilling": false, "address1": "…", "address2": "", "city": "…", "state": "ON", "stateName": "Ontario", "postalCode": "K1A 0B1", "country": "CA" }`.
 
+**`stateName` is required** on `billingAddress` and on a separate `shippingAddress`, next to the `state` code. One of the underlying BigCommerce APIs needs the region name instead of the code. The client takes the name from the BC region data (`getB2BCountries()`, which returns `stateCode` and `stateName`) when it builds the payload. `stateName` is not sent to, or returned from, `validate-address` (§10.2). When `sameAsBilling` is true, the server copies the billing address into the shipping address.
+
 **Success: `200`**
 ```json
 { "referenceId": "CC-104233", "status": "pending" }
@@ -452,18 +453,25 @@ When shipping differs from billing: `"shippingAddress": { "sameAsBilling": false
 | `TURNSTILE_FAILED` | — | Banner "Verification failed, please try again"; reset the widget |
 | `EMAIL_EXISTS` | `email` | Inline error on the email field |
 | `VALIDATION` | any form field name | Inline error on that field |
-| `RATE_LIMITED` (429) | — | Banner "Too many attempts, please try again later" |
-| other / 5xx / network | — | Generic banner, reset the widget |
+| `ADDRESS_EXISTS` | `billingAddress` or `shippingAddress` | Inline error on that address (`bAddress1` / `sAddress1`) and focus the section. Show the server's `message` as-is (it is written for display). |
+| `REGISTRATION_FAILED` (500) | — | Generic banner, reset the widget |
+| `RATE_LIMITED` (429) | — | Banner "Too many attempts, please try again later". Only Cloudflare returns this; the VS API doesn't. |
+| other / 404 / 5xx / network | — | Generic banner, reset the widget |
+
+All application errors (`TURNSTILE_FAILED`, `EMAIL_EXISTS`, `VALIDATION`, `ADDRESS_EXISTS`) come back as HTTP 400, so the client switches on `code`, not on status. `VALIDATION` fields use the form field names (`companyName`, `bAddress1`, `bZip`, …). A failed password step also returns `VALIDATION` on `password`. The privacy field is `privacyAcknowledged`, the same name as the form field.
 
 **Expected server behavior**
 1. Verify the Turnstile token.
 2. Re-validate the payload with the same rules as the client.
-3. Create the BC customer.
-4. Create the B2B company, with the registrant as company Admin.
-5. Create the addresses. `sameAsBilling: true` → **one** address flagged as both default billing and default shipping.
-6. Put the customer in the "New Customer" group: credit card and ACH payment only; UPS Ground, LTL (lift gate and inside delivery options) and Truckload shipping.
-7. Record `existingCustomer` for the Crown team to follow up.
-8. Return `referenceId`.
+3. Check for duplicate billing and shipping addresses already in BigCommerce (exact match on both address lines and ZIP). Reject with `ADDRESS_EXISTS` before creating anything. If the BC search itself fails, the check is skipped.
+4. Create the B2B company, with the registrant as company Admin. BC creates the customer as part of this call, and no creation email is sent. `existingCustomer` is stored in the company extra field `IsAlreadyCustomer` for the Crown team to follow up.
+5. Set the registrant's password. This step is fatal: on failure the company is deleted and the request returns an error.
+6. Create **two** company addresses, even when `sameAsBilling` is true: billing (default billing) and shipping (default shipping).
+7. Set the ShipperHQ customer-group attribute to "New Customer" (UPS Ground, LTL with lift gate and inside delivery, and Truckload shipping).
+8. Restrict payment methods to `stripeupe`, `card` and `us_bank_account`.
+9. Return `referenceId` (`"CC-" + BC company id`) and `status: "pending"`.
+
+Steps 6 to 8 are non-fatal on the server: a failure is logged and the request still succeeds.
 
 ### 10.2 `POST /storefront/registration/validate-address/`
 
@@ -487,6 +495,7 @@ When shipping differs from billing: `"shippingAddress": { "sameAsBilling": false
 ### 10.3 Client stub signatures (`shared/service/vs/api/registration.ts`)
 ```ts
 export function registerBusinessAccount(payload: RegistrationRequest): Promise<RegistrationResponse>;
+// RegistrationAddress has no stateName; RegistrationSubmissionAddress adds a required stateName
 export function validateAddress(address: RegistrationAddress): Promise<AddressValidationResult>;
 export class VSApiError extends Error {
   status: number;
@@ -549,6 +558,8 @@ export class VSApiError extends Error {
 - ✅ `pages/CrownRegistration/index.tsx` (guard, shell, logo, `useTypekitFonts`)
 - ✅ `RegistrationForm` with all four sections, `AddressFields`, `useRegions`, `useEmailPrecheck`
 - ✅ Submit through `registerBusinessAccount` (msw-mocked) and `RegistrationConfirmation`
+- ✅ `stateName`: `useRegions` returns `{ stateCode, stateName }`. `useRegistrationSubmit` resolves the name from the country and state code when building `billingAddress` and a separate `shippingAddress`. If a code has no match, submit fails on that field instead of sending an empty name.
+- ✅ Server error mapping: `field` → form field, including `billingAddress` → `bAddress1`, `shippingAddress` → `sAddress1` (billing only when `sameAsBilling`). Every other server field name already matches a form field. Unknown fields go to the summary banner. `ADDRESS_EXISTS` shows the server `message` as-is.
 - ✅ `en.json` keys, the route swap, and the Login button change
 - ✅ `index.test.tsx`: guard, defaults, validation, country switching, shipping toggle, payload, errors, confirmation
 
@@ -569,7 +580,9 @@ export class VSApiError extends Error {
 - ✅ Connect to the real VS staging endpoints once they exist, and run an end-to-end application on `crowntest`
 - ✅ Put in the real Turnstile keys and the final placeholder copy and URLs
 
-**Validation:** an end-to-end application on staging creates the BC customer, B2B company and addresses, and puts the customer in the New Customer group.
+- ✅ End-to-end checks from the backend plan: duplicate address (`ADDRESS_EXISTS`), duplicate email (`EMAIL_EXISTS`), `IsAlreadyCustomer` set, two addresses created for `sameAsBilling`
+
+**Validation:** an end-to-end application on staging creates the B2B company (with its customer) and two addresses, and puts the customer in the New Customer group.
 
 **Estimated total:** about 5.5–6 developer-days for the client work. Phase 4's end-to-end step waits on the VS backend.
 
@@ -596,7 +609,7 @@ export class VSApiError extends Error {
 | CSP or Typekit allowlist blocks the scripts or fonts on production domains | Widget missing (can't submit) or fallback fonts | Deployment checklist in §9. Confirm on staging during Phase 4. If Turnstile fails to load, Submit stays disabled and a clear message is shown. |
 | An upstream merge touches the route file or `en.json` | Small merge conflicts | The edits are a single line or a single block with `// Crown:` markers. Stock `Registered` code is never modified. |
 | USPS proxy slow or unavailable | Submit delayed or blocked | Short client timeout. On error, continue without validation and log it. The server can re-check later. |
-| Anonymous endpoints abused | Spam accounts, higher USPS costs | Turnstile on register; IP rate limiting and a CORS allowlist on both endpoints; the server re-validates everything. |
+| Anonymous endpoints abused | Spam accounts, higher USPS costs | Turnstile on register; Cloudflare rate limiting and a CORS allowlist on both endpoints; the server re-validates everything. |
 
 ---
 
@@ -636,4 +649,6 @@ export class VSApiError extends Error {
 3. USPS API choice and credentials (VS backend).
 4. Registrant role: Admin or Sr. Buyer, and the process for leaving the "New Customer" group.
 5. Whether Catalyst storefronts need an `on-registered` callback after submit.
-6. The `referenceId` format (the prototype uses `CC-XXXXXX`).
+6. ~~The `referenceId` format~~ Settled: `"CC-" + BC company id`.
+7. ~~Privacy field name and `ADDRESS_EXISTS` message text~~ Settled: `privacyAcknowledged`, and the server message is shown as-is.
+8. ~~Approval email~~ Settled: assume the registration process emails the customer in some form, so the §7.9 confirmation copy ("we email you…") stays as written. The VS API itself sends no BC creation email; the exact mechanism is Crown's to decide.

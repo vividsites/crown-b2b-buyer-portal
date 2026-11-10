@@ -10,15 +10,18 @@ export interface RegistrationAddress {
   city: string;
   // region code, e.g. "IL"
   state: string;
-  // BC region name, e.g. "Illinois"
-  stateName?: string;
   postalCode: string;
   country: RegistrationCountry;
 }
 
+// Registration payloads also need the BC region name (e.g. "Illinois"): one of
+// the underlying BigCommerce calls requires the name instead of the code.
+// validate-address requests and its `suggested` result omit it.
+export type RegistrationSubmissionAddress = RegistrationAddress & { stateName: string };
+
 export type RegistrationShippingAddress =
   | { sameAsBilling: true }
-  | ({ sameAsBilling: false } & RegistrationAddress);
+  | ({ sameAsBilling: false } & RegistrationSubmissionAddress);
 
 export interface RegistrationRequest {
   storeHash: string;
@@ -34,7 +37,7 @@ export interface RegistrationRequest {
   };
   company: { name: string };
   privacyAcknowledged: true;
-  billingAddress: RegistrationAddress;
+  billingAddress: RegistrationSubmissionAddress;
   shippingAddress: RegistrationShippingAddress;
 }
 
@@ -57,6 +60,11 @@ export const REGISTRATION_ERROR_CODES = {
   turnstileFailed: 'TURNSTILE_FAILED',
   emailExists: 'EMAIL_EXISTS',
   validation: 'VALIDATION',
+  // field is "billingAddress" or "shippingAddress"
+  addressExists: 'ADDRESS_EXISTS',
+  // 500, no field
+  registrationFailed: 'REGISTRATION_FAILED',
+  // Not emitted by the VS API; Cloudflare rate limiting may still return 429
   rateLimited: 'RATE_LIMITED',
 } as const;
 
