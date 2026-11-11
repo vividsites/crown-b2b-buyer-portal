@@ -60,7 +60,7 @@ export const REGISTRATION_ERROR_CODES = {
   turnstileFailed: 'TURNSTILE_FAILED',
   emailExists: 'EMAIL_EXISTS',
   validation: 'VALIDATION',
-  // field is "billingAddress" or "shippingAddress"
+  // field is "billingAddress" or "shippingAddress", or "companyName" for a duplicate company name
   addressExists: 'ADDRESS_EXISTS',
   // 500, no field
   registrationFailed: 'REGISTRATION_FAILED',

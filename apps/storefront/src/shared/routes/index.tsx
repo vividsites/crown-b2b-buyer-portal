@@ -37,7 +37,7 @@ const QuickOrder = lazy(() => import('@/pages/QuickOrder'));
 const QuoteDetail = lazy(() => import('@/pages/QuoteDetail'));
 const QuoteDraft = lazy(() => import('@/pages/QuoteDraft'));
 const QuotesList = lazy(() => import('@/pages/QuotesList'));
-const Registered = lazy(() => import('@/pages/Registered'));
+const Registered = lazy(() => import('@/pages/CrownRegistration')); // Crown: stock page is src/pages/Registered
 const RegisteredBCToB2B = lazy(() => import('@/pages/RegisteredBCToB2B'));
 const ShoppingLists = lazy(() => import('@/pages/ShoppingLists'));
 const ShoppingListDetails = lazy(() => import('@/pages/ShoppingListDetails'));

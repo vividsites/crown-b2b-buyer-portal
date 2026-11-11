@@ -309,9 +309,7 @@ function Login(props: PageProps) {
   };
 
   const handleCreateAccountClick = () => {
-    window.parent.postMessage({
-      type: 'create-account',
-    }, '*');
+    navigate('/register');
   };
 
   const loginAndRegisterContainerWidth = /*registerEnabled ? */'100%' /*: '50%'*/;

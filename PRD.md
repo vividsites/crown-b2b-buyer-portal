@@ -453,17 +453,17 @@ When shipping differs from billing: `"shippingAddress": { "sameAsBilling": false
 | `TURNSTILE_FAILED` | — | Banner "Verification failed, please try again"; reset the widget |
 | `EMAIL_EXISTS` | `email` | Inline error on the email field |
 | `VALIDATION` | any form field name | Inline error on that field |
-| `ADDRESS_EXISTS` | `billingAddress` or `shippingAddress` | Inline error on that address (`bAddress1` / `sAddress1`) and focus the section. Show the server's `message` as-is (it is written for display). |
+| `ADDRESS_EXISTS` | `billingAddress`, `shippingAddress`, or `companyName` | Duplicate address: inline error on that address (`bAddress1` / `sAddress1`) and focus the field. Duplicate company name: inline error on `companyName`. Show the server's `message` as-is (it is written for display). |
 | `REGISTRATION_FAILED` (500) | — | Generic banner, reset the widget |
 | `RATE_LIMITED` (429) | — | Banner "Too many attempts, please try again later". Only Cloudflare returns this; the VS API doesn't. |
-| other / 404 / 5xx / network | — | Generic banner, reset the widget |
+| other / 404 / 5xx / network | — | Generic banner, reset the widget. Exception: an unrecognised `code` that names a form field and carries a `message` is shown inline on that field. |
 
 All application errors (`TURNSTILE_FAILED`, `EMAIL_EXISTS`, `VALIDATION`, `ADDRESS_EXISTS`) come back as HTTP 400, so the client switches on `code`, not on status. `VALIDATION` fields use the form field names (`companyName`, `bAddress1`, `bZip`, …). A failed password step also returns `VALIDATION` on `password`. The privacy field is `privacyAcknowledged`, the same name as the form field.
 
 **Expected server behavior**
 1. Verify the Turnstile token.
 2. Re-validate the payload with the same rules as the client.
-3. Check for duplicate billing and shipping addresses already in BigCommerce (exact match on both address lines and ZIP). Reject with `ADDRESS_EXISTS` before creating anything. If the BC search itself fails, the check is skipped.
+3. Check for duplicate billing and shipping addresses already in BigCommerce (exact match on both address lines and ZIP), and for an existing company with the same name. Reject with `ADDRESS_EXISTS` before creating anything: `field` is `billingAddress` or `shippingAddress` for addresses, and `companyName` for a duplicate company name (message: "An account with this company name already exists. Please contact customer service."). If the BC search itself fails, the check is skipped.
 4. Create the B2B company, with the registrant as company Admin. BC creates the customer as part of this call, and no creation email is sent. `existingCustomer` is stored in the company extra field `IsAlreadyCustomer` for the Crown team to follow up.
 5. Set the registrant's password. This step is fatal: on failure the company is deleted and the request returns an error.
 6. Create **two** company addresses, even when `sameAsBilling` is true: billing (default billing) and shipping (default shipping).
@@ -559,7 +559,7 @@ export class VSApiError extends Error {
 - ✅ `RegistrationForm` with all four sections, `AddressFields`, `useRegions`, `useEmailPrecheck`
 - ✅ Submit through `registerBusinessAccount` (msw-mocked) and `RegistrationConfirmation`
 - ✅ `stateName`: `useRegions` returns `{ stateCode, stateName }`. `useRegistrationSubmit` resolves the name from the country and state code when building `billingAddress` and a separate `shippingAddress`. If a code has no match, submit fails on that field instead of sending an empty name.
-- ✅ Server error mapping: `field` → form field, including `billingAddress` → `bAddress1`, `shippingAddress` → `sAddress1` (billing only when `sameAsBilling`). Every other server field name already matches a form field. Unknown fields go to the summary banner. `ADDRESS_EXISTS` shows the server `message` as-is.
+- ✅ Server error mapping: `field` → form field, including `billingAddress` → `bAddress1`, `shippingAddress` → `sAddress1` (billing only when `sameAsBilling`). Every other server field name already matches a form field. Unknown fields go to the summary banner. `ADDRESS_EXISTS` shows the server `message` as-is, and is also returned on `companyName` for a duplicate company name. Any error code that names a known form field and has a message is shown inline on that field.
 - ✅ `en.json` keys, the route swap, and the Login button change
 - ✅ `index.test.tsx`: guard, defaults, validation, country switching, shipping toggle, payload, errors, confirmation
 

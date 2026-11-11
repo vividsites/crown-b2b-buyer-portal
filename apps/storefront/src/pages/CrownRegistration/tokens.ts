@@ -3,7 +3,7 @@ export const crownColors = {
   red: '#E41C40',
   redHover: '#C1152F',
   errorSurface: '#FDEEF0',
-  pageGround: '#EDEDED',
+  pageGround: '#FFFAF7',
   surface: '#FFFFFF',
   fieldFill: '#F4F5F7',
   uploadFill: '#FAFBFC',

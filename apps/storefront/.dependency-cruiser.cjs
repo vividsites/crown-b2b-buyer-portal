@@ -25,6 +25,8 @@ module.exports = {
           'src/types/gql/index.ts',
           // depcruise can't follow dynamic imports of locale bundles
           '^src/lib/lang/locales/.*\\.json$',
+          // Crown: /register serves src/pages/CrownRegistration; the stock page stays for upstream merges
+          '^src/pages/Registered/index.tsx$',
         ],
         numberOfDependentsLessThan: 1,
       },

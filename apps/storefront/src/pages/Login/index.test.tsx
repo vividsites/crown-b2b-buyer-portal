@@ -54,6 +54,18 @@ describe('LoginPage', () => {
     vi.spyOn(snackbar, 'error');
   });
 
+  describe('create account', () => {
+    it('opens the registration page when Create account is clicked', async () => {
+      const { user, navigation } = renderLoginPage();
+
+      await user.click(await screen.findByRole('button', { name: 'CREATE ACCOUNT' }));
+
+      await waitFor(() => {
+        expect(navigation).toHaveBeenCalledWith('/register');
+      });
+    });
+  });
+
   describe('successful login and redirects', () => {
     it('should redirect junior buyer to /shoppingLists after successful login', async () => {
       vi.mock('@/hooks/useB2BCallback');

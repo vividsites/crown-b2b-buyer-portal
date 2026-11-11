@@ -1,6 +1,7 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "entry": ["src/main.ts", "src/headless.ts"],
+  // Crown: src/pages/Registered is the stock page, kept for upstream merges but no longer routed
+  "entry": ["src/main.ts", "src/headless.ts", "src/pages/Registered/index.tsx"],
   "project": ["src/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"],
   "rules": {
     "binaries": "off",
