@@ -140,7 +140,7 @@ export function RegistrationForm({ onSubmitted }: RegistrationFormProps) {
     <>
       {b3Lang('crownRegistration.field.privacyPrefix')}
       {/* TODO: Privacy Policy URL pending */}
-      <PageLink href="#" target="_blank" rel="noopener noreferrer">
+      <PageLink href="https://crownpack.com/privacy-policy/" target="_blank" rel="noopener noreferrer">
         {b3Lang('crownRegistration.field.privacyLink')}
       </PageLink>
       {b3Lang('crownRegistration.field.privacySuffix')}
