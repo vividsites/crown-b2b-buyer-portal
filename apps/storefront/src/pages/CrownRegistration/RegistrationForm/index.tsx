@@ -20,15 +20,15 @@ import { useEmailPrecheck } from './useEmailPrecheck';
 import { useRegions } from './useRegions';
 import { useRegistrationSubmit } from './useRegistrationSubmit';
 
-export interface SubmittedSummary {
-  referenceId: string;
+// The credentials the applicant just registered with. The parent uses them for the
+// automatic login on an auto-approved account; they must never be rendered or kept.
+export interface SubmittedCredentials {
   email: string;
-  companyName: string;
-  contactName: string;
+  password: string;
 }
 
 interface RegistrationFormProps {
-  onSubmitted: (summary: SubmittedSummary) => void;
+  onSubmitted: (credentials: SubmittedCredentials) => void;
 }
 
 // Section order, used to list client-side errors in reading order.
@@ -55,7 +55,6 @@ const FIELD_ORDER: FormFieldName[] = [
   'privacyAcknowledged',
 ];
 
-// Remount the form with a new `key` to reset it.
 export function RegistrationForm({ onSubmitted }: RegistrationFormProps) {
   const b3Lang = useB3Lang();
   const { countries, getRegions } = useRegions();
@@ -84,13 +83,8 @@ export function RegistrationForm({ onSubmitted }: RegistrationFormProps) {
   const { onEmailBlur } = useEmailPrecheck(form);
 
   const handleSuccess = useCallback(
-    ({ referenceId }: { referenceId: string }, values: RegistrationFormValues) => {
-      onSubmitted({
-        referenceId,
-        email: values.email.trim(),
-        companyName: values.companyName.trim(),
-        contactName: `${values.firstName.trim()} ${values.lastName.trim()}`,
-      });
+    (_result: { referenceId: string }, values: RegistrationFormValues) => {
+      onSubmitted({ email: values.email.trim(), password: values.password });
     },
     [onSubmitted],
   );
@@ -140,7 +134,11 @@ export function RegistrationForm({ onSubmitted }: RegistrationFormProps) {
     <>
       {b3Lang('crownRegistration.field.privacyPrefix')}
       {/* TODO: Privacy Policy URL pending */}
-      <PageLink href="https://crownpack.com/privacy-policy/" target="_blank" rel="noopener noreferrer">
+      <PageLink
+        href="https://crownpack.com/privacy-policy/"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
         {b3Lang('crownRegistration.field.privacyLink')}
       </PageLink>
       {b3Lang('crownRegistration.field.privacySuffix')}

@@ -4,12 +4,13 @@ import { useNavigate } from 'react-router-dom';
 import { B3Card } from '@/components/B3Card';
 import { useScrollBar } from '@/hooks/useScrollBar';
 import { useB3Lang } from '@/lib/lang';
+import { CustomStyleContext } from '@/shared/customStyleButton';
 import { GlobalContext } from '@/shared/global';
 
 import { type PageProps } from '../PageProps';
 
-import { RegistrationConfirmation } from './RegistrationConfirmation';
-import { RegistrationForm, SubmittedSummary } from './RegistrationForm';
+import { ConfirmationState, RegistrationConfirmation } from './RegistrationConfirmation';
+import { RegistrationForm, SubmittedCredentials } from './RegistrationForm';
 import {
   Card,
   CardBody,
@@ -25,6 +26,7 @@ import {
   PageRouterLink,
   PageTitle,
 } from './styled';
+import { useAutoLogin } from './useAutoLogin';
 import { useTypekitFonts } from './useTypekitFonts';
 
 const SUPPORT_EMAIL = 'CrownCommerceSupport@crownpack.com';
@@ -36,8 +38,13 @@ export default function CrownRegistration({ setOpenPage }: PageProps) {
     state: { logo, isLogoLoaded, registerEnabled },
   } = useContext(GlobalContext);
 
-  const [submitted, setSubmitted] = useState<SubmittedSummary | null>(null);
-  const [resetKey, setResetKey] = useState(0);
+  const {
+    state: { companyAutoApproval },
+  } = useContext(CustomStyleContext);
+  const autoLogin = useAutoLogin();
+
+  // null while the form is showing
+  const [confirmation, setConfirmation] = useState<ConfirmationState | null>(null);
 
   // registerEnabled mirrors the B2B "Trade professional application" storefront setting
   useEffect(() => {
@@ -49,10 +56,25 @@ export default function CrownRegistration({ setOpenPage }: PageProps) {
   useScrollBar(false);
   useTypekitFonts();
 
-  const handleAnother = useCallback(() => {
-    setSubmitted(null);
-    setResetKey((key) => key + 1);
-  }, []);
+  // Same rule the stock BC-to-B2B registration uses: the B2B "company auto approval"
+  // storefront setting. Auto-approved accounts are logged in straight away; the
+  // credentials only pass through this callback and are never put in state.
+  const handleSubmitted = useCallback(
+    (credentials: SubmittedCredentials) => {
+      if (!companyAutoApproval.enabled) {
+        setConfirmation('pending');
+        return;
+      }
+
+      setConfirmation('signingIn');
+      autoLogin(credentials).then((loggedIn) => {
+        if (!loggedIn) {
+          setConfirmation('signInFailed');
+        }
+      });
+    },
+    [autoLogin, companyAutoApproval.enabled],
+  );
 
   return (
     <B3Card setOpenPage={setOpenPage}>
@@ -71,12 +93,8 @@ export default function CrownRegistration({ setOpenPage }: PageProps) {
           </HeaderRow>
 
           <Card>
-            {submitted ? (
-              <RegistrationConfirmation
-                summary={submitted}
-                onAnother={handleAnother}
-                setOpenPage={setOpenPage}
-              />
+            {confirmation ? (
+              <RegistrationConfirmation state={confirmation} />
             ) : (
               <>
                 <CardHeader>
@@ -84,7 +102,7 @@ export default function CrownRegistration({ setOpenPage }: PageProps) {
                   <PageIntro>{b3Lang('crownRegistration.page.intro')}</PageIntro>
                 </CardHeader>
                 <CardBody>
-                  <RegistrationForm key={resetKey} onSubmitted={setSubmitted} />
+                  <RegistrationForm onSubmitted={handleSubmitted} />
                 </CardBody>
               </>
             )}

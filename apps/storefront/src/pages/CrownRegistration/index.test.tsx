@@ -10,6 +10,8 @@ import {
   within,
 } from 'tests/test-utils';
 
+import { CustomStyleContext } from '@/shared/customStyleButton';
+import { initState } from '@/shared/customStyleButton/context/config';
 import { Country } from '@/shared/global/context/config';
 import * as b2bService from '@/shared/service/b2b';
 import { getVSAPIBaseURL } from '@/shared/service/vs/request/base';
@@ -18,6 +20,11 @@ import b2bLogger from '@/utils/b3Logger';
 import CrownRegistration from './index';
 
 vi.setConfig({ testTimeout: 30000 });
+
+// The real login is covered in useAutoLogin.test.tsx
+const autoLoginMock = vi.hoisted(() => vi.fn());
+
+vi.mock('./useAutoLogin', () => ({ useAutoLogin: () => autoLoginMock }));
 
 // The real widget needs Cloudflare's script inside the iframe. This fake issues a
 // token on mount and lets tests emit new ones (a reset clears the token, as in life).
@@ -78,11 +85,25 @@ const validateUrl = () => `${getVSAPIBaseURL()}/storefront/registration/validate
 
 type User = ReturnType<typeof renderWithProviders>['user'];
 
-const renderPage = (initialGlobalContext: Record<string, unknown> = {}) =>
-  renderWithProviders(<CrownRegistration setOpenPage={vi.fn()} />, {
-    initialGlobalContext: { countriesList, registerEnabled: true, ...initialGlobalContext },
-    initialEntries: ['/register'],
-  });
+// Accounts are pending approval unless a test turns auto approval on.
+const renderPage = (
+  initialGlobalContext: Record<string, unknown> = {},
+  { autoApproval = false }: { autoApproval?: boolean } = {},
+) =>
+  renderWithProviders(
+    <CustomStyleContext.Provider
+      value={{
+        state: { ...initState, companyAutoApproval: { enabled: autoApproval } },
+        dispatch: vi.fn(),
+      }}
+    >
+      <CrownRegistration setOpenPage={vi.fn()} />
+    </CustomStyleContext.Provider>,
+    {
+      initialGlobalContext: { countriesList, registerEnabled: true, ...initialGlobalContext },
+      initialEntries: ['/register'],
+    },
+  );
 
 const section = (name: RegExp) => screen.getByRole('region', { name });
 
@@ -385,10 +406,7 @@ describe('CrownRegistration page', () => {
       },
       shippingAddress: { sameAsBilling: true },
     });
-    expect(screen.getByText('ada@acmefoods.com')).toBeVisible();
-    expect(screen.getByText('Acme Foods')).toBeVisible();
-    expect(screen.getByText('Ada Lovelace')).toBeVisible();
-    expect(screen.getByText('CC-ABC123')).toBeVisible();
+    expect(autoLoginMock).not.toHaveBeenCalled();
   });
 
   it('submits a separate Canadian shipping address with its region name', async () => {
@@ -807,18 +825,54 @@ describe('CrownRegistration page', () => {
     expect(requests).toHaveLength(1);
   });
 
-  it('starts over with an empty form after "Submit another account"', async () => {
-    respondWith(success);
-    const { user } = renderPage();
+  describe('after a successful registration', () => {
+    it('logs in with the submitted credentials when the account is auto-approved', async () => {
+      autoLoginMock.mockResolvedValue(true);
+      respondWith(success);
+      const { user } = renderPage({}, { autoApproval: true });
 
-    await fillValidForm(user);
-    await user.click(submitButton());
-    await user.click(await screen.findByRole('button', { name: 'Submit another account' }));
+      await fillValidForm(user);
+      await user.click(submitButton());
 
-    expect(screen.getByLabelText(/company name/i)).toHaveValue('');
-    expect(within(section(/billing address/i)).getByLabelText(/^country/i)).toHaveValue('US');
-    expect(screen.getByRole('checkbox', { name: /same as billing/i })).toBeChecked();
-    expect(screen.getByRole('checkbox', { name: /privacy policy/i })).not.toBeChecked();
+      expect(await screen.findByText('Signing you in…')).toBeVisible();
+      expect(autoLoginMock).toHaveBeenCalledTimes(1);
+      expect(autoLoginMock).toHaveBeenCalledWith({
+        email: 'ada@acmefoods.com',
+        password: 'secret123',
+      });
+      expect(screen.queryByRole('button', { name: 'Sign in' })).toBeNull();
+    });
+
+    it('offers a sign-in button when the automatic login fails', async () => {
+      autoLoginMock.mockResolvedValue(false);
+      respondWith(success);
+      const { user, navigation } = renderPage({}, { autoApproval: true });
+
+      await fillValidForm(user);
+      await user.click(submitButton());
+
+      expect(await screen.findByText(/We couldn't sign you in automatically/)).toBeVisible();
+      await user.click(screen.getByRole('button', { name: 'Sign in' }));
+
+      await waitFor(() => expect(navigation).toHaveBeenCalledWith('/login'));
+    });
+
+    it('does not log in, and links to sign in, when the account is pending approval', async () => {
+      respondWith(success);
+      const { user, navigation } = renderPage();
+
+      await fillValidForm(user);
+      await user.click(submitButton());
+
+      expect(
+        await screen.findByRole('heading', { name: 'Your account is pending approval' }),
+      ).toBeVisible();
+      expect(autoLoginMock).not.toHaveBeenCalled();
+      expect(screen.queryByRole('button', { name: 'Submit another account' })).toBeNull();
+      await user.click(screen.getByRole('button', { name: 'Sign in' }));
+
+      await waitFor(() => expect(navigation).toHaveBeenCalledWith('/login'));
+    });
   });
 
   it('does not log anything when the email lookup fails', async () => {

@@ -255,15 +255,6 @@ export const ConfirmationRoot = styled.div`
   }
 `;
 
-export const Eyebrow = styled.span`
-  font-family: ${crownFonts.cond};
-  font-weight: 600;
-  font-size: 13px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: ${crownColors.red};
-`;
-
 export const ConfirmationTitle = styled.h1`
   font-family: ${crownFonts.comp};
   font-weight: 600;
@@ -278,32 +269,6 @@ export const ConfirmationBody = styled.p`
   line-height: 1.55;
   color: ${crownColors.bodyText};
   margin: 0;
-`;
-
-export const SummaryBox = styled.dl`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 18px 28px;
-  margin: 0;
-  padding: 18px 20px;
-  background: ${crownColors.fieldFill};
-  border: 1px solid ${crownColors.border};
-
-  dt {
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: ${crownColors.mutedText};
-    margin: 0 0 4px;
-  }
-
-  dd {
-    font-size: 15px;
-    color: ${crownColors.navy};
-    margin: 0;
-    overflow-wrap: anywhere;
-  }
 `;
 
 export const ActionRow = styled.div`
