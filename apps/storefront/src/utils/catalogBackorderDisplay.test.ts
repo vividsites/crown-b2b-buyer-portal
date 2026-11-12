@@ -1,0 +1,765 @@
+import { describe, expect, it } from 'vitest';
+
+import type { CatalogQuickVariantSku, ProductSearch } from '@/shared/service/b2b/graphql/product';
+import type { Variant } from '@/types/products';
+import type { ShoppingListProductItem } from '@/types/shoppingList';
+
+import {
+  buildVariantSkuDependencyKey,
+  catalogListHasBackorderedItemsForDisplay,
+  catalogListHasPicklistBackorderedItemsForDisplay,
+  getCatalogBackorderDisplayFields,
+  getCatalogBackorderDisplayQuantity,
+  getCatalogBackorderFieldsForVariantSku,
+  getCatalogInventoryRowFromSearchProduct,
+  getCatalogInventorySku,
+  getCatalogProductRowDisplayState,
+  getPicklistBackorderHistoryFields,
+  getPicklistSelectionsFromStoredOptions,
+  getProductDetailsForPicklistSelections,
+  productRequiresChooseOptionsBeforeAdd,
+  quantityExceedsAvailableToSell,
+  shouldBlockQuoteAtsAdd,
+  type StoredPicklistOptionRow,
+} from './catalogBackorderDisplay';
+
+describe('catalogBackorderDisplay', () => {
+  it('buildVariantSkuDependencyKey deduplicates, filters empty values, and sorts skus', () => {
+    expect(buildVariantSkuDependencyKey(['B-SKU', 'A-SKU', 'B-SKU', '', null, undefined])).toBe(
+      'A-SKU|B-SKU',
+    );
+  });
+
+  describe('productRequiresChooseOptionsBeforeAdd', () => {
+    it('returns true when allOptions has entries', () => {
+      expect(productRequiresChooseOptionsBeforeAdd({ allOptions: [{ id: 1 }] })).toBe(true);
+    });
+
+    it('returns false when allOptions is empty or missing', () => {
+      expect(productRequiresChooseOptionsBeforeAdd({ allOptions: [] })).toBe(false);
+      expect(productRequiresChooseOptionsBeforeAdd({})).toBe(false);
+      expect(productRequiresChooseOptionsBeforeAdd({ allOptions: null })).toBe(false);
+    });
+
+    it('returns false when allOptions is not an array', () => {
+      expect(productRequiresChooseOptionsBeforeAdd({ allOptions: 'Size' })).toBe(false);
+    });
+  });
+
+  it('quantityExceedsAvailableToSell is false when unlimited backorder', () => {
+    const row = {
+      inventoryTracking: 'variant',
+      unlimitedBackorder: true,
+      availableToSell: 2,
+    } as CatalogQuickVariantSku;
+
+    expect(quantityExceedsAvailableToSell(100, row)).toBe(false);
+  });
+
+  it('quantityExceedsAvailableToSell is false when tracking is none', () => {
+    const row = {
+      inventoryTracking: 'none',
+      availableToSell: 0,
+    } as CatalogQuickVariantSku;
+
+    expect(quantityExceedsAvailableToSell(100, row)).toBe(false);
+  });
+
+  it('quantityExceedsAvailableToSell when qty exceeds available to sell', () => {
+    const row = {
+      inventoryTracking: 'variant',
+      unlimitedBackorder: false,
+      availableToSell: 5,
+    } as CatalogQuickVariantSku;
+
+    expect(quantityExceedsAvailableToSell(6, row)).toBe(true);
+    expect(quantityExceedsAvailableToSell(5, row)).toBe(false);
+  });
+
+  it('quantityExceedsAvailableToSell is false when row is undefined', () => {
+    expect(quantityExceedsAvailableToSell(10, undefined)).toBe(false);
+  });
+
+  describe('shouldBlockQuoteAtsAdd', () => {
+    const trackedRow = {
+      inventoryTracking: 'variant',
+      unlimitedBackorder: false,
+      availableToSell: 5,
+    } as CatalogQuickVariantSku;
+
+    it('allows add when catalog inventory row is missing', () => {
+      expect(shouldBlockQuoteAtsAdd(1, undefined)).toBe(false);
+    });
+
+    it('blocks add when quantity exceeds available to sell', () => {
+      expect(shouldBlockQuoteAtsAdd(6, trackedRow)).toBe(true);
+    });
+
+    it('allows add when quantity is within available to sell', () => {
+      expect(shouldBlockQuoteAtsAdd(5, trackedRow)).toBe(false);
+    });
+
+    it('allows add when unlimited backorder is true', () => {
+      expect(
+        shouldBlockQuoteAtsAdd(100, {
+          ...trackedRow,
+          unlimitedBackorder: true,
+        }),
+      ).toBe(false);
+    });
+
+    it('allows add when inventory tracking is none', () => {
+      expect(
+        shouldBlockQuoteAtsAdd(100, {
+          inventoryTracking: 'none',
+          availableToSell: 0,
+        } as CatalogQuickVariantSku),
+      ).toBe(false);
+    });
+  });
+
+  it('getCatalogBackorderDisplayQuantity caps at available to sell when qty exceeds it', () => {
+    const row = {
+      inventoryTracking: 'variant',
+      unlimitedBackorder: false,
+      availableToSell: 10,
+      totalOnHand: 9,
+    } as CatalogQuickVariantSku;
+
+    expect(getCatalogBackorderDisplayQuantity(100, row)).toBe(10);
+  });
+
+  it('getCatalogBackorderDisplayQuantity returns qty when within available to sell', () => {
+    const row = {
+      inventoryTracking: 'variant',
+      unlimitedBackorder: false,
+      availableToSell: 10,
+    } as CatalogQuickVariantSku;
+
+    expect(getCatalogBackorderDisplayQuantity(7, row)).toBe(7);
+  });
+
+  it('getCatalogBackorderDisplayQuantity returns qty when row undefined', () => {
+    expect(getCatalogBackorderDisplayQuantity(100, undefined)).toBe(100);
+  });
+
+  it('backorder fields from capped qty when raw qty far exceeds available to sell', () => {
+    const row = {
+      inventoryTracking: 'variant',
+      unlimitedBackorder: false,
+      availableToSell: 10,
+      totalOnHand: 9,
+      backorderMessage: '2-4 weeks',
+    } as CatalogQuickVariantSku;
+
+    const capped = getCatalogBackorderDisplayQuantity(100, row);
+    expect(getCatalogBackorderDisplayFields(capped, row)).toEqual({
+      totalOnHand: 9,
+      quantityBackordered: 1,
+      backorderMessage: '2-4 weeks',
+    });
+  });
+
+  it('getCatalogBackorderDisplayFields computes quantity backordered vs total on hand', () => {
+    const row = {
+      inventoryTracking: 'variant',
+      totalOnHand: 9,
+      backorderMessage: 'Ships in 2 weeks',
+    } as CatalogQuickVariantSku;
+
+    const fields = getCatalogBackorderDisplayFields(10, row);
+
+    expect(fields).toEqual({
+      totalOnHand: 9,
+      quantityBackordered: 1,
+      backorderMessage: 'Ships in 2 weeks',
+    });
+  });
+
+  it('getCatalogBackorderDisplayFields returns null when no backordered quantity', () => {
+    const row = {
+      inventoryTracking: 'variant',
+      totalOnHand: 10,
+    } as CatalogQuickVariantSku;
+
+    expect(getCatalogBackorderDisplayFields(10, row)).toBeNull();
+  });
+
+  it('getCatalogBackorderDisplayFields returns null when inventory tracking is none', () => {
+    const row = {
+      inventoryTracking: 'none',
+      totalOnHand: 0,
+    } as CatalogQuickVariantSku;
+
+    expect(getCatalogBackorderDisplayFields(10, row)).toBeNull();
+  });
+
+  it('getCatalogBackorderDisplayFields returns null when row is undefined', () => {
+    expect(getCatalogBackorderDisplayFields(10, undefined)).toBeNull();
+  });
+
+  it('getCatalogBackorderDisplayFields returns null when totalOnHand is null', () => {
+    const row = {
+      inventoryTracking: 'variant',
+      totalOnHand: null,
+    } as CatalogQuickVariantSku;
+
+    expect(getCatalogBackorderDisplayFields(10, row)).toBeNull();
+  });
+
+  it('getCatalogBackorderDisplayFields returns null when quantity is 0', () => {
+    const row = {
+      inventoryTracking: 'variant',
+      totalOnHand: 5,
+    } as CatalogQuickVariantSku;
+
+    expect(getCatalogBackorderDisplayFields(0, row)).toBeNull();
+  });
+
+  it('getCatalogBackorderDisplayFields treats negative totalOnHand as fully backordered', () => {
+    const row = {
+      inventoryTracking: 'variant',
+      totalOnHand: -3,
+    } as CatalogQuickVariantSku;
+
+    expect(getCatalogBackorderDisplayFields(10, row)).toEqual({
+      totalOnHand: -3,
+      quantityBackordered: 13,
+      backorderMessage: undefined,
+    });
+  });
+
+  describe('getCatalogInventorySku', () => {
+    it('returns product sku when inventory tracking is product', () => {
+      expect(
+        getCatalogInventorySku({ inventoryTracking: 'product', sku: 'TEE-BASE' }, 'TEE-M'),
+      ).toBe('TEE-BASE');
+    });
+
+    it('returns variant sku when inventory tracking is variant', () => {
+      expect(
+        getCatalogInventorySku({ inventoryTracking: 'variant', sku: 'TEE-BASE' }, 'TEE-M'),
+      ).toBe('TEE-M');
+    });
+
+    it('returns empty string when tracking is none or product is missing', () => {
+      expect(getCatalogInventorySku({ inventoryTracking: 'none', sku: 'TEE-BASE' }, 'TEE-M')).toBe(
+        '',
+      );
+      expect(getCatalogInventorySku(null, 'TEE-M')).toBe('');
+    });
+  });
+
+  describe('getCatalogInventoryRowFromSearchProduct', () => {
+    const productBase = {
+      inventoryTracking: 'variant',
+      availableToSell: 0,
+      unlimitedBackorder: false,
+      totalOnHand: null,
+      backorderMessage: null,
+    } as Pick<
+      ShoppingListProductItem,
+      | 'inventoryTracking'
+      | 'availableToSell'
+      | 'unlimitedBackorder'
+      | 'totalOnHand'
+      | 'backorderMessage'
+    >;
+
+    const variant = {
+      available_to_sell: 10,
+      unlimited_backorder: false,
+      total_on_hand: 3,
+      backorder_message: 'Lead time: 2 weeks',
+    } as Variant;
+
+    it('returns undefined when inventory tracking is none', () => {
+      expect(
+        getCatalogInventoryRowFromSearchProduct(
+          { ...productBase, inventoryTracking: 'none' },
+          variant,
+        ),
+      ).toBeUndefined();
+    });
+
+    it('maps product-level fields when tracking is product', () => {
+      expect(
+        getCatalogInventoryRowFromSearchProduct(
+          {
+            ...productBase,
+            inventoryTracking: 'product',
+            availableToSell: 8,
+            unlimitedBackorder: true,
+            totalOnHand: 5,
+            backorderMessage: 'Ships soon',
+          },
+          variant,
+        ),
+      ).toEqual({
+        inventoryTracking: 'product',
+        availableToSell: 8,
+        unlimitedBackorder: true,
+        totalOnHand: 5,
+        backorderMessage: 'Ships soon',
+      });
+    });
+
+    it('maps variant-level fields when tracking is variant', () => {
+      expect(
+        getCatalogInventoryRowFromSearchProduct(
+          { ...productBase, inventoryTracking: 'variant' },
+          variant,
+        ),
+      ).toEqual({
+        inventoryTracking: 'variant',
+        availableToSell: 10,
+        unlimitedBackorder: false,
+        totalOnHand: 3,
+        backorderMessage: 'Lead time: 2 weeks',
+      });
+    });
+
+    it('returns undefined for variant tracking when variant is not resolved', () => {
+      expect(
+        getCatalogInventoryRowFromSearchProduct(
+          { ...productBase, inventoryTracking: 'variant' },
+          null,
+        ),
+      ).toBeUndefined();
+    });
+  });
+
+  describe('getCatalogBackorderFieldsForVariantSku', () => {
+    const inventoryRow = {
+      inventoryTracking: 'variant',
+      variantSku: 'SKU-1',
+      availableToSell: 5,
+      totalOnHand: 3,
+      backorderMessage: '2 weeks',
+    } as CatalogQuickVariantSku;
+
+    it('returns null when variantSku is missing', () => {
+      expect(
+        getCatalogBackorderFieldsForVariantSku({
+          quantity: 10,
+          inventoryBySku: { 'SKU-1': inventoryRow },
+        }),
+      ).toBeNull();
+    });
+
+    it('returns null when sku is not in inventoryBySku', () => {
+      expect(
+        getCatalogBackorderFieldsForVariantSku({
+          quantity: 10,
+          variantSku: 'UNKNOWN',
+          inventoryBySku: { 'SKU-1': inventoryRow },
+        }),
+      ).toBeNull();
+    });
+
+    it('resolves catalog row by sku and computes backorder fields', () => {
+      expect(
+        getCatalogBackorderFieldsForVariantSku({
+          quantity: 10,
+          variantSku: 'sku-1',
+          inventoryBySku: { 'SKU-1': inventoryRow },
+        }),
+      ).toEqual({
+        totalOnHand: 3,
+        quantityBackordered: 2,
+        backorderMessage: '2 weeks',
+      });
+    });
+  });
+
+  describe('getCatalogProductRowDisplayState', () => {
+    const inventoryRow = {
+      inventoryTracking: 'variant',
+      unlimitedBackorder: false,
+      availableToSell: 5,
+      totalOnHand: 3,
+      backorderMessage: '2 weeks',
+    } as CatalogQuickVariantSku;
+
+    const formatOnlyAvailable = (count: number) => `Only ${count} available`;
+
+    it('uses validation helper text when present', () => {
+      expect(
+        getCatalogProductRowDisplayState({
+          qty: 10,
+          productHelperText: 'Server error',
+          showAvailableToSellHelper: true,
+          inventoryRow,
+          backorderUiEnabled: true,
+          formatOnlyAvailable,
+        }).qtyHelperText,
+      ).toBe('Server error');
+    });
+
+    it('falls back to available-to-sell helper when validation helper is cleared', () => {
+      expect(
+        getCatalogProductRowDisplayState({
+          qty: 10,
+          productHelperText: '',
+          showAvailableToSellHelper: true,
+          inventoryRow,
+          backorderUiEnabled: true,
+          formatOnlyAvailable,
+        }).qtyHelperText,
+      ).toBe('Only 5 available');
+    });
+
+    it('returns null backorder fields when backorder UI is disabled', () => {
+      expect(
+        getCatalogProductRowDisplayState({
+          qty: 10,
+          showAvailableToSellHelper: true,
+          inventoryRow,
+          backorderUiEnabled: false,
+          formatOnlyAvailable,
+        }).backorderFields,
+      ).toBeNull();
+    });
+  });
+
+  describe('catalogListHasBackorderedItemsForDisplay', () => {
+    const inventoryRow = {
+      inventoryTracking: 'variant',
+      variantSku: 'SKU-1',
+      availableToSell: 10,
+      totalOnHand: 3,
+      backorderMessage: '2 weeks',
+    } as CatalogQuickVariantSku;
+
+    const inventoryBySku = { 'SKU-1': inventoryRow };
+
+    it('returns false for an empty list', () => {
+      expect(catalogListHasBackorderedItemsForDisplay([], inventoryBySku)).toBe(false);
+    });
+
+    it('returns true when any item has backordered quantity', () => {
+      expect(
+        catalogListHasBackorderedItemsForDisplay(
+          [{ qty: 10, variantSku: 'SKU-1' }],
+          inventoryBySku,
+        ),
+      ).toBe(true);
+    });
+
+    it('returns false when qty is within on hand', () => {
+      expect(
+        catalogListHasBackorderedItemsForDisplay([{ qty: 3, variantSku: 'SKU-1' }], inventoryBySku),
+      ).toBe(false);
+    });
+
+    it('returns false when sku is missing from inventory map', () => {
+      expect(
+        catalogListHasBackorderedItemsForDisplay(
+          [{ qty: 10, variantSku: 'UNKNOWN' }],
+          inventoryBySku,
+        ),
+      ).toBe(false);
+    });
+  });
+
+  describe('getProductDetailsForPicklistSelections', () => {
+    const buildRow = (type: string) => ({
+      optionSelections: [{ option_id: 100, value_id: 200 }],
+      productsSearch: {
+        modifiers: [
+          {
+            id: 100,
+            type,
+            display_name: 'Bundle option 1',
+            option_values: [{ id: 200, value_data: { product_id: 555 } }],
+          },
+        ],
+      },
+    });
+
+    it('resolves a product_list selection to its product id', () => {
+      expect(getProductDetailsForPicklistSelections(buildRow('product_list'))).toEqual([
+        { modifierId: 100, displayName: 'Bundle option 1', productId: 555 },
+      ]);
+    });
+
+    it('resolves a product_list_with_images selection to its product id', () => {
+      expect(getProductDetailsForPicklistSelections(buildRow('product_list_with_images'))).toEqual([
+        { modifierId: 100, displayName: 'Bundle option 1', productId: 555 },
+      ]);
+    });
+
+    it('returns an empty array when there are no picklist modifiers', () => {
+      expect(getProductDetailsForPicklistSelections(buildRow('dropdown'))).toEqual([]);
+    });
+
+    it('returns an empty array when optionSelections is missing', () => {
+      expect(
+        getProductDetailsForPicklistSelections({
+          productsSearch: buildRow('product_list').productsSearch,
+        }),
+      ).toEqual([]);
+    });
+
+    it('skips a selected option value that has no product id', () => {
+      expect(
+        getProductDetailsForPicklistSelections({
+          optionSelections: [{ option_id: 100, value_id: 200 }],
+          productsSearch: {
+            modifiers: [
+              {
+                id: 100,
+                type: 'product_list',
+                display_name: 'Bundle option 1',
+                option_values: [{ id: 200, value_data: {} }],
+              },
+            ],
+          },
+        }),
+      ).toEqual([]);
+    });
+
+    it('resolves multiple picklist modifiers into multiple selections', () => {
+      expect(
+        getProductDetailsForPicklistSelections({
+          optionSelections: [
+            { option_id: 100, value_id: 200 },
+            { option_id: 101, value_id: 201 },
+          ],
+          productsSearch: {
+            modifiers: [
+              {
+                id: 100,
+                type: 'product_list',
+                display_name: 'Bundle option 1',
+                option_values: [{ id: 200, value_data: { product_id: 555 } }],
+              },
+              {
+                id: 101,
+                type: 'product_list_with_images',
+                display_name: 'Bundle option 2',
+                option_values: [{ id: 201, value_data: { product_id: 666 } }],
+              },
+            ],
+          },
+        }),
+      ).toEqual([
+        { modifierId: 100, displayName: 'Bundle option 1', productId: 555 },
+        { modifierId: 101, displayName: 'Bundle option 2', productId: 666 },
+      ]);
+    });
+  });
+
+  describe('getPicklistSelectionsFromStoredOptions', () => {
+    const picklistModifier = {
+      id: 100,
+      type: 'product_list',
+      display_name: 'Pick a pickle',
+      option_values: [{ id: 200, value_data: { product_id: 555 } }],
+    };
+
+    const buildRow = (optionList: string): StoredPicklistOptionRow => ({
+      optionList,
+      productsSearch: { modifiers: [picklistModifier] },
+    });
+
+    it('resolves a selection from a camelCase attribute-keyed optionList', () => {
+      const optionList = JSON.stringify([{ optionId: 'attribute[100]', optionValue: '200' }]);
+
+      expect(getPicklistSelectionsFromStoredOptions(buildRow(optionList))).toEqual([
+        { modifierId: 100, displayName: 'Pick a pickle', productId: 555 },
+      ]);
+    });
+
+    it('resolves a selection from snake_case option_id/option_value entries', () => {
+      const optionList = JSON.stringify([{ option_id: 100, option_value: 200 }]);
+
+      expect(getPicklistSelectionsFromStoredOptions(buildRow(optionList))).toEqual([
+        { modifierId: 100, displayName: 'Pick a pickle', productId: 555 },
+      ]);
+    });
+
+    it('resolves a selection from a structured options array', () => {
+      const row: StoredPicklistOptionRow = {
+        options: [{ optionId: 100, optionValue: 200 }],
+        productsSearch: { modifiers: [picklistModifier] },
+      };
+
+      expect(getPicklistSelectionsFromStoredOptions(row)).toEqual([
+        { modifierId: 100, displayName: 'Pick a pickle', productId: 555 },
+      ]);
+    });
+
+    it('resolves a selection from snake_case option_id/option_value options', () => {
+      const row: StoredPicklistOptionRow = {
+        options: [{ option_id: 100, option_value: 200 }],
+        productsSearch: { modifiers: [picklistModifier] },
+      };
+
+      expect(getPicklistSelectionsFromStoredOptions(row)).toEqual([
+        { modifierId: 100, displayName: 'Pick a pickle', productId: 555 },
+      ]);
+    });
+
+    it('prefers the options array when a leftover optionList is also present', () => {
+      const row: StoredPicklistOptionRow = {
+        options: [{ optionId: 100, optionValue: 200 }],
+        optionList: '[]',
+        productsSearch: { modifiers: [picklistModifier] },
+      };
+
+      expect(getPicklistSelectionsFromStoredOptions(row)).toEqual([
+        { modifierId: 100, displayName: 'Pick a pickle', productId: 555 },
+      ]);
+    });
+
+    it('returns an empty array when the modifier is not a picklist', () => {
+      const optionList = JSON.stringify([{ optionId: 'attribute[100]', optionValue: '200' }]);
+      const row: StoredPicklistOptionRow = {
+        optionList,
+        productsSearch: { modifiers: [{ ...picklistModifier, type: 'dropdown' }] },
+      };
+
+      expect(getPicklistSelectionsFromStoredOptions(row)).toEqual([]);
+    });
+
+    it('returns an empty array when optionList is empty', () => {
+      expect(getPicklistSelectionsFromStoredOptions(buildRow('[]'))).toEqual([]);
+    });
+
+    it('returns an empty array when optionList is not valid JSON', () => {
+      expect(getPicklistSelectionsFromStoredOptions(buildRow('not json'))).toEqual([]);
+    });
+
+    it('skips null and primitive entries without throwing on a malformed options array', () => {
+      const row = {
+        options: [
+          null,
+          'x',
+          42,
+          { optionId: 100, optionValue: 200 },
+        ] as StoredPicklistOptionRow['options'],
+        productsSearch: { modifiers: [picklistModifier] },
+      };
+
+      expect(getPicklistSelectionsFromStoredOptions(row)).toEqual([
+        { modifierId: 100, displayName: 'Pick a pickle', productId: 555 },
+      ]);
+    });
+
+    it('skips null and primitive entries without throwing on a malformed optionList', () => {
+      const optionList = JSON.stringify([
+        null,
+        'x',
+        42,
+        { optionId: 'attribute[100]', optionValue: '200' },
+      ]);
+
+      expect(getPicklistSelectionsFromStoredOptions(buildRow(optionList))).toEqual([
+        { modifierId: 100, displayName: 'Pick a pickle', productId: 555 },
+      ]);
+    });
+  });
+
+  describe('catalogListHasPicklistBackorderedItemsForDisplay', () => {
+    const productTrackedPicklist = {
+      id: 555,
+      inventoryTracking: 'product',
+      availableToSell: 10,
+      unlimitedBackorder: false,
+      totalOnHand: 9,
+      backorderMessage: 'Lead time: 2-4 weeks',
+    } as ProductSearch;
+
+    const variantTrackedPicklist = {
+      id: 666,
+      inventoryTracking: 'variant',
+      variants: [
+        {
+          available_to_sell: 10,
+          unlimited_backorder: false,
+          total_on_hand: 9,
+          backorder_message: 'Lead time: 2-4 weeks',
+        },
+      ],
+    } as unknown as ProductSearch;
+
+    const selection = { modifierId: 100, displayName: 'Bundle option 1', productId: 555 };
+
+    it('returns true when a product-tracked picklist item is backordered', () => {
+      expect(
+        catalogListHasPicklistBackorderedItemsForDisplay([{ qty: 10, selections: [selection] }], {
+          555: productTrackedPicklist,
+        }),
+      ).toBe(true);
+    });
+
+    it('returns true when a variant-tracked picklist item is backordered', () => {
+      expect(
+        catalogListHasPicklistBackorderedItemsForDisplay(
+          [{ qty: 10, selections: [{ ...selection, productId: 666 }] }],
+          { 666: variantTrackedPicklist },
+        ),
+      ).toBe(true);
+    });
+
+    it('returns false when qty is within on hand', () => {
+      expect(
+        catalogListHasPicklistBackorderedItemsForDisplay([{ qty: 9, selections: [selection] }], {
+          555: productTrackedPicklist,
+        }),
+      ).toBe(false);
+    });
+
+    it('returns false when the picklist product is missing from the map', () => {
+      expect(
+        catalogListHasPicklistBackorderedItemsForDisplay(
+          [{ qty: 10, selections: [selection] }],
+          {},
+        ),
+      ).toBe(false);
+    });
+  });
+
+  describe('getPicklistBackorderHistoryFields', () => {
+    it('maps a backordered history child to display fields', () => {
+      expect(
+        getPicklistBackorderHistoryFields({
+          product_id: 555,
+          sku: 'CHILD-SKU',
+          backorder_message: 'Lead time: 2-4 weeks',
+          quantity_backordered: 3,
+          total_on_hand: 7,
+        }),
+      ).toEqual({
+        totalOnHand: 7,
+        quantityBackordered: 3,
+        backorderMessage: 'Lead time: 2-4 weeks',
+      });
+    });
+
+    it('returns null when nothing is backordered', () => {
+      expect(
+        getPicklistBackorderHistoryFields({
+          product_id: 555,
+          quantity_backordered: 0,
+          total_on_hand: 10,
+        }),
+      ).toBeNull();
+    });
+
+    it('returns null for an undefined child', () => {
+      expect(getPicklistBackorderHistoryFields(undefined)).toBeNull();
+    });
+
+    it('defaults missing totals and message', () => {
+      expect(
+        getPicklistBackorderHistoryFields({ product_id: 555, quantity_backordered: 2 }),
+      ).toEqual({
+        totalOnHand: 0,
+        quantityBackordered: 2,
+        backorderMessage: undefined,
+      });
+    });
+  });
+});

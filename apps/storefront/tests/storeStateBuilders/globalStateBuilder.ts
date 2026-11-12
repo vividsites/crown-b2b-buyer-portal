@@ -5,7 +5,6 @@ import { builder } from 'tests/builder';
 import { GlobalState } from '@/store/slices/global';
 
 export const buildGlobalStateWith = builder<GlobalState & PersistPartial>(() => ({
-  taxZoneRates: [],
   isClickEnterBtn: faker.datatype.boolean(),
   currentClickedUrl: faker.internet.url(),
   isRegisterAndLogin: faker.datatype.boolean(),
@@ -46,9 +45,17 @@ export const buildGlobalStateWith = builder<GlobalState & PersistPartial>(() => 
   },
   isOpenCompanyHierarchyDropDown: faker.datatype.boolean(),
   backorderEnabled: faker.datatype.boolean(),
+  backorderDisplaySettings: {
+    showQuantityOnBackorder: faker.datatype.boolean(),
+    showQuantityOnHand: faker.datatype.boolean(),
+    showBackorderMessage: faker.datatype.boolean(),
+    showDefaultShippingExpectationPrompt: faker.datatype.boolean(),
+    defaultShippingExpectationPrompt: faker.lorem.sentence(),
+  },
   _persist: {
     version: 1,
     rehydrated: true,
   },
   featureFlags: {},
+  locales: [],
 }));

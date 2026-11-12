@@ -6,19 +6,20 @@ import { B3CustomForm } from '@/components/B3CustomForm';
 import { getContrastColor } from '@/components/outSideComponents/utils/b3CustomStyles';
 import { useB3Lang } from '@/lib/lang';
 
-import { getLoginFields, LoginConfig } from './config';
+import { getLoginFields, LoginConfig } from './helper';
 import LoginWidget from './component/LoginWidget';
 
 interface LoginFormProps {
   loginBtn: string;
   headerText?: string;
-  footerText?: string;
   handleLoginSubmit: (data: LoginConfig) => void;
   backgroundColor: string;
+  isLoading?: boolean;
 }
 
 function LoginForm(props: LoginFormProps) {
-  const { loginBtn, headerText, footerText, handleLoginSubmit, backgroundColor } = props;
+  const { loginBtn, headerText, handleLoginSubmit, backgroundColor, isLoading = false } =
+    props;
 
   const b3Lang = useB3Lang();
   const theme = useTheme();
@@ -37,19 +38,20 @@ function LoginForm(props: LoginFormProps) {
     handleLoginSubmit(data);
   };
 
-  const loginFields = getLoginFields(b3Lang, handleSubmit(handleLoginClick));
+  const loginFields = getLoginFields(b3Lang);
 
   return (
     <Box
       sx={{
         display: 'flex',
         flexDirection: 'column',
+        height: '100%'
       }}
     >
       <Typography
         variant="h5"
         sx={{
-          margin: '0',
+          margin: '0 0 10px 0',
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
@@ -57,16 +59,6 @@ function LoginForm(props: LoginFormProps) {
       >
         {b3Lang('login.loginText.signInHeader')}
       </Typography>
-      {headerText && (
-        <LoginWidget
-          sx={{
-            marginBottom: '20px',
-            minHeight: '48px',
-            width: '100%',
-          }}
-          html={headerText}
-        />
-      )}
       <Box
         sx={{
           width: '100%',
@@ -85,6 +77,7 @@ function LoginForm(props: LoginFormProps) {
             control={control}
             getValues={getValues}
             setValue={setValue}
+            disabled={isLoading}
           />
           <Box
             sx={{
@@ -98,6 +91,7 @@ function LoginForm(props: LoginFormProps) {
             <Button
               type="submit"
               variant="contained"
+              disabled={isLoading}
               sx={{
                 backgroundColor: theme.palette.primary.main,
               }}
@@ -114,14 +108,14 @@ function LoginForm(props: LoginFormProps) {
           </Box>
         </form>
       </Box>
-      {footerText && (
+      {headerText && (
         <LoginWidget
           sx={{
             marginTop: '20px',
             minHeight: '48px',
             width: '100%',
           }}
-          html={footerText}
+          html={headerText}
         />
       )}
     </Box>

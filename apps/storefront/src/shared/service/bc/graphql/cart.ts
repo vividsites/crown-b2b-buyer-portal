@@ -2,9 +2,11 @@ import Cookies from 'js-cookie';
 
 import { CreateCartInput, DeleteCartInput } from '@/types/cart';
 import { LineItem } from '@/utils/b3Product/b3Product';
-import { platform } from '@/utils/basicConfig';
+import { isBigCommercePlatform } from '@/utils/basicConfig';
 
 import B3Request from '../../request/b3Fetch';
+
+import { storefrontGQLRequest } from './client';
 
 const lineItemsFragment = `lineItems {
   physicalItems {
@@ -324,7 +326,7 @@ export interface GetCart {
 }
 
 export const getCart = async (cartId?: string): Promise<GetCart> => {
-  if (platform === 'bigcommerce') {
+  if (isBigCommercePlatform()) {
     const cartInfo = await B3Request.graphqlBC({
       query: getCartInfo,
     });
@@ -349,34 +351,19 @@ export const getCart = async (cartId?: string): Promise<GetCart> => {
 };
 
 export const createNewCart = (data: CreateCartInput): any =>
-  platform === 'bigcommerce'
-    ? B3Request.graphqlBC({
-        query: createCart,
-        variables: data,
-      })
-    : B3Request.graphqlBCProxy({
-        query: createCart,
-        variables: data,
-      });
+  storefrontGQLRequest({
+    query: createCart,
+    variables: data,
+  });
 
 export const addNewLineToCart = (data: any): any =>
-  platform === 'bigcommerce'
-    ? B3Request.graphqlBC({
-        query: addLineItemToCart,
-        variables: data,
-      })
-    : B3Request.graphqlBCProxy({
-        query: addLineItemToCart,
-        variables: data,
-      });
+  storefrontGQLRequest({
+    query: addLineItemToCart,
+    variables: data,
+  });
 
 export const deleteCart = (data: DeleteCartInput): any =>
-  platform === 'bigcommerce'
-    ? B3Request.graphqlBC({
-        query: deleteCartQuery,
-        variables: data,
-      })
-    : B3Request.graphqlBCProxy({
-        query: deleteCartQuery,
-        variables: data,
-      });
+  storefrontGQLRequest({
+    query: deleteCartQuery,
+    variables: data,
+  });

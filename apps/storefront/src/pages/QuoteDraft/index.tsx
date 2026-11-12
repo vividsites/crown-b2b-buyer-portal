@@ -2,7 +2,7 @@ import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowBackIosNew } from '@mui/icons-material';
 import { Box, Checkbox, FormControlLabel, Stack, Typography } from '@mui/material';
-import { cloneDeep, concat, has, isEqual, omit, uniq } from 'lodash-es';
+import { cloneDeep, concat, isEqual, omit, uniq } from 'lodash-es';
 import { v4 as generateUuid } from 'uuid';
 
 import CustomButton from '@/components/button/CustomButton';
@@ -10,8 +10,9 @@ import { getContrastColor } from '@/components/outSideComponents/utils/b3CustomS
 import B3Spin from '@/components/spin/B3Spin';
 import { permissionLevels } from '@/constants';
 import { dispatchEvent } from '@/hooks/useB2BCallback';
+import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 import { useSetCountry } from '@/hooks/useGetCountry';
-import { useIsBackorderValidationEnabled } from '@/hooks/useIsBackorderValidationEnabled';
+import { useIsBackorderEnabled } from '@/hooks/useIsBackorderEnabled';
 import { useMobile } from '@/hooks/useMobile';
 import { useProductRequirements } from '@/hooks/useProductRequirements';
 import { useValidatePermissionWithComparisonType } from '@/hooks/useVerifyPermission';
@@ -48,9 +49,11 @@ import { B3LStorage } from '@/utils/b3Storage';
 import { snackbar } from '@/utils/b3Tip';
 import { channelId, storeHash } from '@/utils/basicConfig';
 import { deleteCartData } from '@/utils/cartUtils';
+import { formatBcCurrencyToDisplayCurrency } from '@/utils/currencyUtils';
 import validateObject from '@/utils/quoteUtils';
 import {
   convertStockAndThresholdValidationErrorToWarning,
+  VALIDATED_PRODUCT_ERROR_TYPES,
   validateProductsLegacy,
 } from '@/utils/validateProducts';
 
@@ -68,6 +71,11 @@ import QuoteSubmissionResponse from '../quote/components/QuoteSubmissionResponse
 import QuoteSummary from '../quote/components/QuoteSummary';
 import QuoteTable from '../quote/components/QuoteTable';
 import getAccountFormFields from '../quote/config';
+import { addPrice } from '../quote/shared/config';
+import {
+  getQuoteValidationErrorMessage,
+  QUOTE_VALIDATION_ERROR_CODES,
+} from '../quote/shared/getQuoteValidationErrorMessage';
 import Container from '../quote/style';
 import getB2BQuoteExtraFields from '../quote/utils/getQuoteExtraFields';
 
@@ -156,6 +164,7 @@ function QuoteDraft({ setOpenPage }: PageProps) {
   );
   const quoteInfoOrigin = useAppSelector(({ quoteInfo }) => quoteInfo.draftQuoteInfo);
   const currency = useAppSelector(activeCurrencyInfoSelector);
+  const displayCurrency = useMemo(() => formatBcCurrencyToDisplayCurrency(currency), [currency]);
   const quoteSubmissionResponseInfo = useAppSelector(
     ({ global }) => global.quoteSubmissionResponse,
   );
@@ -172,7 +181,6 @@ function QuoteDraft({ setOpenPage }: PageProps) {
     },
   } = useContext(CustomStyleContext);
 
-  const isMoveStockAndBackorderValidationToBackend = useIsBackorderValidationEnabled();
   const { requirementsMap, fetchRequirements } = useProductRequirements();
 
   useEffect(() => {
@@ -181,6 +189,9 @@ function QuoteDraft({ setOpenPage }: PageProps) {
       .filter((id): id is number => !!id);
     if (productIds.length) fetchRequirements(productIds);
   }, [draftQuoteList, fetchRequirements]);
+
+  const isBackorderEnabled = useIsBackorderEnabled();
+  const isTbdPriceEnabled = useFeatureFlag('B2B-4089.use_tbd_price_on_quotes_list');
 
   const quotesActionsPermission = useMemo(() => {
     if (isB2BUser) {
@@ -468,7 +479,7 @@ function QuoteDraft({ setOpenPage }: PageProps) {
   };
 
   const addToQuote = async (products: CustomFieldItems[]) => {
-    if (!isMoveStockAndBackorderValidationToBackend) {
+    if (!isBackorderEnabled) {
       addQuoteDraftProducts(products);
       return true;
     }
@@ -477,15 +488,18 @@ function QuoteDraft({ setOpenPage }: PageProps) {
       convertStockAndThresholdValidationErrorToWarning(validatedProducts);
 
     error.forEach((err) => {
-      if (err.error.type === 'network') {
-        snackbar.error(
-          b3Lang('quotes.productValidationFailed', {
-            productName: err.product.node?.productName || '',
-          }),
-        );
-      } else {
-        snackbar.error(err.error.message);
-      }
+      const errorCode =
+        err.error.type === VALIDATED_PRODUCT_ERROR_TYPES.NETWORK
+          ? QUOTE_VALIDATION_ERROR_CODES.NETWORK_ERROR
+          : err.error.errorCode;
+
+      snackbar.error(
+        getQuoteValidationErrorMessage({
+          b3Lang,
+          errorCode,
+          productName: err.product.node?.productName || '',
+        }),
+      );
     });
 
     const validProducts = [...success, ...warning].map((product) => product.product);
@@ -546,12 +560,8 @@ function QuoteDraft({ setOpenPage }: PageProps) {
       return address;
     }
 
-    if (has(masterCopy, 'company')) {
-      masterCopy.companyName = masterCopy.company || '';
-    }
-
     const addressForComparison = omit(address, ['addressId']);
-    const masterCopyForComparison = omit(masterCopy, ['addressId', 'company']);
+    const masterCopyForComparison = omit(masterCopy, ['addressId']);
 
     return {
       ...address,
@@ -568,6 +578,7 @@ function QuoteDraft({ setOpenPage }: PageProps) {
 
     try {
       const info = cloneDeep(quoteInfoOrigin);
+      const { decimalPlaces } = displayCurrency;
       if (isEdit && contactInfoRef?.current) {
         const data = await handleCollectingData(info);
         if (!data) return;
@@ -597,10 +608,7 @@ function QuoteDraft({ setOpenPage }: PageProps) {
         return;
       }
 
-      if (
-        !isAddNonPurchasableOutOfStockToQuoteEnabled &&
-        !isMoveStockAndBackorderValidationToBackend
-      ) {
+      if (!isAddNonPurchasableOutOfStockToQuoteEnabled && !isBackorderEnabled) {
         const itHasInvalidProduct = draftQuoteList.some((item) => {
           return getVariantInfoOOSAndPurchase(item)?.name;
         });
@@ -703,9 +711,9 @@ function QuoteDraft({ setOpenPage }: PageProps) {
         const items = {
           productId: node?.productsSearch?.id,
           sku: node.variantSku,
-          basePrice: Number(node?.basePrice || 0).toFixed(currency.decimal_places),
+          basePrice: Number(node?.basePrice || 0).toFixed(decimalPlaces),
           discount: '0.00',
-          offeredPrice: Number(node?.basePrice || 0).toFixed(currency.decimal_places),
+          offeredPrice: Number(node?.basePrice || 0).toFixed(decimalPlaces),
           quantity: node.quantity,
           variantId: variantsItem?.variant_id,
           imageUrl: node.primaryImage,
@@ -718,15 +726,17 @@ function QuoteDraft({ setOpenPage }: PageProps) {
       });
 
       const fileList = getFileList(quoteInfoOrigin?.fileInfo || []);
+      const { totalIsTbd } = addPrice();
 
       const data = {
         message: newNote,
         legalTerms: '',
         totalAmount: enteredInclusiveTax
-          ? allPrice.toFixed(currency.decimal_places)
-          : (allPrice + allTaxPrice).toFixed(currency.decimal_places),
-        grandTotal: allPrice.toFixed(currency.decimal_places),
-        subtotal: allPrice.toFixed(currency.decimal_places),
+          ? allPrice.toFixed(decimalPlaces)
+          : (allPrice + allTaxPrice).toFixed(decimalPlaces),
+        totalIsTbd: isTbdPriceEnabled ? totalIsTbd : false,
+        grandTotal: allPrice.toFixed(decimalPlaces),
+        subtotal: allPrice.toFixed(decimalPlaces),
         companyId: isB2BUser ? selectCompanyHierarchyId || companyB2BId || salesRepCompanyId : '',
         storeHash,
         quoteTitle,
@@ -738,16 +748,8 @@ function QuoteDraft({ setOpenPage }: PageProps) {
         contactInfo,
         productList,
         fileList,
-        taxTotal: allTaxPrice.toFixed(currency.decimal_places),
-        currency: {
-          currencyExchangeRate: currency.currency_exchange_rate,
-          token: currency.token,
-          location: currency.token_location,
-          decimalToken: currency.decimal_token,
-          decimalPlaces: currency.decimal_places,
-          thousandsToken: currency.thousands_token,
-          currencyCode: currency.currency_code,
-        },
+        taxTotal: allTaxPrice.toFixed(decimalPlaces),
+        currency: displayCurrency,
         referenceNumber: `${info.referenceNumber}` || '',
         extraFields: info.extraFields || [],
         recipients: info.recipients || [],
@@ -759,7 +761,7 @@ function QuoteDraft({ setOpenPage }: PageProps) {
 
       const response = await createQuote(data);
 
-      if (isMoveStockAndBackorderValidationToBackend) {
+      if (isBackorderEnabled) {
         if (response?.error?.extensions?.productValidationErrors?.length) {
           response.error.extensions.productValidationErrors.forEach(
             (err: { productId: number }) => {

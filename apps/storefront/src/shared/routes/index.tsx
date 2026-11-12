@@ -6,7 +6,8 @@ import { store } from '@/store';
 import { CompanyStatus, CustomerRole, UserTypes } from '@/types';
 import { b2bJumpPath } from '@/utils/b3CheckPermissions/b2bPermissionPath';
 import b2bLogger from '@/utils/b3Logger';
-import { isB2bTokenPage, logoutSession } from '@/utils/b3logout';
+import { isB2bTokenPage } from '@/utils/b3logout';
+import { logoutSession } from '@/utils/logoutSession';
 
 import b2bVerifyBcLoginStatus from '../../utils/b2bVerifyBcLoginStatus';
 import { GlobalState } from '../global/context/config';
@@ -36,7 +37,7 @@ const QuickOrder = lazy(() => import('@/pages/QuickOrder'));
 const QuoteDetail = lazy(() => import('@/pages/QuoteDetail'));
 const QuoteDraft = lazy(() => import('@/pages/QuoteDraft'));
 const QuotesList = lazy(() => import('@/pages/QuotesList'));
-const Registered = lazy(() => import('@/pages/Registered'));
+const Registered = lazy(() => import('@/pages/CrownRegistration')); // Crown: stock page is src/pages/Registered
 const RegisteredBCToB2B = lazy(() => import('@/pages/RegisteredBCToB2B'));
 const ShoppingLists = lazy(() => import('@/pages/ShoppingLists'));
 const ShoppingListDetails = lazy(() => import('@/pages/ShoppingListDetails'));

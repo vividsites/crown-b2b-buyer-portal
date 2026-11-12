@@ -13,6 +13,7 @@ import { format, formatDistanceStrict } from 'date-fns';
 
 import { B3CollapseContainer } from '@/components/B3CollapseContainer';
 import B3Spin from '@/components/spin/B3Spin';
+import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 import { useB3Lang } from '@/lib/lang';
 import { GlobalContext } from '@/shared/global';
 import { updateQuote } from '@/shared/service/b2b';
@@ -46,6 +47,7 @@ interface CustomerMessageProps {
 
 function ChatMessage({ msg, isEndMessage, isCustomer }: CustomerMessageProps) {
   const b3Lang = useB3Lang();
+
   return (
     <Box
       sx={{
@@ -140,6 +142,7 @@ function Message({ msgs, id, isB2BUser, email, status }: MsgsProps) {
   const theme = useTheme();
   const primaryColor = theme.palette.primary.main;
   const b3Lang = useB3Lang();
+  const showUserName = useFeatureFlag('B2B-2219.fix_buyer_portal_quote_message_sender_name');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const changeReadRef = useRef(0);
@@ -184,16 +187,20 @@ function Message({ msgs, id, isB2BUser, email, status }: MsgsProps) {
           });
         }
 
-        if (nextMsg.isCustomer === !msg.role?.includes('Sales rep:')) {
+        const isCurrentCustomer = !msg.role?.includes('Sales rep:');
+        const isSameSide = nextMsg.isCustomer === isCurrentCustomer;
+        const isSameSender = isSameSide && (!showUserName || nextMsg.role === msg.role);
+
+        if (isSameSender) {
           getNewMsgs.push({
-            isCustomer: !msg.role?.includes('Sales rep:'),
+            isCustomer: isCurrentCustomer,
             message: msg.message,
             sendTime: msg.date,
             key: msg?.date,
           });
         } else {
           getNewMsgs.push({
-            isCustomer: !msg.role?.includes('Sales rep:'),
+            isCustomer: isCurrentCustomer,
             message: msg.message,
             role: msg.role,
             sendTime: msg.date,
@@ -251,7 +258,8 @@ function Message({ msgs, id, isB2BUser, email, status }: MsgsProps) {
 
   useEffect(() => {
     convertedMsgs(msgs);
-  }, [msgs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [msgs, showUserName]);
 
   useEffect(() => {
     if (messagesEndRef.current && messages.length) {

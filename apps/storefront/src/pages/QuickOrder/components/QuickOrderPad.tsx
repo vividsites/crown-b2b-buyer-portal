@@ -6,8 +6,8 @@ import CustomButton from '@/components/button/CustomButton';
 import { B3Upload } from '@/components/upload/B3Upload';
 import { CART_URL } from '@/constants';
 import { useBlockPendingAccountViewPrice } from '@/hooks/useBlockPendingAccountViewPrice';
-import { useFeatureFlags } from '@/hooks/useFeatureFlags';
-import { useIsBackorderValidationEnabled } from '@/hooks/useIsBackorderValidationEnabled';
+import { useFeatureFlag } from '@/hooks/useFeatureFlag';
+import { useIsBackorderEnabled } from '@/hooks/useIsBackorderEnabled';
 import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
 import { validateProducts } from '@/shared/service/b2b/graphql/product';
@@ -33,10 +33,10 @@ export default function QuickOrderPad() {
   const [addBtnText, setAddBtnText] = useState<string>('Add to cart');
   const [isLoading, setIsLoading] = useState(false);
   const [blockPendingAccountViewPrice] = useBlockPendingAccountViewPrice();
-  const featureFlags = useFeatureFlags();
-  const backendValidationEnabled = useIsBackorderValidationEnabled();
-  const passWithModifiersToProductUpload =
-    featureFlags['B2B-3978.pass_with_modifiers_to_product_upload'] ?? false;
+  const isBackorderEnabled = useIsBackorderEnabled();
+  const passWithModifiersToProductUpload = useFeatureFlag(
+    'B2B-3978.pass_with_modifiers_to_product_upload',
+  );
 
   const companyStatus = useAppSelector(({ company }) => company.companyInfo.status);
 
@@ -326,24 +326,14 @@ export default function QuickOrderPad() {
           })) || [],
       }));
 
-      const validationResult = await validateProducts({ products: productsToValidate });
+      const validationResult = await validateProducts({
+        products: productsToValidate,
+        target: 'CART',
+      });
 
       const outOfStockProducts = validationResult.products.filter(
         (product) => product.errorCode === 'OOS',
       );
-
-      outOfStockProducts.forEach(({ product }) => {
-        snackbar.warning(
-          b3Lang('purchasedProducts.quickOrderPad.notEnoughStock', {
-            variantSku: product.sku,
-          }),
-          {
-            description: b3Lang('purchasedProducts.quickOrderPad.availableAmount', {
-              availableAmount: product.availableToSell,
-            }),
-          },
-        );
-      });
 
       if (outOfStockProducts.length > 0 && stockErrorFile) {
         snackbar.error(
@@ -359,6 +349,19 @@ export default function QuickOrderPad() {
             },
           },
         );
+      } else {
+        outOfStockProducts.forEach(({ product }) => {
+          snackbar.error(
+            b3Lang('purchasedProducts.quickOrderPad.notEnoughStock', {
+              variantSku: product.sku,
+            }),
+            {
+              description: b3Lang('purchasedProducts.quickOrderPad.availableAmount', {
+                availableAmount: product.availableToSell,
+              }),
+            },
+          );
+        });
       }
 
       const nonPurchasableProducts = validationResult.products.filter(
@@ -475,16 +478,16 @@ export default function QuickOrderPad() {
         },
       };
 
-    const isPassVerify = await addCartProductToVerify([currentProduct], b3Lang);
+    const validProducts = await addCartProductToVerify([currentProduct], b3Lang);
 
     try {
-      if (isPassVerify) {
+      if (validProducts.length > 0) {
         if (!await validateRequirements([{
           productId: Number(product.id),
           quantity: Number(product.quantity),
           variantSku: product.sku || product.variantSku || '',
         }])) return;
-        await addSingleProductToCart(product);
+        await addSingleProductToCart(validProducts[0].node?.productsSearch ?? product);
       }
     } catch (error) {
       b2bLogger.error(error);
@@ -534,9 +537,7 @@ export default function QuickOrderPad() {
 
           <SearchProduct
             addToList={
-              backendValidationEnabled
-                ? handleBackendQuickSearchAddToCart
-                : handleQuickSearchAddCart
+              isBackorderEnabled ? handleBackendQuickSearchAddToCart : handleQuickSearchAddCart
             }
           />
 
@@ -558,7 +559,7 @@ export default function QuickOrderPad() {
       <B3Upload
         isOpen={isOpenBulkLoadCSV}
         setIsOpen={setIsOpenBulkLoadCSV}
-        handleAddToList={backendValidationEnabled ? handleAddCSVToCart : handleAddToCart}
+        handleAddToList={isBackorderEnabled ? handleAddCSVToCart : handleAddToCart}
         setProductData={setProductData}
         addBtnText={addBtnText}
         isLoading={isLoading}

@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FieldValues, useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
-import { Box, Typography } from '@mui/material';
+import { Alert, Box, Typography } from '@mui/material';
 import Cookies from 'js-cookie';
 
 import { B3CustomForm } from '@/components/B3CustomForm';
 import B3Dialog from '@/components/B3Dialog';
 import { CART_URL } from '@/constants';
-import { useIsBackorderValidationEnabled } from '@/hooks/useIsBackorderValidationEnabled';
+import { useBackorderStorefrontMessaging } from '@/hooks/useBackorderStorefrontMessaging';
 import { useMobile } from '@/hooks/useMobile';
 import { useProductRequirements } from '@/hooks/useProductRequirements';
 import { useB3Lang } from '@/lib/lang';
@@ -15,17 +15,27 @@ import {
   addProductToBcShoppingList,
   addProductToShoppingList,
   getVariantInfoBySkus,
+  searchProducts,
 } from '@/shared/service/b2b';
-import { isB2BUserSelector, useAppSelector } from '@/store';
+import {
+  type CatalogQuickVariantSku,
+  type ProductSearch,
+  QUOTE_VALIDATION_ERROR_CODES,
+} from '@/shared/service/b2b/graphql/product';
+import { activeCurrencyInfoSelector, isB2BUserSelector, useAppSelector } from '@/store';
 import b2bLogger from '@/utils/b3Logger';
 import { snackbar } from '@/utils/b3Tip';
 import b3TriggerCartNumber from '@/utils/b3TriggerCartNumber';
 import { BigCommerceStorefrontAPIBaseURL } from '@/utils/basicConfig';
 import { createOrUpdateExistingCart } from '@/utils/cartUtils';
-import { validateProductsLegacy as rawValidateProducts } from '@/utils/validateProducts';
+import {
+  VALIDATED_PRODUCT_ERROR_TYPES,
+  validateProductsLegacy as rawValidateProducts,
+} from '@/utils/validateProducts';
 
 import { EditableProductItem, OrderProductItem } from '../../../types';
 import getReturnFormFields from '../shared/config';
+import { getOrderPicklistSelections } from '../shared/getOrderPicklistSelections';
 
 import CreateShoppingList from './CreateShoppingList';
 import OrderCheckboxProduct from './OrderCheckboxProduct';
@@ -51,6 +61,7 @@ interface OrderDialogProps {
   currentDialogData?: DialogData;
   itemKey: string;
   orderId: number;
+  currencyCode?: string;
 }
 
 interface ReturnListProps {
@@ -68,6 +79,18 @@ const getXsrfToken = (): string | undefined => {
   return decodeURIComponent(token);
 };
 
+const indexVariantRowsBySku = (
+  rows: CatalogQuickVariantSku[],
+): Record<string, CatalogQuickVariantSku> => {
+  const bySku: Record<string, CatalogQuickVariantSku> = {};
+  rows.forEach((row) => {
+    if (row.variantSku) {
+      bySku[row.variantSku.toUpperCase()] = row;
+    }
+  });
+  return bySku;
+};
+
 const validateProducts = async (products: EditableProductItem[]) => {
   return rawValidateProducts(
     products.map((product) => ({
@@ -83,6 +106,7 @@ const validateProducts = async (products: EditableProductItem[]) => {
 
       allOptions: product.product_options,
     })),
+    'CART',
   );
 };
 
@@ -94,17 +118,30 @@ export default function OrderDialog({
   setOpen,
   itemKey,
   orderId,
+  currencyCode,
 }: OrderDialogProps) {
   const navigate = useNavigate();
-  const backendValidationEnabled = useIsBackorderValidationEnabled();
+  const { isBackorderMessagingContextEnabled: isReorderAtsEnabled, hasAnyBackorderDisplay } =
+    useBackorderStorefrontMessaging();
+  const backorderUiEnabled =
+    isReorderAtsEnabled &&
+    hasAnyBackorderDisplay &&
+    (type === 'reOrder' || type === 'shoppingList');
   const isB2BUser = useAppSelector(isB2BUserSelector);
+  const { currency_code: activeCurrencyCode } = useAppSelector(activeCurrencyInfoSelector);
+  const companyInfoId = useAppSelector(({ company }) => company.companyInfo.id);
+  const customerGroupId = useAppSelector(({ company }) => company.customer.customerGroupId);
   const [isOpenCreateShopping, setOpenCreateShopping] = useState(false);
   const [openShoppingList, setOpenShoppingList] = useState(false);
   const [editableProducts, setEditableProducts] = useState<EditableProductItem[]>([]);
-  const [variantInfoList, setVariantInfoList] = useState<CustomFieldItems[]>([]);
+  const [variantInfoList, setVariantInfoList] = useState<CatalogQuickVariantSku[]>([]);
+  const [picklistProductsById, setPicklistProductsById] = useState<Record<number, ProductSearch>>(
+    {},
+  );
   const [isRequestLoading, setIsRequestLoading] = useState(false);
   const [checkedArr, setCheckedArr] = useState<number[]>([]);
   const [returnArr, setReturnArr] = useState<ReturnListProps[]>([]);
+  const [reorderValidationBanner, setReorderValidationBanner] = useState(false);
 
   const [returnFormFields] = useState(getReturnFormFields());
 
@@ -269,7 +306,7 @@ export default function OrderDialog({
     const items: CustomFieldItems[] = [];
     const skus: string[] = [];
     editableProducts.forEach((product) => {
-      if (checkedArr.includes(product.variant_id)) {
+      if (checkedArr.includes(product.id)) {
         items.push({
           quantity: parseInt(`${product.editQuantity}`, 10) || 1,
           productId: product.product_id,
@@ -317,11 +354,13 @@ export default function OrderDialog({
   };
 
   const handleReorderBackend = async () => {
-    const items = editableProducts.filter((product) => checkedArr.includes(product.variant_id));
+    const items = editableProducts.filter((product) => checkedArr.includes(product.id));
 
     if (items.length <= 0) {
       return;
     }
+
+    setReorderValidationBanner(false);
 
     if (!validateRequirements(items)) {
       snackbar.error(b3Lang('purchasedProducts.error.fillCorrectQuantity'));
@@ -337,12 +376,32 @@ export default function OrderDialog({
     });
 
     validationResult.error.forEach(({ product, error }) => {
-      if (error.type === 'network') {
+      if (error.type === VALIDATED_PRODUCT_ERROR_TYPES.NETWORK) {
         helperTextMap.set(product.variantId, b3Lang('orderDetail.reorder.failedToAdd.helperText'));
-      } else {
-        helperTextMap.set(product.variantId, error.message || '');
+      } else if (error.type === VALIDATED_PRODUCT_ERROR_TYPES.VALIDATION) {
+        helperTextMap.set(
+          product.variantId,
+          error.errorCode === QUOTE_VALIDATION_ERROR_CODES.OOS
+            ? b3Lang('orderDetail.reorder.onlyAvailable', { count: error.availableToSell })
+            : error.message || '',
+        );
       }
     });
+
+    const hasValidationErrors = validationResult.error.some(
+      ({ error }) => error.type === VALIDATED_PRODUCT_ERROR_TYPES.VALIDATION,
+    );
+    const hasNetworkErrors = validationResult.error.some(
+      ({ error }) => error.type === VALIDATED_PRODUCT_ERROR_TYPES.NETWORK,
+    );
+
+    if (hasValidationErrors && !hasNetworkErrors) {
+      setReorderValidationBanner(true);
+    }
+
+    if (hasNetworkErrors) {
+      snackbar.error(b3Lang('orderDetail.reorder.addToCartError'));
+    }
 
     const successVariantIds = validationResult.success.map(({ product }) => product.variantId);
 
@@ -364,7 +423,9 @@ export default function OrderDialog({
     );
 
     if (validationResult.success.length === 0) {
-      snackbar.error(b3Lang('orderDetail.reorder.addToCartError'));
+      if (!hasValidationErrors && !hasNetworkErrors) {
+        snackbar.error(b3Lang('orderDetail.reorder.addToCartError'));
+      }
       return;
     }
 
@@ -376,19 +437,19 @@ export default function OrderDialog({
     // This will throw if there are errors, no need to check the response
     await createOrUpdateExistingCart(validItems);
 
-    const successfulVariantIds = validItems.map((item) => item.variantId);
+    const successfulLineItemIds = validItems
+      .map((item) => editableProducts.find((p) => p.product_id === item.productId)?.id)
+      .filter((id): id is number => id != null);
 
-    if (successfulVariantIds.length === checkedArr.length) {
+    if (validItems.length === checkedArr.length) {
       setOpen(false);
+      setReorderValidationBanner(false);
       showSuccessSnackbarWithCartLink(b3Lang('orderDetail.reorder.productsAdded'));
     } else {
-      snackbar.error(b3Lang('orderDetail.reorder.addToCartError'));
       showSuccessSnackbarWithCartLink(
         b3Lang('orderDetail.reorder.partialSuccess', { count: validItems.length }),
       );
-      setCheckedArr((prev) =>
-        prev.filter((variantId) => !successfulVariantIds.includes(variantId)),
-      );
+      setCheckedArr((prev) => prev.filter((id) => !successfulLineItemIds.includes(id)));
     }
   };
 
@@ -396,7 +457,7 @@ export default function OrderDialog({
     try {
       setIsRequestLoading(true);
 
-      if (backendValidationEnabled) {
+      if (isReorderAtsEnabled) {
         await handleReorderBackend();
       } else {
         await handleReorderOnFrontend();
@@ -448,29 +509,30 @@ export default function OrderDialog({
   const handleShoppingConfirm = async (id: string) => {
     setIsRequestLoading(true);
     try {
-      const items = editableProducts.map((product) => {
-        const {
-          product_id: productId,
-          variant_id: variantId,
-          editQuantity,
-          product_options: productOptions,
-        } = product;
+      const params = editableProducts
+        .filter((product) => checkedArr.includes(product.id))
+        .map((product) => {
+          const {
+            product_id: productId,
+            variant_id: variantId,
+            editQuantity,
+            product_options: productOptions,
+          } = product;
 
-        return {
-          productId: Number(productId),
-          variantId,
-          quantity: Number(editQuantity),
-          optionList: productOptions.map((option) => {
-            const { product_option_id: optionId, value: optionValue } = option;
+          return {
+            productId: Number(productId),
+            variantId,
+            quantity: Number(editQuantity),
+            optionList: productOptions.map((option) => {
+              const { product_option_id: optionId, value: optionValue } = option;
 
-            return {
-              optionId: `attribute[${optionId}]`,
-              optionValue,
-            };
-          }),
-        };
-      });
-      const params = items.filter((item) => checkedArr.includes(Number(item.variantId)));
+              return {
+                optionId: `attribute[${optionId}]`,
+                optionValue,
+              };
+            }),
+          };
+        });
 
       const addToShoppingList = isB2BUser ? addProductToShoppingList : addProductToBcShoppingList;
 
@@ -504,8 +566,24 @@ export default function OrderDialog({
     setOpenShoppingList(true);
   };
 
+  const catalogInventoryBySku = useMemo(() => {
+    const map: Record<string, CatalogQuickVariantSku> = {};
+    variantInfoList.forEach((row) => {
+      if (row.variantSku) {
+        map[row.variantSku.toUpperCase()] = row;
+      }
+    });
+    return map;
+  }, [variantInfoList]);
+
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setVariantInfoList([]);
+      setPicklistProductsById({});
+      setIsRequestLoading(false);
+      return () => {};
+    }
+
     setEditableProducts(
       products.map((item: OrderProductItem) => ({
         ...item,
@@ -513,28 +591,93 @@ export default function OrderDialog({
       })),
     );
     setCheckedArr([]);
+    setVariantInfoList([]);
+    setPicklistProductsById({});
 
-    const productIds = products
-      .map((p) => p.product_id)
-      .filter((id): id is number => !!id);
+    let cancelled = false;
+
+    setReorderValidationBanner(false);
+
+    const productIds = products.map((p) => p.product_id).filter((id): id is number => !!id);
     if (productIds.length) fetchRequirements(productIds);
 
-    const getVariantInfoByList = async () => {
+    const loadInventory = async () => {
       const visibleProducts = products.filter((item: OrderProductItem) => item?.isVisible);
 
       const visibleSkus = visibleProducts.map((product) => product.sku);
 
-      if (visibleSkus.length === 0) return;
+      if (visibleSkus.length === 0) {
+        setIsRequestLoading(false);
+        return;
+      }
 
-      const { variantSku: variantInfoList = [] } = await getVariantInfoBySkus(visibleSkus);
+      setIsRequestLoading(true);
 
-      setVariantInfoList(variantInfoList);
+      try {
+        const { variantSku: nextVariantInfoList = [] } = await getVariantInfoBySkus(visibleSkus);
+
+        const nextPicklistProductsById: Record<number, ProductSearch> = {};
+        if (backorderUiEnabled) {
+          const variantRowsBySku = indexVariantRowsBySku(nextVariantInfoList);
+
+          const picklistProductIds = [
+            ...new Set(
+              visibleProducts.flatMap((product) =>
+                getOrderPicklistSelections(product, variantRowsBySku).map(
+                  (selection) => selection.productId,
+                ),
+              ),
+            ),
+          ];
+
+          if (picklistProductIds.length > 0) {
+            try {
+              const { productsSearch = [] } = await searchProducts({
+                productIds: picklistProductIds,
+                currencyCode: activeCurrencyCode,
+                companyId: companyInfoId,
+                customerGroupId,
+              });
+              productsSearch.forEach((product: ProductSearch) => {
+                nextPicklistProductsById[Number(product.id)] = product;
+              });
+            } catch (error) {
+              b2bLogger.error(error);
+            }
+          }
+        }
+
+        if (!cancelled) {
+          setVariantInfoList(nextVariantInfoList);
+          setPicklistProductsById(nextPicklistProductsById);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsRequestLoading(false);
+        }
+      }
     };
 
-    getVariantInfoByList();
-  }, [isB2BUser, open, products, fetchRequirements]);
+    loadInventory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isB2BUser,
+    open,
+    products,
+    activeCurrencyCode,
+    companyInfoId,
+    customerGroupId,
+    backorderUiEnabled,
+    fetchRequirements,
+  ]);
 
   const handleProductChange = (products: EditableProductItem[]) => {
+    if (type === 'reOrder') {
+      setReorderValidationBanner(false);
+    }
     setEditableProducts(products);
   };
 
@@ -564,15 +707,24 @@ export default function OrderDialog({
           >
             {currentDialogData?.description || ''}
           </Typography>
+          {reorderValidationBanner && type === 'reOrder' && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {b3Lang('orderDetail.reorder.adjustQuantitiesBanner')}
+            </Alert>
+          )}
           <OrderCheckboxProduct
             products={editableProducts}
             onProductChange={handleProductChange}
             checkedArr={checkedArr}
             setCheckedArr={setCheckedArr}
             setReturnArr={setReturnArr}
-            textAlign={isMobile ? 'left' : 'right'}
             type={type}
             requirementsMap={requirementsMap}
+            catalogInventoryBySku={catalogInventoryBySku}
+            backorderUiEnabled={backorderUiEnabled}
+            showReorderAtsHelper={type === 'reOrder' && isReorderAtsEnabled}
+            currencyCode={currencyCode}
+            picklistProductsById={picklistProductsById}
           />
 
           {type === 'return' && (
