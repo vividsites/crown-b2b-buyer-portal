@@ -1,4 +1,5 @@
 import {
+  act,
   delay,
   http,
   HttpResponse,
@@ -17,6 +18,38 @@ import b2bLogger from '@/utils/b3Logger';
 import CrownRegistration from './index';
 
 vi.setConfig({ testTimeout: 30000 });
+
+// The real widget needs Cloudflare's script inside the iframe. This fake issues a
+// token on mount and lets tests emit new ones (a reset clears the token, as in life).
+const turnstileMock = vi.hoisted(() => ({
+  tokenOnMount: 'test-token' as string | null,
+  reset: vi.fn(),
+  emit: (() => {}) as (token: string | null) => void,
+}));
+
+vi.mock('./RegistrationForm/Turnstile', async () => {
+  const { forwardRef, useEffect, useImperativeHandle } = await import('react');
+
+  return {
+    TURNSTILE_HELPER_ID: 'crown-turnstile-helper',
+    Turnstile: forwardRef<{ reset: () => void }, { onToken: (token: string | null) => void }>(
+      function FakeTurnstile({ onToken }, ref) {
+        useImperativeHandle(ref, () => ({
+          reset: () => {
+            turnstileMock.reset();
+            onToken(null);
+          },
+        }));
+        useEffect(() => {
+          turnstileMock.emit = onToken;
+          onToken(turnstileMock.tokenOnMount);
+        }, [onToken]);
+
+        return null;
+      },
+    ),
+  };
+});
 
 const { server } = startMockServer();
 
@@ -41,6 +74,7 @@ const countriesList: Country[] = [
 ];
 
 const registrationUrl = () => `${getVSAPIBaseURL()}/storefront/registration/`;
+const validateUrl = () => `${getVSAPIBaseURL()}/storefront/registration/validate-address/`;
 
 type User = ReturnType<typeof renderWithProviders>['user'];
 
@@ -116,12 +150,61 @@ const respondWith = (response: () => Response | Promise<Response>) => {
 
 const success = () => HttpResponse.json({ referenceId: 'CC-ABC123', status: 'pending' });
 
+type SentAddress = { address1: string; country: string };
+
+const respondToValidation = (respond: (address: SentAddress) => Response | Promise<Response>) => {
+  const calls: SentAddress[] = [];
+  server.use(
+    http.post(validateUrl(), async ({ request }) => {
+      const { address } = (await request.json()) as { address: SentAddress };
+      calls.push(address);
+
+      return respond(address);
+    }),
+  );
+
+  return calls;
+};
+
+const emitToken = (token: string | null) => act(() => turnstileMock.emit(token));
+
+const dialog = () => screen.findByRole('dialog', { name: 'Verify your address' });
+
+const correctedBilling = {
+  status: 'corrected',
+  suggested: {
+    address1: '1 MAIN ST',
+    address2: '',
+    city: 'CHICAGO',
+    state: 'IL',
+    postalCode: '60601-1234',
+    country: 'US',
+  },
+  changes: ['ZIP+4 added'],
+};
+
+const correctedShipping = {
+  status: 'corrected',
+  suggested: {
+    address1: '9 DOCK RD',
+    address2: '',
+    city: 'DALLAS',
+    state: 'TX',
+    postalCode: '75001-0001',
+    country: 'US',
+  },
+};
+
 const failWith = (status: number, errors: { code: string; field?: string; message: string }[]) =>
   respondWith(() => HttpResponse.json({ errors }, { status }));
 
 describe('CrownRegistration page', () => {
   beforeEach(() => {
     vi.spyOn(b2bService, 'checkUserEmail').mockResolvedValue({ isValid: true });
+    turnstileMock.tokenOnMount = 'test-token';
+    turnstileMock.reset.mockClear();
+    // USPS has no opinion unless a test says otherwise
+    respondToValidation(() => HttpResponse.json({ status: 'match' }));
   });
 
   it('redirects to the login page when registration is disabled', async () => {
@@ -280,7 +363,7 @@ describe('CrownRegistration page', () => {
     ).toBeVisible();
     expect(requests).toHaveLength(1);
     expect(requests[0]).toMatchObject({
-      turnstileToken: 'XXXX.DUMMY.TOKEN.XXXX',
+      turnstileToken: 'test-token',
       contact: {
         firstName: 'Ada',
         lastName: 'Lovelace',
@@ -467,7 +550,246 @@ describe('CrownRegistration page', () => {
 
       expect(await screen.findByText(banner)).toBeVisible();
       expect(screen.getByLabelText(/company name/i)).toHaveValue('Acme Foods');
+      // the token is single-use: the widget resets and Submit waits for a new one
+      expect(turnstileMock.reset).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('button', { name: 'Submit application' })).toBeDisabled();
+
+      emitToken('token-2');
       expect(screen.getByRole('button', { name: 'Submit application' })).toBeEnabled();
+    });
+  });
+
+  describe('Turnstile', () => {
+    it('keeps Submit disabled until a token exists and does not reset after a success', async () => {
+      turnstileMock.tokenOnMount = null;
+      const requests = respondWith(success);
+      const { user } = renderPage();
+
+      expect(submitButton()).toBeDisabled();
+      await fillValidForm(user);
+      expect(submitButton()).toBeDisabled();
+
+      emitToken('live-token');
+      expect(submitButton()).toBeEnabled();
+      await user.click(submitButton());
+
+      await screen.findByRole('heading', { name: 'Your account is pending approval' });
+      expect(requests[0]).toMatchObject({ turnstileToken: 'live-token' });
+      expect(turnstileMock.reset).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('USPS address verification', () => {
+    const billingStreet = () =>
+      within(section(/billing address/i)).getByLabelText(/street address/i);
+
+    it('writes the recommended address into the form and the payload', async () => {
+      respondToValidation(() => HttpResponse.json(correctedBilling));
+      const requests = respondWith(success);
+      const { user } = renderPage();
+
+      await fillValidForm(user);
+      await user.click(submitButton());
+
+      const verifyDialog = await dialog();
+      expect(within(verifyDialog).getByText('1 MAIN ST')).toBeVisible();
+      await user.click(within(verifyDialog).getByRole('button', { name: 'Use this address' }));
+
+      await screen.findByRole('heading', { name: 'Your account is pending approval' });
+      expect(requests).toHaveLength(1);
+      expect(requests[0]).toMatchObject({
+        turnstileToken: 'test-token',
+        billingAddress: {
+          address1: '1 MAIN ST',
+          city: 'CHICAGO',
+          state: 'IL',
+          stateName: 'Illinois',
+          postalCode: '60601-1234',
+          country: 'US',
+        },
+      });
+    });
+
+    it('shows the applied address in the form when the server then rejects the submit', async () => {
+      respondToValidation(() => HttpResponse.json(correctedBilling));
+      failWith(500, [{ code: 'REGISTRATION_FAILED', message: 'oops' }]);
+      const { user } = renderPage();
+
+      await fillValidForm(user);
+      await user.click(submitButton());
+      await user.click(within(await dialog()).getByRole('button', { name: 'Use this address' }));
+
+      await screen.findByText("We couldn't submit your application. Please try again.");
+      expect(billingStreet()).toHaveValue('1 MAIN ST');
+      expect(within(section(/billing address/i)).getByLabelText(/^zip code/i)).toHaveValue(
+        '60601-1234',
+      );
+    });
+
+    it('sends what the user entered when they choose it', async () => {
+      respondToValidation(() => HttpResponse.json(correctedBilling));
+      const requests = respondWith(success);
+      const { user } = renderPage();
+
+      await fillValidForm(user);
+      await user.click(submitButton());
+      const verifyDialog = await dialog();
+      await user.click(within(verifyDialog).getByRole('radio', { name: 'What you entered' }));
+      await user.click(within(verifyDialog).getByRole('button', { name: 'Use this address' }));
+
+      await screen.findByRole('heading', { name: 'Your account is pending approval' });
+      expect(requests[0]).toMatchObject({
+        billingAddress: { address1: '1 Main St', city: 'Chicago', postalCode: '60601' },
+      });
+    });
+
+    it('sends nothing and focuses the street address on "Edit address"', async () => {
+      respondToValidation(() => HttpResponse.json(correctedBilling));
+      const requests = respondWith(success);
+      const { user } = renderPage();
+
+      await fillValidForm(user);
+      await user.click(submitButton());
+      await user.click(within(await dialog()).getByRole('button', { name: 'Edit address' }));
+
+      await waitFor(() => expect(billingStreet()).toHaveFocus());
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(requests).toHaveLength(0);
+      expect(turnstileMock.reset).not.toHaveBeenCalled();
+      expect(submitButton()).toBeEnabled();
+    });
+
+    it.each([
+      ['a server error', () => HttpResponse.json({}, { status: 500 })],
+      ['a network error', () => HttpResponse.error()],
+    ])('logs %s from USPS and still submits', async (_name, respond) => {
+      const logError = vi.spyOn(b2bLogger, 'error').mockImplementation(() => {});
+      respondToValidation(respond);
+      const requests = respondWith(success);
+      const { user } = renderPage();
+
+      await fillValidForm(user);
+      await user.click(submitButton());
+
+      await screen.findByRole('heading', { name: 'Your account is pending approval' });
+      expect(requests).toHaveLength(1);
+      expect(logError).toHaveBeenCalledWith('Address validation failed', expect.anything());
+    });
+
+    it('never sends a Canadian address for validation', async () => {
+      const calls = respondToValidation(() => HttpResponse.json({ status: 'match' }));
+      const requests = respondWith(success);
+      const { user } = renderPage();
+
+      await fillDetails(user);
+      await fillAddress(user, /billing address/i, {
+        address1: '100 Queen St',
+        city: 'Ottawa',
+        country: 'CA',
+        state: 'ON',
+        zip: 'K1A 0B1',
+      });
+      await acknowledgePrivacy(user);
+      await user.click(submitButton());
+
+      await screen.findByRole('heading', { name: 'Your account is pending approval' });
+      expect(requests).toHaveLength(1);
+      expect(calls).toHaveLength(0);
+    });
+
+    const fillSeparateShipping = async (user: User) => {
+      await fillDetails(user);
+      await fillBilling(user);
+      await user.click(screen.getByRole('checkbox', { name: /same as billing/i }));
+      await fillAddress(user, /shipping address/i, {
+        address1: '9 Dock Rd',
+        city: 'Dallas',
+        state: 'TX',
+        zip: '75001',
+      });
+      await acknowledgePrivacy(user);
+    };
+
+    it('prompts for billing then shipping, one at a time', async () => {
+      const calls = respondToValidation((address) =>
+        HttpResponse.json(address.address1 === '1 Main St' ? correctedBilling : correctedShipping),
+      );
+      const requests = respondWith(success);
+      const { user } = renderPage();
+
+      await fillSeparateShipping(user);
+      await user.click(submitButton());
+
+      const first = await dialog();
+      expect(within(first).getByText('Billing address')).toBeVisible();
+      await user.click(within(first).getByRole('button', { name: 'Use this address' }));
+
+      await waitFor(() =>
+        expect(within(screen.getByRole('dialog')).getByText('Shipping address')).toBeVisible(),
+      );
+      await user.click(
+        within(screen.getByRole('dialog')).getByRole('button', { name: 'Use this address' }),
+      );
+
+      await screen.findByRole('heading', { name: 'Your account is pending approval' });
+      expect(calls.map((call) => call.address1)).toEqual(['1 Main St', '9 Dock Rd']);
+      expect(requests[0]).toMatchObject({
+        billingAddress: { address1: '1 MAIN ST' },
+        shippingAddress: { sameAsBilling: false, address1: '9 DOCK RD', postalCode: '75001-0001' },
+      });
+    });
+
+    it('does not prompt for shipping when the user edits billing', async () => {
+      const calls = respondToValidation(() => HttpResponse.json(correctedBilling));
+      const requests = respondWith(success);
+      const { user } = renderPage();
+
+      await fillSeparateShipping(user);
+      await user.click(submitButton());
+      await user.click(within(await dialog()).getByRole('button', { name: 'Edit address' }));
+
+      await waitFor(() => expect(billingStreet()).toHaveFocus());
+      expect(calls).toHaveLength(1);
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(requests).toHaveLength(0);
+    });
+
+    it('does not ask again, or call USPS again, when retrying after a server error', async () => {
+      const calls = respondToValidation(() => HttpResponse.json(correctedBilling));
+      failWith(409, [{ code: 'EMAIL_EXISTS', field: 'email', message: 'exists' }]);
+      const { user } = renderPage();
+
+      await fillValidForm(user);
+      await user.click(submitButton());
+      await user.click(within(await dialog()).getByRole('radio', { name: 'What you entered' }));
+      await user.click(
+        within(screen.getByRole('dialog')).getByRole('button', { name: 'Use this address' }),
+      );
+      await screen.findByText('An account with this email already exists');
+
+      respondWith(success);
+      emitToken('token-2');
+      await user.click(submitButton());
+
+      await screen.findByRole('heading', { name: 'Your account is pending approval' });
+      expect(calls).toHaveLength(1);
+    });
+
+    it('shows "Verifying address…" while USPS is being asked', async () => {
+      respondToValidation(async () => {
+        await delay(300);
+
+        return HttpResponse.json({ status: 'match' });
+      });
+      respondWith(success);
+      const { user } = renderPage();
+
+      await fillValidForm(user);
+      await user.click(submitButton());
+
+      const verifying = await screen.findByRole('button', { name: 'Verifying address…' });
+      expect(verifying).toBeDisabled();
+      await screen.findByRole('heading', { name: 'Your account is pending approval' });
     });
   });
 

@@ -63,6 +63,7 @@ declare global {
         platform: ChannelPlatform;
         environment: string;
         vsEnvironment: string;
+        turnstileSiteKey?: string;
         disable_logout_button?: boolean;
         cart_url?: string;
       };

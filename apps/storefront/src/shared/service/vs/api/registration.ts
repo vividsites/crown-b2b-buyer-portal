@@ -68,6 +68,9 @@ export const REGISTRATION_ERROR_CODES = {
   rateLimited: 'RATE_LIMITED',
 } as const;
 
+// must match the VS API's expected siteverify action
+export const REGISTRATION_TURNSTILE_ACTION = 'registration';
+
 const ADDRESS_VALIDATION_TIMEOUT_MS = 8000;
 
 export const registerBusinessAccount = (submission: RegistrationSubmission) =>

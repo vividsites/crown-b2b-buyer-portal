@@ -86,7 +86,7 @@ Make it quick and error-free for a qualified business to apply for a Crown onlin
 - ✅ Payload contract for the VS registration and address-validation endpoints, documented here
 
 ### Deployment
-- ✅ Turnstile site key per environment (local, integration, staging, production), set in `request/base.ts`
+- ✅ Turnstile site key per environment comes from `window.B3.setting.turnstileSiteKey`, a BigCommerce theme setting copied by the Script Manager snippet (no code change per environment)
 - ✅ Rollback is a single-line route revert to the stock `Registered` page
 
 ### Out of scope
@@ -206,7 +206,7 @@ apps/storefront/src/
     ├── api/registration.test.ts
     ├── request/anonymousFetch.ts       # no-JWT request helper (new)
     ├── request/anonymousFetch.test.ts
-    ├── request/base.ts                 # + Turnstile site key map (edit)
+    ├── request/base.ts                 # + getVSTurnstileSiteKey / isTurnstileTestSiteKey, read from window.B3.setting (edit)
     └── index.ts                        # + exports (edit)
 ```
 
@@ -223,6 +223,8 @@ apps/storefront/src/
 | `src/shared/routes/index.tsx:40` | `const Registered = lazy(() => import('@/pages/CrownRegistration')); // Crown:` |
 | `src/pages/Login/index.tsx:311` | `handleCreateAccountClick` → `navigate('/register')` (this file is already customized for Crown) |
 | `src/lib/lang/locales/en.json` | One contiguous `crownRegistration.*` block |
+| `src/index.d.ts` | One line: `turnstileSiteKey?: string` in `Window.B3.setting` |
+| `apps/storefront/index.html` | One line: the local-dev Turnstile site key in the `window.B3.setting` block (dev harness only) |
 | `apps/storefront/package.json` | Add `@hookform/resolvers` |
 | `knip.jsonc` | Only if knip flags the stock `Registered` page as unused |
 
@@ -311,7 +313,7 @@ A boxed checkbox, "Shipping address is the same as billing", is checked by defau
   - Built on MUI `Dialog`, which provides `aria-modal` and traps focus.
   - Title: "VERIFY YOUR ADDRESS".
   - Two radio cards:
-    - "USPS recommended" (selected by default): the uppercase address with ZIP+4, plus a note built from `changes[]`.
+    - "Recommended" (selected by default): the uppercase address with ZIP+4, plus a note built from `changes[]`.
     - "What you entered".
   - Actions:
     - "Use this address": writes the chosen address into the form with `setValue`, then continues the submit.
@@ -319,7 +321,9 @@ A boxed checkbox, "Shipping address is the same as billing", is checked by defau
 
 ### 7.8 Bot protection (Turnstile)
 - Loads `https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit` into the ThemeFrame iframe `<head>`, only once.
-- Renders through `iframeWindow.turnstile.render(el, { sitekey, callback, 'expired-callback', 'error-callback' })`. The iframe is same-origin, so it calls `render` directly. If that proves unreliable, it falls back to the reCAPTCHA-style `postMessage` bridge.
+- Renders through `iframeWindow.turnstile.render(el, { sitekey, action: 'registration', theme: 'light', size: 'normal', callback, 'expired-callback', 'error-callback', 'timeout-callback' })`. The iframe is same-origin, so it calls `render` directly (Plan A). If that proves unreliable, it falls back to the reCAPTCHA-style `postMessage` bridge (Plan B). **Spike result:** Plan A works. With a real widget on the local dev server, siteverify returned `hostname: "localhost"` and `action: "registration"`. The hostname on deployed domains is confirmed in Phase 4.
+- The site key comes only from `window.B3.setting.turnstileSiteKey`. If it is missing or empty the widget is not rendered, an error is logged, a "not configured" message shows and Submit stays disabled (fail closed). A Cloudflare test key in a production build is logged.
+- The `action` travels inside the token (the payload has no extra field); the VS API checks it against `siteverify`.
 - Token lifecycle:
   - The callback stores the token.
   - When the token expires or errors, it's cleared and Submit is disabled.
@@ -375,10 +379,10 @@ A boxed checkbox, "Shipping address is the same as billing", is checked by defau
 | Setting | Location | Values |
 |---|---|---|
 | VS API base URL | `shared/service/vs/request/base.ts` (existing) | local `https://localhost:44320`, integration, staging `crowntest.vividconnector.com`, production `crowncom.vividconnector.com` |
-| Turnstile site key | `request/base.ts` → `ENVIRONMENT_VS_TURNSTILE_SITE_KEY` (new) | local and integration: `1x00000000000000000000AA` (Cloudflare's always-pass test key); staging and production: **still to be provided** |
+| Turnstile site key | `window.B3.setting.turnstileSiteKey`, filled by the Script Manager snippet from the existing BigCommerce theme setting (locally: `apps/storefront/index.html`) | local: `1x00000000000000000000AA` (Cloudflare's always-pass test key); staging and production: real keys set as theme settings, **still to be provided**. Changing the key is a theme-setting change, not a rebuild. |
 | Environment selection | `window.B3.setting.vsEnvironment` (existing) | |
 | Registration enabled | B2B storefront config `tradeProfessionalApplication` → `registerEnabled` (existing) | |
-| Turnstile secret key | **VS API server only.** Never in this repo. | |
+| Turnstile secret key | **VS API server only.** Never in this repo. | Test secrets pair with test site keys: `1x0000000000000000000000000000000AA` always passes, `2x0000000000000000000000000000000AA` always fails, `3x0000000000000000000000000000000AA` returns `timeout-or-duplicate`. Test secrets accept only the token `XXXX.DUMMY.TOKEN.XXXX`, and real secrets reject it. See `docs/turnstile-manual-testing.md`. |
 
 ### Security scope
 - ✅ **In scope for the client:** anonymous request path, Turnstile widget, client validation, no password persistence, a submit button that can't be double-clicked (`isSubmittingRef`).
@@ -461,7 +465,7 @@ When shipping differs from billing: `"shippingAddress": { "sameAsBilling": false
 All application errors (`TURNSTILE_FAILED`, `EMAIL_EXISTS`, `VALIDATION`, `ADDRESS_EXISTS`) come back as HTTP 400, so the client switches on `code`, not on status. `VALIDATION` fields use the form field names (`companyName`, `bAddress1`, `bZip`, …). A failed password step also returns `VALIDATION` on `password`. The privacy field is `privacyAcknowledged`, the same name as the form field.
 
 **Expected server behavior**
-1. Verify the Turnstile token.
+1. Verify the token with siteverify: `success`, `action == 'registration'`, and `hostname` in the allowlist. Log the specific failure reason; return `TURNSTILE_FAILED` for all of them. (Cloudflare's test keys return `hostname: "example.com"` and no `action`, so these two checks must be relaxed in non-production.)
 2. Re-validate the payload with the same rules as the client.
 3. Check for duplicate billing and shipping addresses already in BigCommerce (exact match on both address lines and ZIP), and for an existing company with the same name. Reject with `ADDRESS_EXISTS` before creating anything: `field` is `billingAddress` or `shippingAddress` for addresses, and `companyName` for a duplicate company name (message: "An account with this company name already exists. Please contact customer service."). If the BC search itself fails, the check is skipped.
 4. Create the B2B company, with the registrant as company Admin. BC creates the customer as part of this call, and no creation email is sent. `existingCustomer` is stored in the company extra field `IsAlreadyCustomer` for the Crown team to follow up.
@@ -546,7 +550,7 @@ export class VSApiError extends Error {
 ### Phase 1: Foundations (≈1–1.5 days)
 **Goal:** a service layer and form primitives that can be tested.
 - ✅ `request/anonymousFetch.ts` and `VSApiError`, with tests
-- ✅ `api/registration.ts` stub and types, the Turnstile site-key map in `base.ts`, and exports from `vs/index.ts`
+- ✅ `api/registration.ts` stub and types, and exports from `vs/index.ts` (the Turnstile site key is read from `window.B3.setting` since Phase 3)
 - ✅ Add `@hookform/resolvers`
 - ✅ `schema.ts` and `schema.test.ts` (the full validation matrix)
 - ✅ `tokens.ts`, `styled.ts`, and `CrownTextField`, `CrownSelect`, `CrownCheckbox`, `FormSection`, `ErrorSummary`
@@ -567,11 +571,13 @@ export class VSApiError extends Error {
 
 ### Phase 3: Turnstile and USPS (≈1.5 days)
 **Goal:** bot protection and the address-verification flow.
-- ✅ `loadTurnstile.ts` and `Turnstile.tsx` (iframe injection, token lifecycle, reset)
-- ✅ `validateAddress` integration, `AddressVerificationDialog`, and submit that walks through each address in turn
-- ✅ Tests: token gating, reset after failure, modal choices, validate endpoint down
+- ✅ `loadTurnstile.ts` and `Turnstile.tsx` (iframe injection, token lifecycle, reset, fail-closed on a missing key), built as Plan A
+- ✅ `validateAddress` integration (`useAddressVerification`, `addressVerification.ts`), `AddressVerificationDialog`, and submit that walks through each address in turn
+- ✅ Tests: token gating, reset after failure, modal choices, validate endpoint down, remembered decisions
+- ✅ Spike: Turnstile renders and issues a real token inside the ThemeFrame iframe (local dev, real key; `hostname` = `localhost`, `action` = `registration`)
+- ⏳ Not yet done: the full manual key matrix in `docs/turnstile-manual-testing.md` (rows 2-3 and 5-7 need the VS API). Unit and page tests mock the widget.
 
-**Validation:** the Turnstile test key renders and issues a token inside the ThemeFrame iframe. The modal works with the keyboard and screen readers.
+**Validation:** the Turnstile test key renders and issues a token inside the ThemeFrame iframe (confirmed). The modal works with the keyboard and screen readers.
 
 ### Phase 4: Hardening and integration (≈1 day, plus backend dependency)
 **Goal:** production readiness.

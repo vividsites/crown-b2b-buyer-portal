@@ -906,9 +906,9 @@
     "semantic_hash": ""
   },
   "apps/storefront/src/index.d.ts": {
-    "mtime": 1790097203.6722224,
-    "seen": 1790357985.023659,
-    "ast_hash": "fe6c1bdb8acafe094b7d9cfad08d3e2f",
+    "mtime": 1794431336.926003,
+    "seen": 1794432178.1851306,
+    "ast_hash": "a529bf3817abeb0d3e25547956cec4ab",
     "semantic_hash": ""
   },
   "apps/storefront/src/lang.tsx": {
@@ -990,9 +990,9 @@
     "semantic_hash": ""
   },
   "apps/storefront/src/lib/lang/locales/en.json": {
-    "mtime": 1794346737.5898595,
-    "seen": 1794347676.4661183,
-    "ast_hash": "2eabb3ad7e3be08af935427d1aca7e9c",
+    "mtime": 1794431392.3765259,
+    "seen": 1794432178.1851492,
+    "ast_hash": "ca64a3517f9a2610ae25ca28d60daafa",
     "semantic_hash": ""
   },
   "apps/storefront/src/lib/lang/locales/es-419.json": {
@@ -3228,15 +3228,15 @@
     "semantic_hash": ""
   },
   "apps/storefront/src/shared/service/vs/index.ts": {
-    "mtime": 1790359037.8462155,
-    "seen": 1790359830.9432538,
-    "ast_hash": "bd742b5c6a038ed6a90593d44368e1a1",
+    "mtime": 1794431340.476562,
+    "seen": 1794432178.1856809,
+    "ast_hash": "2b4789b38a24c9e15d0e2339d5bd936a",
     "semantic_hash": ""
   },
   "apps/storefront/src/shared/service/vs/request/base.ts": {
-    "mtime": 1790358919.3355956,
-    "seen": 1790359830.943258,
-    "ast_hash": "3ce04ff8d5de464444f6f7bd932c3cff",
+    "mtime": 1794431339.5994847,
+    "seen": 1794432178.1856868,
+    "ast_hash": "568baaa682e50ed69da786df75b9f5cd",
     "semantic_hash": ""
   },
   "apps/storefront/src/shared/service/vs/request/fetch.ts": {
@@ -4398,9 +4398,9 @@
     "semantic_hash": ""
   },
   "PRD.md": {
-    "mtime": 1794343070.3325973,
-    "seen": 1794347676.466905,
-    "ast_hash": "eeccf7d4b6a342fa23f0d3efe34b0512",
+    "mtime": 1794431928.1149287,
+    "seen": 1794432178.1859405,
+    "ast_hash": "3629c094f348dd893bb45dd1285ba95c",
     "semantic_hash": ""
   },
   "README.md": {
@@ -4410,9 +4410,9 @@
     "semantic_hash": ""
   },
   "apps/storefront/index.html": {
-    "mtime": 1790097203.6191208,
-    "seen": 1790357985.0242121,
-    "ast_hash": "283c781e9a54dbc45f31fdf19c7d6e1f",
+    "mtime": 1794431337.8197246,
+    "seen": 1794432178.1859431,
+    "ast_hash": "b29a2d02caab50af5d776370ce780baf",
     "semantic_hash": ""
   },
   "docs/Crown B2B Registration.dc.html": {
@@ -4602,9 +4602,9 @@
     "semantic_hash": ""
   },
   "apps/storefront/src/pages/CrownRegistration/tokens.ts": {
-    "mtime": 1790359172.7855349,
-    "seen": 1790359830.9428592,
-    "ast_hash": "dfdf01882aa34acaa655832d83671b89",
+    "mtime": 1794424297.9488997,
+    "seen": 1794432178.1852703,
+    "ast_hash": "5ead5f4dd4a02705e400d7cd93d98b19",
     "semantic_hash": ""
   },
   "apps/storefront/src/shared/service/vs/api/registration.test.ts": {
@@ -4614,9 +4614,9 @@
     "semantic_hash": ""
   },
   "apps/storefront/src/shared/service/vs/api/registration.ts": {
-    "mtime": 1794340647.7864294,
-    "seen": 1794340785.2169256,
-    "ast_hash": "a44a0cb1bb6c477174b896a2abb929c6",
+    "mtime": 1794431341.3500614,
+    "seen": 1794432178.1856785,
+    "ast_hash": "1764920a4889367076258a0466b5a020",
     "semantic_hash": ""
   },
   "apps/storefront/src/shared/service/vs/request/VSApiError.ts": {
@@ -4662,27 +4662,27 @@
     "semantic_hash": ""
   },
   "apps/storefront/src/pages/CrownRegistration/RegistrationForm/buildSubmission.ts": {
-    "mtime": 1794347483.8899536,
-    "seen": 1794347676.466189,
-    "ast_hash": "c3472e97995078ba8b3efee1bc1fcabd",
+    "mtime": 1794431648.71832,
+    "seen": 1794432178.1852283,
+    "ast_hash": "1fc892f3cda0573b8b1f050b91fc6566",
     "semantic_hash": ""
   },
   "apps/storefront/src/pages/CrownRegistration/RegistrationForm/index.tsx": {
-    "mtime": 1794347073.736859,
-    "seen": 1794347676.4661899,
-    "ast_hash": "c7ea7a3e084b40962c69607b25e08340",
+    "mtime": 1794431661.3619535,
+    "seen": 1794432178.1852298,
+    "ast_hash": "424d160eeb6f22b2ab77e2cd9a85d310",
     "semantic_hash": ""
   },
   "apps/storefront/src/pages/CrownRegistration/RegistrationForm/mapServerErrors.test.ts": {
-    "mtime": 1794346826.7330124,
-    "seen": 1794347676.466191,
-    "ast_hash": "4a5292672fa63d7b3677c142b941e58d",
+    "mtime": 1794424870.40281,
+    "seen": 1794432178.1852334,
+    "ast_hash": "9479ae739748d8f89d8637887ac75b41",
     "semantic_hash": ""
   },
   "apps/storefront/src/pages/CrownRegistration/RegistrationForm/mapServerErrors.ts": {
-    "mtime": 1794347483.8526366,
-    "seen": 1794347676.4661918,
-    "ast_hash": "ed6670644be0d7e61a90d7b8291f6b33",
+    "mtime": 1794424862.4633536,
+    "seen": 1794432178.1852348,
+    "ast_hash": "fdec3bbe0dbb9359816c4e6b2d1ac1e8",
     "semantic_hash": ""
   },
   "apps/storefront/src/pages/CrownRegistration/RegistrationForm/regions.test.ts": {
@@ -4722,21 +4722,21 @@
     "semantic_hash": ""
   },
   "apps/storefront/src/pages/CrownRegistration/RegistrationForm/useRegistrationSubmit.ts": {
-    "mtime": 1794347073.737858,
-    "seen": 1794347676.466203,
-    "ast_hash": "db225f3eaa511c291e47e5145af11afa",
+    "mtime": 1794431649.5926788,
+    "seen": 1794432178.185249,
+    "ast_hash": "82ba6683c290854481ffcb2d075a4ce2",
     "semantic_hash": ""
   },
   "apps/storefront/src/pages/CrownRegistration/index.test.tsx": {
-    "mtime": 1794347329.1722918,
-    "seen": 1794347676.4662185,
-    "ast_hash": "91a3fa222da956eb72868aa297119ae9",
+    "mtime": 1794432032.3360894,
+    "seen": 1794432178.1852667,
+    "ast_hash": "49d9e3de6148b0d22d4122500f53bb5b",
     "semantic_hash": ""
   },
   "apps/storefront/src/pages/CrownRegistration/index.tsx": {
-    "mtime": 1794347073.736859,
-    "seen": 1794347676.4662194,
-    "ast_hash": "8decfc3faaf5dfa599a17d1aa6acea41",
+    "mtime": 1794424031.862512,
+    "seen": 1794432178.185268,
+    "ast_hash": "7a304fe519ceaf837c326a2048420155",
     "semantic_hash": ""
   },
   "apps/storefront/src/pages/CrownRegistration/useTypekitFonts.test.tsx": {
@@ -4755,6 +4755,84 @@
     "mtime": 1794345550.9224298,
     "seen": 1794347676.4668818,
     "ast_hash": "ec14e2378f3eda6e244ee0875b8ea8db",
+    "semantic_hash": ""
+  },
+  "apps/storefront/src/pages/CrownRegistration/RegistrationForm/AddressVerificationDialog.test.tsx": {
+    "mtime": 1794432027.5701513,
+    "seen": 1794432178.1852186,
+    "ast_hash": "dc7218297aedf61365db44ca676c2fcb",
+    "semantic_hash": ""
+  },
+  "apps/storefront/src/pages/CrownRegistration/RegistrationForm/AddressVerificationDialog.tsx": {
+    "mtime": 1794432040.8719785,
+    "seen": 1794432178.1852198,
+    "ast_hash": "6d4377965d07352b8a1bf24a9dcf6198",
+    "semantic_hash": ""
+  },
+  "apps/storefront/src/pages/CrownRegistration/RegistrationForm/Turnstile.test.tsx": {
+    "mtime": 1794432027.5711515,
+    "seen": 1794432178.1852212,
+    "ast_hash": "e3e1b4fdd0c02bdb061551249c873e21",
+    "semantic_hash": ""
+  },
+  "apps/storefront/src/pages/CrownRegistration/RegistrationForm/Turnstile.tsx": {
+    "mtime": 1794431661.5042865,
+    "seen": 1794432178.1852229,
+    "ast_hash": "1a300676e416c2a577bed6667660210f",
+    "semantic_hash": ""
+  },
+  "apps/storefront/src/pages/CrownRegistration/RegistrationForm/addressVerification.test.ts": {
+    "mtime": 1794431490.0301173,
+    "seen": 1794432178.1852245,
+    "ast_hash": "4575388a7278432a9eed9d63d9b025fc",
+    "semantic_hash": ""
+  },
+  "apps/storefront/src/pages/CrownRegistration/RegistrationForm/addressVerification.ts": {
+    "mtime": 1794431489.156432,
+    "seen": 1794432178.1852255,
+    "ast_hash": "2b76d2c6d00ab7ffe6cef2559600e55f",
+    "semantic_hash": ""
+  },
+  "apps/storefront/src/pages/CrownRegistration/RegistrationForm/loadTurnstile.test.ts": {
+    "mtime": 1794431361.6555743,
+    "seen": 1794432178.1852307,
+    "ast_hash": "eaf2521cd117018ddee7992631e057fe",
+    "semantic_hash": ""
+  },
+  "apps/storefront/src/pages/CrownRegistration/RegistrationForm/loadTurnstile.ts": {
+    "mtime": 1794431661.384769,
+    "seen": 1794432178.1852322,
+    "ast_hash": "6263d7b0995b662bc53debd3274d9f16",
+    "semantic_hash": ""
+  },
+  "apps/storefront/src/pages/CrownRegistration/RegistrationForm/useAddressVerification.test.tsx": {
+    "mtime": 1794431628.0200405,
+    "seen": 1794432178.1852417,
+    "ast_hash": "b5067cbeb1e3b62e526d0eea289077a7",
+    "semantic_hash": ""
+  },
+  "apps/storefront/src/pages/CrownRegistration/RegistrationForm/useAddressVerification.ts": {
+    "mtime": 1794432040.8719785,
+    "seen": 1794432178.1852427,
+    "ast_hash": "483cab69a4e1f86c4d978292e5747bb9",
+    "semantic_hash": ""
+  },
+  "apps/storefront/src/shared/service/vs/request/base.test.ts": {
+    "mtime": 1794431342.2291343,
+    "seen": 1794432178.1856854,
+    "ast_hash": "3bb5618483152edb186fcde2924b51dd",
+    "semantic_hash": ""
+  },
+  ".agents/plans/crown-registration-phase-3-turnstile-and-usps.md": {
+    "mtime": 1794430903.8625011,
+    "seen": 1794432178.185916,
+    "ast_hash": "eab258a0c4cf2036f3c9df7d9eb0fdd7",
+    "semantic_hash": ""
+  },
+  "docs/turnstile-manual-testing.md": {
+    "mtime": 1794431928.4069886,
+    "seen": 1794432178.185949,
+    "ast_hash": "dbef6df5f9a9be895e94e2b15feb679d",
     "semantic_hash": ""
   }
 }

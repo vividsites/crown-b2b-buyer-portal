@@ -15,14 +15,6 @@ const ENVIRONMENT_VS_APP_CLIENT_ID: EnvSpecificConfig<string> = {
   production: 'rewfea6m9enlzs1elq6c5ifdhz9rme8',
 };
 
-// Cloudflare always-pass test key for local/integration.
-// TODO(Crown): provide staging and production Turnstile site keys.
-const ENVIRONMENT_VS_TURNSTILE_SITE_KEY: EnvSpecificConfig<string> = {
-  local: '1x00000000000000000000AA',
-  integration: '1x00000000000000000000AA',
-  staging: '1x00000000000000000000AA',
-  production: '1x00000000000000000000AA',
-};
 // cspell:enable
 
 const DEFAULT_ENVIRONMENT =
@@ -56,8 +48,15 @@ export function getVSAppClientId(environment?: Environment) {
   return ENVIRONMENT_VS_APP_CLIENT_ID[getEnvironment(environment)];
 }
 
-export function getVSTurnstileSiteKey(environment?: Environment) {
-  return ENVIRONMENT_VS_TURNSTILE_SITE_KEY[getEnvironment(environment)];
+// The site key comes only from the BigCommerce theme setting that the Script
+// Manager snippet copies into window.B3.setting. Read at call time, no fallback.
+export function getVSTurnstileSiteKey(): string {
+  return window.B3?.setting?.turnstileSiteKey?.trim() ?? '';
+}
+
+// Cloudflare's dummy keys: a digit, "x", 20 zeros, then two letters.
+export function isTurnstileTestSiteKey(key: string): boolean {
+  return /^[123]x0{20}[A-Z]{2}$/.test(key);
 }
 
 export interface DataSourceRequest {

@@ -4,9 +4,6 @@ import { RegistrationSubmission, RegistrationSubmissionAddress } from '@/shared/
 import { resolveStateName } from './regions';
 import { AddressPrefix, RegistrationFormValues } from './schema';
 
-// Cloudflare's documented dummy token (accepted only with their test secret).
-export const DEV_TURNSTILE_TOKEN = 'XXXX.DUMMY.TOKEN.XXXX'; // Phase 3: replace with the widget token
-
 type BuildSubmissionResult =
   | { ok: true; submission: RegistrationSubmission }
   | { ok: false; field: 'bState' | 'sState' };
