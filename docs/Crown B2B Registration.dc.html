@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://use.typekit.net" crossorigin="">
+<link rel="stylesheet" href="https://use.typekit.net/yss3osz.css">
+<style>
+  body { margin: 0; background: #EDEDED; font-family: 'franklin-gothic-urw', 'Franklin Gothic', Arial, sans-serif; }
+  a { color: #E41C40; text-decoration: none; }
+  a:hover { color: #C1152F; text-decoration: underline; }
+  input, select { font-family: 'franklin-gothic-urw', 'Franklin Gothic', Arial, sans-serif; }
+  input:focus, select:focus { outline: none; border-bottom-color: #E41C40 !important; background: #FFFFFF !important; }
+</style>
+</helmet>
+<div style="min-height: 100%; padding: 32px 24px 64px; display: flex; flex-direction: column; align-items: center; gap: 20px; color: #15296E; box-sizing: border-box; position: absolute; left: 4px; top: -4px; width: 100%">
+
+  <div style="width: 100%; max-width: 1180px; display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between;">
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <img src="./crown-logo.png" alt="Crown Packaging Corp." style="height: 44px; width: auto; display: block;">
+    </div>
+    <div style="font-size: 14px; color: #5B6473;">Already have an account? <a href="#signin">Sign in</a></div>
+  </div>
+
+  <div style="width: 100%; max-width: 1180px; background: #FFFFFF; border: 1px solid #D5D8DE; border-top: 3px solid #15296E;">
+
+    <sc-if value="{{ submitted }}" hint-placeholder-val="{{ false }}">
+      <div style="padding: 64px 48px; display: flex; flex-direction: column; align-items: flex-start; gap: 18px; max-width: 720px;">
+        <div style="font-family: 'franklin-gothic-urw-cond', 'Franklin Gothic', Arial, sans-serif; font-size: 13px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: #E41C40;">Application received</div>
+        <h1 style="margin: 0; font-family: 'franklin-gothic-urw-comp', 'Franklin Gothic', Arial, sans-serif; font-weight: 600; font-size: 40px; line-height: 1.1; letter-spacing: 0.01em;">Your account is pending approval</h1>
+        <p style="margin: 0; font-size: 17px; line-height: 1.55; color: #3F4650; text-wrap: pretty;">Our trade team reviews new business accounts within one business day. Once approved, we email <strong style="color: #15296E;">{{ v.email }}</strong> confirmation and you can sign in with the password you set below.</p>
+        <div style="margin-top: 8px; border: 1px solid #D5D8DE; background: #F4F5F7; padding: 18px 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 18px 28px; width: 100%; box-sizing: border-box;">
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #5B6473;">Company</span>
+            <span style="font-size: 15px; color: #15296E;">{{ v.companyName }}</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #5B6473;">Primary contact</span>
+            <span style="font-size: 15px; color: #15296E;">{{ contactSummary }}</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #5B6473;">Reference</span>
+            <span style="font-size: 15px; color: #15296E;">{{ reference }}</span>
+          </div>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px;">
+          <a href="#catalog" style="display: inline-block; padding: 13px 26px; background: #15296E; color: #FFFFFF; font-family: 'franklin-gothic-urw-comp', 'Franklin Gothic', Arial, sans-serif; font-weight: 600; font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase;" style-hover="background: #000000; color: #FFFFFF;">Browse the catalog</a>
+          <button type="button" onClick="{{ reset }}" style="padding: 13px 26px; background: transparent; color: #15296E; border: 1px solid #BFC6CD; cursor: pointer; font-family: 'franklin-gothic-urw-comp', 'Franklin Gothic', Arial, sans-serif; font-weight: 600; font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase;" style-hover="border-color: #15296E;">Submit another account</button>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ editing }}" hint-placeholder-val="{{ true }}">
+      <div>
+        <div style="padding: 36px 40px 28px; border-bottom: 1px solid #E4E6EA; display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-end; justify-content: space-between;">
+          <div style="max-width: 620px;">
+            
+            <h1 style="margin: 0 0 10px; font-family: 'franklin-gothic-urw-comp', 'Franklin Gothic', Arial, sans-serif; font-weight: 600; font-size: 40px; line-height: 1.05; letter-spacing: 0.01em;">Business Account Registration</h1>
+            <div style="margin: 0; font-size: 16px; line-height: 1.5; color: #3F4650; text-wrap: pretty;"><p class="MsoNormal">Content
+can go here&nbsp;</p></div>
+          </div>
+          
+        </div>
+
+        <div style="padding: 8px 40px 0;">
+          <sc-if value="{{ hasErrors }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top: 24px; border: 1px solid #E41C40; background: #FDEEF0; padding: 14px 18px; display: flex; gap: 12px; align-items: flex-start;">
+              <span style="font-family: 'franklin-gothic-urw-cond', 'Franklin Gothic', Arial, sans-serif; font-weight: 700; font-size: 15px; letter-spacing: 0.1em; text-transform: uppercase; color: #C1152F;">Check</span>
+              <span style="font-size: 15px; color: #3F4650;">{{ errorSummary }}</span>
+            </div>
+          </sc-if>
+        </div>
+
+        <div style="padding: 28px 40px 40px; display: flex; flex-direction: column; gap: 4px;">
+
+          <div style="display: grid; grid-template-columns: minmax(150px, 240px) minmax(0, 1fr); gap: 8px 40px; padding: 24px 0; border-bottom: 1px solid #E4E6EA;">
+            <div>
+              <h2 style="margin: 0 0 6px; font-family: 'franklin-gothic-urw-comp', 'Franklin Gothic', Arial, sans-serif; font-weight: 600; font-size: clamp(16px, calc(8px + 0.85vw), 24px); letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap;">01 — Your details</h2>
+              <p style="margin: 0; font-size: 14px; line-height: 1.45; color: #5B6473;">The person who will administer the company account.</p>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px 20px; align-content: start;">
+              <label style="grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; cursor: pointer; justify-self: start;">
+                <input name="existingCustomer" type="checkbox" checked="{{ v.existingCustomer }}" onChange="{{ toggleExisting }}" style="width: 20px; height: 20px; accent-color: #E41C40; margin: 0; cursor: pointer;">
+                <span style="font-size: 16px; color: #15296E;">Already a customer?</span>
+              </label>
+              <label style="display: flex; flex-direction: column; gap: 6px;">
+                <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #5B6473;">Company name *</span>
+                <input name="companyName" type="text" autocomplete="organization" value="{{ v.companyName }}" onChange="{{ onChange }}" onBlur="{{ onBlur }}" style="width: 100%; box-sizing: border-box; padding: 12px 12px; font-size: 16px; color: #15296E; background: #F4F5F7; border: 1px solid transparent; border-bottom: 2px solid #BFC6CD; border-radius: 4px 4px 0 0;">
+                <span style="font-size: 12.5px; color: #C1152F; min-height: 0;">{{ err.companyName }}</span>
+              </label><label style="display: flex; flex-direction: column; gap: 6px;">
+                
+                <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #5B6473;">First name *</span><input name="firstName" type="text" autocomplete="given-name" value="{{ v.firstName }}" onChange="{{ onChange }}" onBlur="{{ onBlur }}" style="width: 100%; box-sizing: border-box; padding: 12px 12px; font-size: 16px; color: #15296E; background: #F4F5F7; border: 1px solid transparent; border-bottom: 2px solid #BFC6CD; border-radius: 4px 4px 0 0;">
+                <span style="font-size: 12.5px; color: #C1152F; min-height: 0;">{{ err.firstName }}</span>
+              </label><label style="display: flex; flex-direction: column; gap: 6px;">
+                <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #5B6473;">Last name *</span>
+                <input name="lastName" type="text" autocomplete="family-name" value="{{ v.lastName }}" onChange="{{ onChange }}" onBlur="{{ onBlur }}" style="width: 100%; box-sizing: border-box; padding: 12px 12px; font-size: 16px; color: #15296E; background: #F4F5F7; border: 1px solid transparent; border-bottom: 2px solid #BFC6CD; border-radius: 4px 4px 0 0;">
+                <span style="font-size: 12.5px; color: #C1152F; min-height: 0;">{{ err.lastName }}</span>
+              </label>
+              
+              <label style="display: flex; flex-direction: column; gap: 6px;">
+                <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #5B6473;">Email *</span>
+                <input name="email" type="email" autocomplete="email" value="{{ v.email }}" onChange="{{ onChange }}" onBlur="{{ onBlur }}" style="width: 100%; box-sizing: border-box; padding: 12px 12px; font-size: 16px; color: #15296E; background: #F4F5F7; border: 1px solid transparent; border-bottom: 2px solid #BFC6CD; border-radius: 4px 4px 0 0;">
+                <span style="font-size: 12.5px; color: #C1152F; min-height: 0;">{{ err.email }}</span>
+                <span style="font-size: 12.5px; color: #5B6473; min-height: 0;">{{ emailHint }}</span>
+              </label>
+              
+              <label style="display: flex; flex-direction: column; gap: 6px;">
+                <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #5B6473;">Password *</span>
+                <input name="password" type="password" autocomplete="new-password" value="{{ v.password }}" onChange="{{ onChange }}" onBlur="{{ onBlur }}" style="width: 100%; box-sizing: border-box; padding: 12px 12px; font-size: 16px; color: #15296E; background: #F4F5F7; border: 1px solid transparent; border-bottom: 2px solid #BFC6CD; border-radius: 4px 4px 0 0;">
+                <span style="font-size: 12.5px; color: #C1152F; min-height: 0;">{{ err.password }}</span>
+                <span style="font-size: 12.5px; color: #5B6473; min-height: 0;">{{ passwordHint }}</span>
+              </label>
+              <label style="display: flex; flex-direction: column; gap: 6px;">
+                <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #5B6473;">Confirm password *</span>
+                <input name="confirmPassword" type="password" autocomplete="new-password" value="{{ v.confirmPassword }}" onChange="{{ onChange }}" onBlur="{{ onBlur }}" style="width: 100%; box-sizing: border-box; padding: 12px 12px; font-size: 16px; color: #15296E; background: #F4F5F7; border: 1px solid transparent; border-bottom: 2px solid #BFC6CD; border-radius: 4px 4px 0 0;">
+                <span style="font-size: 12.5px; color: #C1152F; min-height: 0;">{{ err.confirmPassword }}</span>
+              </label><label style="display: flex; flex-direction: column; gap: 6px;">
+                <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #5B6473;">Phone *</span>
+                <input name="phone" type="tel" autocomplete="tel" placeholder="(555) 555-0100" value="{{ v.phone }}" onChange="{{ onChange }}" onBlur="{{ onBlur }}" style="width: 100%; box-sizing: border-box; padding: 12px 12px; font-size: 16px; color: #15296E; background: #F4F5F7; border: 1px solid transparent; border-bottom: 2px solid #BFC6CD; border-radius: 4px 4px 0 0;">
+                <span style="font-size: 12.5px; color: #C1152F; min-height: 0;">{{ err.phone }}</span>
+              </label>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: minmax(150px, 240px) minmax(0, 1fr); gap: 8px 40px; padding: 24px 0; border-bottom: 1px solid #E4E6EA;">
+            <div>
+              <h2 style="margin: 0 0 6px; font-family: 'franklin-gothic-urw-comp', 'Franklin Gothic', Arial, sans-serif; font-weight: 600; font-size: clamp(16px, calc(8px + 0.85vw), 24px); letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap;">02 — Billing address</h2>
+              <p style="margin: 0; font-size: 14px; line-height: 1.45; color: #5B6473;">Where invoices and statements are sent.</p>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px 20px; align-content: start;">
+              <label style="display: flex; flex-direction: column; gap: 6px; grid-column: 1 / -1;">
+                <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #5B6473;">Street address *</span>
+                <input name="bAddress1" type="text" autocomplete="address-line1" value="{{ v.bAddress1 }}" onChange="{{ onChange }}" onBlur="{{ onBlur }}" style="width: 100%; box-sizing: border-box; padding: 12px 12px; font-size: 16px; color: #15296E; background: #F4F5F7; border: 1px solid transparent; border-bottom: 2px solid #BFC6CD; border-radius: 4px 4px 0 0;">
+                <span style="font-size: 12.5px; color: #C1152F; min-height: 0;">{{ err.bAddress1 }}</span>
+              </label>
+              <label style="display: flex; flex-direction: column; gap: 6px; grid-column: 1 / -1;">
+                <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #5B6473;">Suite, dock, floor</span>
+                <input name="bAddress2" type="text" autocomplete="address-line2" value="{{ v.bAddress2 }}" onChange="{{ onChange }}" style="width: 100%; box-sizing: border-box; padding: 12px 12px; font-size: 16px; color: #15296E; background: #F4F5F7; border: 1px solid transparent; border-bottom: 2px solid #BFC6CD; border-radius: 4px 4px 0 0;">
+              </label>
+              <label style="display: flex; flex-direction: column; gap: 6px;">
+                <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #5B6473;">City *</span>
+                <input name="bCity" type="text" autocomplete="address-level2" value="{{ v.bCity }}" onChange="{{ onChange }}" onBlur="{{ onBlur }}" style="width: 100%; box-sizing: border-box; padding: 12px 12px; font-size: 16px; color: #15296E; background: #F4F5F7; border: 1px solid transparent; border-bottom: 2px solid #BFC6CD; border-radius: 4px 4px 0 0;">
+                <span style="font-size: 12.5px; color: #C1152F; min-height: 0;">{{ err.bCity }}</span>
+              </label>
+              <label style="display: flex; flex-direction: column; gap: 6px;">
+                <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #5B6473;">Country *</span>
+                <select name="bCountry" autocomplete="country" value="{{ v.bCountry }}" onChange="{{ onChange }}" style="width: 100%; box-sizing: border-box; padding: 12px 12px; font-size: 16px; color: #15296E; background: #F4F5F7; border: 1px solid transparent; border-bottom: 2px solid #BFC6CD; border-radius: 4px 4px 0 0; appearance: none;">
+                  <option value="US">United States</option>
+                  <option value="CA">Canada</option>
+                </select>
+              </label>
+              <label style="display: flex; flex-direction: column; gap: 6px;">
+                <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #5B6473;">{{ bRegionLabel }}</span>
+                <select name="bState" autocomplete="address-level1" value="{{ v.bState }}" onChange="{{ onChange }}" onBlur="{{ onBlur }}" style="width: 100%; box-sizing: border-box; padding: 12px 12px; font-size: 16px; color: #15296E; background: #F4F5F7; border: 1px solid transparent; border-bottom: 2px solid #BFC6CD; border-radius: 4px 4px 0 0; appearance: none;">
+                  <option value="">{{ bRegionPrompt }}</option>
+                  <sc-for list="{{ bRegions }}" as="st" hint-placeholder-count="3">
+                    <option value="{{ st.code }}">{{ st.name }}</option>
+                  </sc-for>
+                </select>
+                <span style="font-size: 12.5px; color: #C1152F; min-height: 0;">{{ err.bState }}</span>
+              </label>
+              <label style="display: flex; flex-direction: column; gap: 6px;">
+                <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #5B6473;">{{ bZipLabel }}</span>
+                <input name="bZip" type="text" inputmode="numeric" autocomplete="postal-code" value="{{ v.bZip }}" onChange="{{ onChange }}" onBlur="{{ onBlur }}" style="width: 100%; box-sizing: border-box; padding: 12px 12px; font-size: 16px; color: #15296E; background: #F4F5F7; border: 1px solid transparent; border-bottom: 2px solid #BFC6CD; border-radius: 4px 4px 0 0;">
+                <span style="font-size: 12.5px; color: #C1152F; min-height: 0;">{{ err.bZip }}</span>
+              </label>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: minmax(150px, 240px) minmax(0, 1fr); gap: 8px 40px; padding: 24px 0; border-bottom: 1px solid #E4E6EA;">
+            <div>
+              <h2 style="margin: 0 0 6px; font-family: 'franklin-gothic-urw-comp', 'Franklin Gothic', Arial, sans-serif; font-weight: 600; font-size: clamp(16px, calc(8px + 0.85vw), 24px); letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap;">03 — Shipping address</h2>
+              <p style="margin: 0; font-size: 14px; line-height: 1.45; color: #5B6473;">You can add more ship-to locations after approval.</p>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 18px;">
+              <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; background: #F4F5F7; border: 1px solid #E4E6EA; padding: 14px 16px;">
+                <input type="checkbox" checked="{{ sameAsBilling }}" onChange="{{ toggleSame }}" style="width: 20px; height: 20px; accent-color: #E41C40; margin: 0; cursor: pointer;">
+                <span style="font-size: 16px; color: #15296E;">Shipping address is the same as billing</span>
+              </label>
+              <sc-if value="{{ needShipping }}" hint-placeholder-val="{{ false }}">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px 20px; align-content: start;">
+                  <label style="display: flex; flex-direction: column; gap: 6px; grid-column: 1 / -1;">
+                    <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #5B6473;">Street address *</span>
+                    <input name="sAddress1" type="text" value="{{ v.sAddress1 }}" onChange="{{ onChange }}" onBlur="{{ onBlur }}" style="width: 100%; box-sizing: border-box; padding: 12px 12px; font-size: 16px; color: #15296E; background: #F4F5F7; border: 1px solid transparent; border-bottom: 2px solid #BFC6CD; border-radius: 4px 4px 0 0;">
+                    <span style="font-size: 12.5px; color: #C1152F; min-height: 0;">{{ err.sAddress1 }}</span>
+                  </label>
+                  <label style="display: flex; flex-direction: column; gap: 6px; grid-column: 1 / -1;">
+                    <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #5B6473;">Suite, dock, floor</span>
+                    <input name="sAddress2" type="text" value="{{ v.sAddress2 }}" onChange="{{ onChange }}" style="width: 100%; box-sizing: border-box; padding: 12px 12px; font-size: 16px; color: #15296E; background: #F4F5F7; border: 1px solid transparent; border-bottom: 2px solid #BFC6CD; border-radius: 4px 4px 0 0;">
+                  </label>
+                  <label style="display: flex; flex-direction: column; gap: 6px;">
+                    <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #5B6473;">City *</span>
+                    <input name="sCity" type="text" value="{{ v.sCity }}" onChange="{{ onChange }}" onBlur="{{ onBlur }}" style="width: 100%; box-sizing: border-box; padding: 12px 12px; font-size: 16px; color: #15296E; background: #F4F5F7; border: 1px solid transparent; border-bottom: 2px solid #BFC6CD; border-radius: 4px 4px 0 0;">
+                    <span style="font-size: 12.5px; color: #C1152F; min-height: 0;">{{ err.sCity }}</span>
+                  </label>
+                  <label style="display: flex; flex-direction: column; gap: 6px;">
+                    <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #5B6473;">Country *</span>
+                    <select name="sCountry" value="{{ v.sCountry }}" onChange="{{ onChange }}" style="width: 100%; box-sizing: border-box; padding: 12px 12px; font-size: 16px; color: #15296E; background: #F4F5F7; border: 1px solid transparent; border-bottom: 2px solid #BFC6CD; border-radius: 4px 4px 0 0; appearance: none;">
+                      <option value="US">United States</option>
+                      <option value="CA">Canada</option>
+                    </select>
+                  </label>
+                  <label style="display: flex; flex-direction: column; gap: 6px;">
+                    <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #5B6473;">{{ sRegionLabel }}</span>
+                    <select name="sState" value="{{ v.sState }}" onChange="{{ onChange }}" onBlur="{{ onBlur }}" style="width: 100%; box-sizing: border-box; padding: 12px 12px; font-size: 16px; color: #15296E; background: #F4F5F7; border: 1px solid transparent; border-bottom: 2px solid #BFC6CD; border-radius: 4px 4px 0 0; appearance: none;">
+                      <option value="">{{ sRegionPrompt }}</option>
+                      <sc-for list="{{ sRegions }}" as="st" hint-placeholder-count="3">
+                        <option value="{{ st.code }}">{{ st.name }}</option>
+                      </sc-for>
+                    </select>
+                    <span style="font-size: 12.5px; color: #C1152F; min-height: 0;">{{ err.sState }}</span>
+                  </label>
+                  <label style="display: flex; flex-direction: column; gap: 6px;">
+                    <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #5B6473;">{{ sZipLabel }}</span>
+                    <input name="sZip" type="text" inputmode="numeric" value="{{ v.sZip }}" onChange="{{ onChange }}" onBlur="{{ onBlur }}" style="width: 100%; box-sizing: border-box; padding: 12px 12px; font-size: 16px; color: #15296E; background: #F4F5F7; border: 1px solid transparent; border-bottom: 2px solid #BFC6CD; border-radius: 4px 4px 0 0;">
+                    <span style="font-size: 12.5px; color: #C1152F; min-height: 0;">{{ err.sZip }}</span>
+                  </label>
+                  
+                </div>
+              </sc-if>
+            </div>
+          </div>
+
+          <sc-if value="{{ showTax }}" hint-placeholder-val="{{ true }}">
+            <div style="display: grid; grid-template-columns: minmax(150px, 240px) minmax(0, 1fr); gap: 8px 40px; padding: 24px 0; border-bottom: 1px solid #E4E6EA;">
+              <div>
+                <h2 style="margin: 0 0 6px; font-family: 'franklin-gothic-urw-comp', 'Franklin Gothic', Arial, sans-serif; font-weight: 600; font-size: clamp(16px, calc(8px + 0.85vw), 24px); letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap;">04 — Tax exemption</h2>
+                <p style="margin: 0; font-size: 14px; line-height: 1.45; color: #5B6473;">Optional.</p>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 18px;">
+                <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; background: #F4F5F7; border: 1px solid #E4E6EA; padding: 14px 16px;">
+                  <input type="checkbox" checked="{{ taxExempt }}" onChange="{{ toggleTax }}" style="width: 20px; height: 20px; accent-color: #E41C40; margin: 0; cursor: pointer;">
+                  <span style="font-size: 16px; color: #15296E;">We hold a resale or tax-exemption certificate</span>
+                </label>
+                <sc-if value="{{ taxExempt }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px 20px;">
+                    <label style="display: flex; flex-direction: column; gap: 6px;">
+                      <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #5B6473;">{{ taxIdLabel }}</span>
+                      <input name="taxId" type="text" placeholder="{{ taxIdPlaceholder }}" value="{{ v.taxId }}" onChange="{{ onChange }}" onBlur="{{ onBlur }}" style="width: 100%; box-sizing: border-box; padding: 12px 12px; font-size: 16px; color: #15296E; background: #F4F5F7; border: 1px solid transparent; border-bottom: 2px solid #BFC6CD; border-radius: 4px 4px 0 0;">
+                      <span style="font-size: 12.5px; color: #C1152F; min-height: 0;">{{ err.taxId }}</span>
+                    </label>
+                    <label style="display: flex; flex-direction: column; gap: 6px;">
+                      <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #5B6473;">{{ taxRegionLabel }}</span>
+                      <select name="taxState" value="{{ v.taxState }}" onChange="{{ onChange }}" onBlur="{{ onBlur }}" style="width: 100%; box-sizing: border-box; padding: 12px 12px; font-size: 16px; color: #15296E; background: #F4F5F7; border: 1px solid transparent; border-bottom: 2px solid #BFC6CD; border-radius: 4px 4px 0 0; appearance: none;">
+                        <option value="">{{ bRegionPrompt }}</option>
+                        <sc-for list="{{ bRegions }}" as="st" hint-placeholder-count="3">
+                          <option value="{{ st.code }}">{{ st.name }}</option>
+                        </sc-for>
+                      </select>
+                      <span style="font-size: 12.5px; color: #C1152F; min-height: 0;">{{ err.taxState }}</span>
+                    </label>
+                    <label style="grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 16px; border: 2px dashed #BFC6CD; background: #FAFBFC; padding: 20px; cursor: pointer;" style-hover="border-color: #E41C40;">
+                      <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange="{{ onFile }}" style="display: none;">
+                      <span style="display: inline-block; padding: 11px 20px; background: #15296E; color: #FFFFFF; font-family: 'franklin-gothic-urw-comp', 'Franklin Gothic', Arial, sans-serif; font-weight: 600; font-size: 14px; letter-spacing: 0.12em; text-transform: uppercase;">Choose file</span>
+                      <span style="font-size: 15px; color: #3F4650;">{{ fileLabel }}</span>
+                    </label>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+          </sc-if>
+
+          <div style="display: grid; grid-template-columns: minmax(150px, 240px) minmax(0, 1fr); gap: 8px 40px; padding: 24px 0;">
+            <div>
+              <h2 style="margin: 0 0 6px; font-family: 'franklin-gothic-urw-comp', 'Franklin Gothic', Arial, sans-serif; font-weight: 600; font-size: clamp(16px, calc(8px + 0.85vw), 24px); letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap;">{{ finalStepLabel }}</h2>
+              <p style="margin: 0; font-size: 14px; line-height: 1.45; color: #5B6473;">Content can go here...</p>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+              <label style="display: flex; align-items: flex-start; gap: 12px; cursor: pointer;">
+                <input type="checkbox" checked="{{ marketing }}" onChange="{{ toggleMarketing }}" style="width: 20px; height: 20px; accent-color: #E41C40; margin: 2px 0 0; cursor: pointer;">
+                <span style="font-size: 15px; line-height: 1.5; color: #3F4650;"><div>I acknowledge that I have read and understand the Crown Packaging Corporation <a href="#">Privacy Policy</a>.</div></span>
+              </label>
+              <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center;">
+                <button type="button" onClick="{{ submit }}" disabled="{{ submitting }}" style="padding: 16px 34px; background: #E41C40; color: #FFFFFF; border: none; cursor: pointer; font-family: 'franklin-gothic-urw-comp', 'Franklin Gothic', Arial, sans-serif; font-weight: 700; font-size: 17px; letter-spacing: 0.14em; text-transform: uppercase;" style-hover="background: #C1152F;">{{ submitLabel }}</button>
+                
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </sc-if>
+  </div>
+
+  <sc-if value="{{ addrModalOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position: fixed; inset: 0; z-index: 60; background: rgba(13, 20, 45, 0.55); display: flex; align-items: center; justify-content: center; padding: 24px;">
+      <div role="dialog" aria-modal="true" aria-label="Verify your address" style="width: 100%; max-width: 620px; background: #FFFFFF; border-top: 4px solid #15296E; box-shadow: 0 24px 60px rgba(13, 20, 45, 0.28); display: flex; flex-direction: column; max-height: 100%; overflow: auto;">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 26px 30px 0;">
+          <div>
+            
+            <h2 style="margin: 6px 0 0; font-family: 'franklin-gothic-urw-comp', 'Franklin Gothic', Arial, sans-serif; font-weight: 600; font-size: 30px; line-height: 1.1; letter-spacing: 0.02em; text-transform: uppercase; color: #15296E;">Verify your address</h2>
+            
+          </div>
+          <button type="button" onClick="{{ closeAddrModal }}" aria-label="Close" style="flex: none; width: 34px; height: 34px; border: 1px solid #D5D8DE; background: #FFFFFF; color: #5B6473; font-size: 18px; line-height: 1; cursor: pointer; border-radius: 4px;" style-hover="border-color: #15296E; color: #15296E;">×</button>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 12px; padding: 22px 30px 0;">
+          <label style="display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 14px; align-items: start; padding: 16px 18px; border: 2px solid {{ suggestedBorder }}; background: {{ suggestedBg }}; cursor: pointer;">
+            <input type="radio" name="addrChoice" checked="{{ suggestedChecked }}" onChange="{{ pickSuggested }}" style="margin-top: 3px; width: 17px; height: 17px; accent-color: #15296E;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #15296E;">USPS recommended</span>
+                
+              </div>
+              <div style="margin-top: 8px; font-size: 15.5px; line-height: 1.55; color: #15296E;">{{ suggestedLine1 }}</div>
+              <div style="font-size: 15.5px; line-height: 1.55; color: #15296E;">{{ suggestedLine2 }}</div>
+              <div style="margin-top: 8px; font-size: 13px; line-height: 1.45; color: #5B6473;">{{ suggestedNote }}</div>
+            </div>
+          </label>
+
+          <label style="display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 14px; align-items: start; padding: 16px 18px; border: 2px solid {{ enteredBorder }}; background: {{ enteredBg }}; cursor: pointer;">
+            <input type="radio" name="addrChoice" checked="{{ enteredChecked }}" onChange="{{ pickEntered }}" style="margin-top: 3px; width: 17px; height: 17px; accent-color: #15296E;">
+            <div>
+              <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #5B6473;">What you entered</span>
+              <div style="margin-top: 8px; font-size: 15.5px; line-height: 1.55; color: #3F4650;">{{ enteredLine1 }}</div>
+              <div style="font-size: 15.5px; line-height: 1.55; color: #3F4650;">{{ enteredLine2 }}</div>
+            </div>
+          </label>
+        </div>
+
+        
+
+        <div style="display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; padding: 24px 30px 28px;">
+          <button type="button" onClick="{{ closeAddrModal }}" style="font-family: 'franklin-gothic-urw-comp', 'Franklin Gothic', Arial, sans-serif; font-size: 16px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 13px 22px; color: #15296E; background: #FFFFFF; border: 2px solid #15296E; cursor: pointer;" style-hover="background: #15296E; color: #FFFFFF;">Edit address</button>
+          <button type="button" onClick="{{ confirmAddrModal }}" style="font-family: 'franklin-gothic-urw-comp', 'Franklin Gothic', Arial, sans-serif; font-size: 16px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 13px 26px; color: #FFFFFF; background: #E41C40; border: 2px solid #E41C40; cursor: pointer;" style-hover="background: #C1152F; border-color: #C1152F;">Use this address</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <div style="width: 100%; max-width: 1180px; font-size: 13.5px; color: #5B6473;">Need help with an application? Email <a href="#">CrownCommerceSupport@crownpack.com</a>&nbsp;</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showTaxExemption&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Registration options&quot;},&quot;shippingSameByDefault&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Registration options&quot;},&quot;showAddressModal&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Registration options&quot;}}">
+const US_STATES = [
+  ['AL','Alabama'],['AK','Alaska'],['AZ','Arizona'],['AR','Arkansas'],['CA','California'],['CO','Colorado'],['CT','Connecticut'],['DE','Delaware'],['DC','District of Columbia'],['FL','Florida'],['GA','Georgia'],['HI','Hawaii'],['ID','Idaho'],['IL','Illinois'],['IN','Indiana'],['IA','Iowa'],['KS','Kansas'],['KY','Kentucky'],['LA','Louisiana'],['ME','Maine'],['MD','Maryland'],['MA','Massachusetts'],['MI','Michigan'],['MN','Minnesota'],['MS','Mississippi'],['MO','Missouri'],['MT','Montana'],['NE','Nebraska'],['NV','Nevada'],['NH','New Hampshire'],['NJ','New Jersey'],['NM','New Mexico'],['NY','New York'],['NC','North Carolina'],['ND','North Dakota'],['OH','Ohio'],['OK','Oklahoma'],['OR','Oregon'],['PA','Pennsylvania'],['RI','Rhode Island'],['SC','South Carolina'],['SD','South Dakota'],['TN','Tennessee'],['TX','Texas'],['UT','Utah'],['VT','Vermont'],['VA','Virginia'],['WA','Washington'],['WV','West Virginia'],['WI','Wisconsin'],['WY','Wyoming']
+].map(([code, name]) => ({ code, name }));
+
+const CA_PROVINCES = [
+  ['AB','Alberta'],['BC','British Columbia'],['MB','Manitoba'],['NB','New Brunswick'],['NL','Newfoundland and Labrador'],['NT','Northwest Territories'],['NS','Nova Scotia'],['NU','Nunavut'],['ON','Ontario'],['PE','Prince Edward Island'],['QC','Quebec'],['SK','Saskatchewan'],['YT','Yukon']
+].map(([code, name]) => ({ code, name }));
+
+const REGIONS = { US: US_STATES, CA: CA_PROVINCES };
+const ZIP_RULES = {
+  US: { test: /^\d{5}(-\d{4})?$/, message: 'Enter a 5-digit ZIP code' },
+  CA: { test: /^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/, message: 'Enter a postal code like K1A 0B1' },
+};
+
+const LABELS = {
+  firstName: 'First name', lastName: 'Last name', email: 'Work email', phone: 'Direct phone',
+  password: 'Password', confirmPassword: 'Password confirmation',
+  companyName: 'Company name', bAddress1: 'Billing street address', bCity: 'Billing city',
+  bState: 'Billing state', bZip: 'Billing ZIP', sAddress1: 'Shipping street address',
+  sCity: 'Shipping city', sState: 'Shipping state', sZip: 'Shipping ZIP',
+  taxId: 'Tax ID', taxState: 'Exempt state',
+};
+
+class Component extends DCLogic {
+  state = {
+    v: {
+      firstName: '', lastName: '', email: '', phone: '', password: '', confirmPassword: '', existingCustomer: false, companyName: '',
+      bCountry: 'US', bAddress1: '', bAddress2: '', bCity: '', bState: '', bZip: '',
+      sCountry: 'US', sAddress1: '', sAddress2: '', sCity: '', sState: '', sZip: '', sNotes: '',
+      taxId: '', taxState: '',
+    },
+    err: {},
+    sameAsBilling: true,
+    addrModalOpen: false,
+    addrScope: 'billing',
+    addrChoice: 'suggested',
+    taxExempt: false,
+    marketing: true,
+    fileName: '',
+    submitting: false,
+    submitted: false,
+    touched: {},
+  };
+
+  addrModalVals() {
+    const { v, addrModalOpen, addrChoice, addrScope } = this.state;
+    const scope = addrScope === 'shipping' ? 'shipping' : 'billing';
+    const p = scope === 'shipping' ? 's' : 'b';
+    const line1 = [v[p + 'Address1'], v[p + 'Address2']].filter(Boolean).join(', ') || '1420 Industrial Pkwy, Ste 200';
+    const city = v[p + 'City'] || 'Columbus';
+    const region = v[p + 'State'] || 'OH';
+    const zip = v[p + 'Zip'] || '43204';
+    const sug = (s) => s.toUpperCase().replace(/\bSTREET\b/g, 'ST').replace(/\bSUITE\b|\bSTE\b/g, 'STE').replace(/\bPARKWAY\b/g, 'PKWY');
+    const suggested = addrChoice !== 'entered';
+    return {
+      addrModalOpen: (this.props.showAddressModal ?? false) || !!addrModalOpen,
+      addrModalScope: scope,
+      enteredLine1: line1,
+      enteredLine2: city + ', ' + region + ' ' + zip,
+      suggestedLine1: sug(line1),
+      suggestedLine2: sug(city) + ', ' + region + ' ' + zip + '-1187',
+      suggestedNote: 'Standardized to USPS format, ZIP+4 added.',
+      suggestedChecked: suggested,
+      enteredChecked: !suggested,
+      suggestedBorder: suggested ? '#15296E' : '#D5D8DE',
+      suggestedBg: suggested ? '#F2F4FA' : '#FFFFFF',
+      enteredBorder: suggested ? '#D5D8DE' : '#15296E',
+      enteredBg: suggested ? '#FFFFFF' : '#F2F4FA',
+      pickSuggested: () => this.setState({ addrChoice: 'suggested' }),
+      pickEntered: () => this.setState({ addrChoice: 'entered' }),
+      closeAddrModal: () => this.setState({ addrModalOpen: false }),
+      confirmAddrModal: () => this.setState({ addrModalOpen: false }),
+    };
+  }
+
+  requiredFields() {
+    const base = ['firstName', 'lastName', 'email', 'phone', 'password', 'confirmPassword', 'companyName', 'bAddress1', 'bCity', 'bState', 'bZip'];
+    if (!this.state.sameAsBilling) base.push('sAddress1', 'sCity', 'sState', 'sZip');
+    if (this.state.taxExempt && (this.props.showTaxExemption ?? true)) base.push('taxId', 'taxState');
+    return base;
+  }
+
+  fieldError(name, value) {
+    const val = (value || '').trim();
+    if (this.requiredFields().includes(name) && !val) {
+      let label = LABELS[name];
+      if (name === 'bZip') label = this.state.v.bCountry === 'CA' ? 'Billing postal code' : 'Billing ZIP';
+      if (name === 'sZip') label = this.state.v.sCountry === 'CA' ? 'Shipping postal code' : 'Shipping ZIP';
+      if (name === 'bState' && this.state.v.bCountry === 'CA') label = 'Billing province';
+      if (name === 'sState' && this.state.v.sCountry === 'CA') label = 'Shipping province';
+      if (name === 'taxState' && this.state.v.bCountry === 'CA') label = 'Exempt province';
+      return label + ' is required';
+    }
+    if (name === 'email' && val && !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(val)) return 'Enter a valid email address';
+    if (name === 'email' && val && /@(gmail|yahoo|hotmail|outlook|aol)\./i.test(val)) return 'Use a company email address';
+    if (name === 'phone' && val && val.replace(/\D/g, '').length < 10) return 'Enter a 10-digit phone number';
+    if (name === 'password' && val) {
+      if (val.length < 8) return 'Use at least 8 characters';
+      if (!/[A-Za-z]/.test(val) || !/\d/.test(val)) return 'Include at least one letter and one number';
+    }
+    if (name === 'confirmPassword' && val && val !== this.state.v.password) return 'Passwords do not match';
+    if (name === 'bZip' || name === 'sZip') {
+      const rule = ZIP_RULES[name === 'bZip' ? this.state.v.bCountry : this.state.v.sCountry] || ZIP_RULES.US;
+      if (val && !rule.test.test(val)) return rule.message;
+    }
+    if (name === 'taxId' && val) {
+      const ca = this.state.v.bCountry === 'CA';
+      const ok = ca ? /^\d{9}([A-Za-z]{2}\d{4})?$/.test(val.replace(/\s/g, '')) : /^\d{2}-?\d{7}$/.test(val);
+      if (!ok) return ca ? 'Enter a 9-digit business number' : 'Enter a 9-digit Tax ID (12-3456789)';
+    }
+    return '';
+  }
+
+  validateAll() {
+    const err = {};
+    this.requiredFields().concat(['email', 'phone', 'password', 'confirmPassword', 'bZip', 'sZip', 'taxId']).forEach((name) => {
+      if (!(name in this.state.v)) return;
+      const msg = this.fieldError(name, this.state.v[name]);
+      if (msg) err[name] = msg;
+    });
+    return err;
+  }
+
+  onChange = (e) => {
+    const { name, value } = e.target;
+    this.setState((s) => {
+      const v = { ...s.v, [name]: value };
+      const err = { ...s.err };
+      if (err[name]) delete err[name];
+      if (name === 'bCountry') {
+        v.bState = ''; v.taxState = '';
+        delete err.bState; delete err.bZip; delete err.taxState; delete err.taxId;
+      }
+      if (name === 'sCountry') {
+        v.sState = '';
+        delete err.sState; delete err.sZip;
+      }
+      return { v, err };
+    });
+  };
+
+  onBlur = (e) => {
+    const { name, value } = e.target;
+    const msg = this.fieldError(name, value);
+    this.setState((s) => {
+      const err = { ...s.err };
+      if (msg) err[name] = msg; else delete err[name];
+      return { err, touched: { ...s.touched, [name]: true } };
+    });
+  };
+
+  submit = async () => {
+    const err = this.validateAll();
+    if (Object.keys(err).length) {
+      this.setState({ err });
+      return;
+    }
+    this.setState({ err: {}, submitting: true });
+    const { v, sameAsBilling, taxExempt, marketing, fileName } = this.state;
+    const payload = {
+      contact: { firstName: v.firstName, lastName: v.lastName, email: v.email, phone: v.phone, password: v.password, existingCustomer: !!v.existingCustomer },
+      company: { name: v.companyName, marketingOptIn: marketing },
+      billingAddress: { address1: v.bAddress1, address2: v.bAddress2, city: v.bCity, state: v.bState, postalCode: v.bZip, country: v.bCountry },
+      shippingAddress: sameAsBilling
+        ? { sameAsBilling: true }
+        : { address1: v.sAddress1, address2: v.sAddress2, city: v.sCity, state: v.sState, postalCode: v.sZip, country: v.sCountry, deliveryNotes: v.sNotes },
+      taxExemption: taxExempt ? { taxId: v.taxId, state: v.taxState, country: v.bCountry, certificate: fileName } : null,
+    };
+    try {
+      // Custom endpoint stands in for the B2B registration API.
+      await fetch('/api/b2b/registration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    } catch (e) {
+      /* endpoint not wired in the prototype */
+    }
+    setTimeout(() => this.setState({ submitting: false, submitted: true }), 550);
+  };
+
+  reset = () => this.setState({ submitted: false, err: {}, touched: {} });
+
+  renderVals() {
+    const { v, err, sameAsBilling, taxExempt, marketing, fileName, submitting, submitted } = this.state;
+    const showTax = this.props.showTaxExemption ?? true;
+    const errorKeys = Object.keys(err);
+    const shipSame = this.props.shippingSameByDefault;
+    const bCA = v.bCountry === 'CA';
+    const sCA = v.sCountry === 'CA';
+    return {
+      v,
+      err,
+      states: US_STATES,
+      bRegions: REGIONS[v.bCountry] || US_STATES,
+      sRegions: REGIONS[v.sCountry] || US_STATES,
+      bRegionLabel: bCA ? 'Province *' : 'State *',
+      sRegionLabel: sCA ? 'Province *' : 'State *',
+      bRegionPrompt: bCA ? 'Select province' : 'Select state',
+      sRegionPrompt: sCA ? 'Select province' : 'Select state',
+      bZipLabel: bCA ? 'Postal code *' : 'ZIP code *',
+      sZipLabel: sCA ? 'Postal code *' : 'ZIP code *',
+      taxIdLabel: bCA ? 'Business number (BN) *' : 'Tax ID / EIN *',
+      taxIdPlaceholder: bCA ? '123456789 RT0001' : '12-3456789',
+      taxRegionLabel: bCA ? 'Exempt in province *' : 'Exempt in state *',
+      onChange: this.onChange,
+      onBlur: this.onBlur,
+      submit: this.submit,
+      reset: this.reset,
+      sameAsBilling,
+      needShipping: !sameAsBilling,
+      toggleSame: () => this.setState((s) => ({ sameAsBilling: !s.sameAsBilling })),
+      taxExempt,
+      toggleTax: () => this.setState((s) => ({ taxExempt: !s.taxExempt })),
+      marketing,
+      toggleMarketing: () => this.setState((s) => ({ marketing: !s.marketing })),
+      onFile: (e) => this.setState({ fileName: e.target.files && e.target.files[0] ? e.target.files[0].name : '' }),
+      fileLabel: fileName || 'PDF or image, up to 10 MB',
+      showTax,
+      submitting,
+      submitted,
+      editing: !submitted,
+      submitLabel: submitting ? 'Submitting…' : 'Submit application',
+      finalStepLabel: showTax ? '05 — Submit' : '04 — Submit',
+      ...this.addrModalVals(),
+      toggleExisting: (e) => { const c = e.target.checked; this.setState(s => ({ v: { ...s.v, existingCustomer: c } })); },
+      emailHint: err.email ? '' : 'Used to sign in once approved',
+      passwordHint: err.password ? '' : 'At least 8 characters, with a letter and a number',
+      hasErrors: errorKeys.length > 0,
+      errorSummary: errorKeys.length
+        ? errorKeys.map((k) => err[k]).slice(0, 3).join(' · ') + (errorKeys.length > 3 ? ' · +' + (errorKeys.length - 3) + ' more' : '')
+        : '',
+      contactSummary: (v.firstName + ' ' + v.lastName).trim(),
+      reference: 'CC-' + String(Date.now()).slice(-6),
+      shipSame,
+    };
+  }
+
+  componentDidMount() {
+    if (this.props.shippingSameByDefault === false) this.setState({ sameAsBilling: false });
+  }
+}
+</script>
+</body>
+</html>

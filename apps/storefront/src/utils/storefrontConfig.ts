@@ -12,9 +12,8 @@ import {
   getStorefrontConfigs,
   getStorefrontConfigWithCompanyHierarchy,
   getStorefrontDefaultLanguages,
-  getTaxZoneRates,
 } from '@/shared/service/b2b';
-import { getActiveBcCurrency } from '@/shared/service/bc';
+import { getActiveBcCurrency, getLocales } from '@/shared/service/bc';
 import { getStorefrontTaxDisplayType } from '@/shared/service/bc/graphql/tax';
 import { store } from '@/store';
 import { setCompanyHierarchyInfoModules } from '@/store/slices/company';
@@ -22,15 +21,18 @@ import {
   setBlockPendingAccountViewPrice,
   setBlockPendingQuoteNonPurchasableOOS,
   setFeatureFlags,
+  setLocales,
   setLoginLandingLocation,
   setQuoteSubmissionResponse,
   setShowInclusiveTaxPrice,
-  setTaxZoneRates,
 } from '@/store/slices/global';
 import { setActiveCurrency, setCurrencies } from '@/store/slices/storeConfigs';
 import { B3SStorage } from '@/utils/b3Storage';
 import { channelId } from '@/utils/basicConfig';
 import { FeatureFlagKey, featureFlags } from '@/utils/featureFlags';
+import { setMultiLanguageEnabledCache } from '@/utils/multiLanguageFlagCache';
+import { setNativeLinkInterceptionEnabled } from '@/utils/nativeStorefrontLinks';
+import { setDefaultLoginStylingEnabled } from '@/utils/preMountLoginMask';
 
 import { checkEveryPermissionsCode } from './b3CheckPermissions/check';
 
@@ -44,27 +46,6 @@ interface CurrencyNodeProps {
     entityId: number;
     isActive: boolean;
   };
-}
-
-interface TaxZoneRatesProps {
-  rates: {
-    id: number;
-    name: string;
-    enabled: boolean;
-    priority: number;
-    classRates: {
-      rate: number;
-      taxClassId: number;
-    }[];
-  }[];
-  priceDisplaySettings: {
-    showInclusive: boolean;
-    showBothOnDetailView: boolean;
-    showBothOnListView: boolean;
-  };
-  enabled: boolean;
-  id: number;
-  name: string;
 }
 
 const storefrontKeys: StorefrontKeysProps[] = [
@@ -317,10 +298,33 @@ const getStoreConfigs = async (dispatch: any, dispatchGlobal: any) => {
     }
   });
 
+  // Cache the default-login-styling flag so the next page load can gate the
+  // pre-mount login mask synchronously, before StoreConfig is fetched again.
+  // Read from the store (rather than the loop) so an absent flag resolves to
+  // false rather than leaving a stale cached value.
+  setDefaultLoginStylingEnabled(
+    store.getState().global.featureFlags['B2B-4870.default_buyer_portal_styling_on_login_page'] ??
+      false,
+  );
+
+  // Same rationale as above, for the native-link-interception flag read in main.ts.
+  // TODO(B2B-4912): remove this call once the flag is fully rolled out and deleted
+  // (see nativeStorefrontLinks.ts for the rest of the caching bridge to remove).
+  setNativeLinkInterceptionEnabled(
+    store.getState().global.featureFlags['B2B-4912.buyer_portal_native_link_interception'] ?? false,
+  );
+
+  // Same rationale, for the multi-language flag read by the translation thunks:
+  // B3StoreContainer dispatches them before these flags land.
+  setMultiLanguageEnabledCache(
+    store.getState().global.featureFlags['LOCAL-3191.B2B_multi_language'] ?? false,
+  );
+
   dispatchGlobal({
     type: 'common',
     payload: {
       logo,
+      isLogoLoaded: true,
       quoteConfig: storefrontConfigs,
       blockPendingAccountOrderCreation,
     },
@@ -345,6 +349,15 @@ export const getAccountHierarchyIsEnabled = async () => {
 const setStorefrontConfig = async (dispatch: DispatchProps) => {
   const { featureFlags } = store.getState().global;
   const useCombinedQuery = featureFlags['B2B-3817.disable_masquerading_cleanup_on_login'] ?? false;
+
+  if (
+    featureFlags['LOCAL-3191.B2B_multi_language'] ||
+    featureFlags['LOCAL-3280.B2B_email_multi_language']
+  ) {
+    getLocales()
+      .then((res) => store.dispatch(setLocales(res.data.site.settings.locales)))
+      .catch(() => {});
+  }
 
   if (useCombinedQuery) {
     const hasCompanyHierarchyPermission = checkEveryPermissionsCode(
@@ -472,41 +485,11 @@ const setStorefrontConfig = async (dispatch: DispatchProps) => {
   }
 };
 
-const getTaxDisplayTypeFromStorefrontGraph = async () => {
+const getGlobalStoreTax = async () => {
   const response = await getStorefrontTaxDisplayType();
   const showInclusive = response.pdp === 'INC';
   B3SStorage.set('showInclusiveTaxPrice', showInclusive);
   store.dispatch(setShowInclusiveTaxPrice(showInclusive));
-};
-
-const getStoreTaxZoneRates = async () => {
-  const { taxZoneRates = [] } = await getTaxZoneRates();
-
-  if (taxZoneRates.length) {
-    const defaultTaxZone: TaxZoneRatesProps = taxZoneRates.find(
-      (taxZone: { id: number }) => taxZone.id === 1,
-    );
-    if (defaultTaxZone) {
-      const {
-        priceDisplaySettings: { showInclusive },
-      } = defaultTaxZone;
-      B3SStorage.set('showInclusiveTaxPrice', showInclusive);
-      store.dispatch(setShowInclusiveTaxPrice(showInclusive));
-    }
-  }
-
-  store.dispatch(setTaxZoneRates(taxZoneRates));
-};
-
-const getGlobalStoreTax = async () => {
-  const { featureFlags } = store.getState().global;
-  const taxZoneRatesPromise = featureFlags[
-    'B2B-3857.move_tax_display_settings_to_bc_storefront_graph'
-  ]
-    ? getTaxDisplayTypeFromStorefrontGraph()
-    : getStoreTaxZoneRates();
-
-  return taxZoneRatesPromise;
 };
 
 export { getStoreConfigs, setStorefrontConfig, getGlobalStoreTax };

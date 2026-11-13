@@ -115,6 +115,11 @@ interface VariantInfo {
   purchasingDisabled: '1' | '0';
   variantSku: string;
   imageUrl: string;
+  inventoryTracking?: string;
+  availableToSell?: number;
+  unlimitedBackorder?: boolean;
+  totalOnHand?: number | null;
+  backorderMessage?: string | null;
 }
 
 interface VariantInfoResponse {
@@ -425,6 +430,24 @@ const buildAddCartLineItemsResponseWith = builder(() => ({
 const storeInfoWithDateFormat = buildStoreInfoStateWith({ timeFormat: { display: 'j F Y' } });
 
 const preloadedState = { company: approvedB2BCompany, storeInfo: storeInfoWithDateFormat };
+
+const backorderPreloadedState = {
+  company: approvedB2BCompany,
+  storeInfo: storeInfoWithDateFormat,
+  global: buildGlobalStateWith({
+    backorderEnabled: true,
+    backorderDisplaySettings: {
+      showQuantityOnBackorder: true,
+      showQuantityOnHand: true,
+      showBackorderMessage: true,
+      showDefaultShippingExpectationPrompt: false,
+      defaultShippingExpectationPrompt: '',
+    },
+    featureFlags: {
+      'BACK-134.backorders_phase_1_1_control_messaging_on_storefront': true,
+    },
+  }),
+};
 
 beforeEach(() => {
   set(window, 'b2b.callbacks.dispatchEvent', vi.fn());
@@ -984,7 +1007,7 @@ it('adds a product to the cart', async () => {
   await userEvent.click(screen.getByRole('menuitem', { name: /Add selected to cart/ }));
 
   await waitFor(() => {
-    expect(screen.getByText('Products were added to cart')).toBeInTheDocument();
+    expect(screen.getByText('1 product was added to cart')).toBeInTheDocument();
   });
 
   expect(Cookies.get('cartId')).toBe('12345');
@@ -1162,7 +1185,7 @@ describe('when product purchasing_disabled', () => {
       await userEvent.click(screen.getByRole('menuitem', { name: /Add selected to cart/ }));
 
       await waitFor(() => {
-        expect(screen.getByText('Products were added to cart')).toBeInTheDocument();
+        expect(screen.getByText('1 product was added to cart')).toBeInTheDocument();
       });
 
       expect(Cookies.get('cartId')).toBe('12345');
@@ -1437,7 +1460,7 @@ describe('when the quantity is not within the min/max', () => {
     await userEvent.click(screen.getByRole('menuitem', { name: /Add selected to cart/ }));
 
     await waitFor(() => {
-      expect(screen.getByText('Products were added to cart')).toBeInTheDocument();
+      expect(screen.getByText('1 product was added to cart')).toBeInTheDocument();
     });
   });
 
@@ -1651,6 +1674,337 @@ describe('when the quantity is not within the min/max', () => {
     await waitFor(() => {
       expect(
         screen.getByText('You need to purchase a maximum of 10 of the VARIANT-123 per order.'),
+      ).toBeInTheDocument();
+    });
+  });
+});
+
+describe('when the product variant has changed (stale purchased products)', () => {
+  it('displays error when variant in purchased products no longer exists in catalog', async () => {
+    const getRecentlyOrderedProducts = vi.fn();
+    const searchProducts = vi.fn<(...arg: unknown[]) => SearchProductsResponse>();
+    const laughCanister = buildRecentlyOrderedProductNodeWith({
+      node: {
+        productName: 'Laugh Canister',
+        variantSku: 'OLD-VARIANT-SKU',
+        variantId: '66',
+        productId: '86',
+      },
+    });
+
+    when(getRecentlyOrderedProducts)
+      .calledWith(stringContainingAll('first: 12', 'offset: 0', 'orderBy: "-lastOrderedAt"'))
+      .thenReturn(
+        buildGetRecentlyOrderedProductsWith({
+          data: { orderedProducts: { totalCount: 1, edges: [laughCanister] } },
+        }),
+      );
+
+    when(searchProducts)
+      .calledWith(stringContainingAll(`productIds: [${laughCanister.node.productId}]`))
+      .thenReturn({
+        data: {
+          productsSearch: [
+            buildSearchProductWith({
+              id: Number(laughCanister.node.productId),
+              name: laughCanister.node.productName,
+              sku: laughCanister.node.sku,
+              orderQuantityMaximum: 0,
+              orderQuantityMinimum: 0,
+              inventoryLevel: 100,
+              variants: [
+                buildVariantWith({
+                  product_id: Number(laughCanister.node.productId),
+                  variant_id: 99,
+                  sku: 'NEW-VARIANT-SKU',
+                  purchasing_disabled: false,
+                }),
+              ],
+            }),
+          ],
+        },
+      });
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', ({ query }) =>
+        HttpResponse.json(getRecentlyOrderedProducts(query)),
+      ),
+      graphql.query('SearchProducts', ({ query }) => HttpResponse.json(searchProducts(query))),
+      graphql.query('getCart', () =>
+        HttpResponse.json(buildGetCartWith({ data: { site: { cart: null } } })),
+      ),
+    );
+
+    renderWithProviders(<QuickOrder />, { preloadedState });
+
+    const row = await screen.findByRole('row', { name: /Laugh Canister/ });
+
+    await userEvent.click(within(row).getByRole('checkbox'));
+
+    const addButton = screen.getByRole('button', { name: 'Add selected to' });
+
+    await userEvent.click(addButton);
+
+    await userEvent.click(screen.getByRole('menuitem', { name: /Add selected to cart/ }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(`SKU ${laughCanister.node.sku} product doesn't exist`),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('displays error when product modifier in purchased products no longer exists', async () => {
+    const getRecentlyOrderedProducts = vi.fn();
+    const searchProducts = vi.fn<(...arg: unknown[]) => SearchProductsResponse>();
+
+    const productId = 86;
+    const variantId = 66;
+    const laughCanister = buildRecentlyOrderedProductNodeWith({
+      node: {
+        productName: 'Laugh Canister',
+        variantSku: 'VARIANT-WITH-OPTION',
+        variantId: String(variantId),
+        productId: String(productId),
+        optionList: [
+          buildRecentlyOrderedProductNodeOptionListWith({ product_option_id: 111, value: '106' }),
+        ],
+      },
+    });
+
+    when(getRecentlyOrderedProducts)
+      .calledWith(stringContainingAll('first: 12', 'offset: 0', 'orderBy: "-lastOrderedAt"'))
+      .thenReturn(
+        buildGetRecentlyOrderedProductsWith({
+          data: { orderedProducts: { totalCount: 1, edges: [laughCanister] } },
+        }),
+      );
+
+    when(searchProducts)
+      .calledWith(stringContainingAll(`productIds: [${laughCanister.node.productId}]`))
+      .thenReturn({
+        data: {
+          productsSearch: [
+            buildSearchProductWith({
+              id: productId,
+              name: laughCanister.node.productName,
+              sku: laughCanister.node.sku,
+              orderQuantityMaximum: 0,
+              orderQuantityMinimum: 0,
+              inventoryLevel: 100,
+              options: [],
+              variants: [
+                buildVariantWith({
+                  product_id: productId,
+                  variant_id: variantId,
+                  sku: laughCanister.node.variantSku,
+                  purchasing_disabled: false,
+                }),
+              ],
+            }),
+          ],
+        },
+      });
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', ({ query }) =>
+        HttpResponse.json(getRecentlyOrderedProducts(query)),
+      ),
+      graphql.query('SearchProducts', ({ query }) => HttpResponse.json(searchProducts(query))),
+      graphql.query('getCart', () =>
+        HttpResponse.json(buildGetCartWith({ data: { site: { cart: null } } })),
+      ),
+    );
+
+    renderWithProviders(<QuickOrder />, { preloadedState });
+
+    const row = await screen.findByRole('row', { name: /Laugh Canister/ });
+
+    await userEvent.click(within(row).getByRole('checkbox'));
+
+    const addButton = screen.getByRole('button', { name: 'Add selected to' });
+
+    await userEvent.click(addButton);
+
+    await userEvent.click(screen.getByRole('menuitem', { name: /Add selected to cart/ }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(`SKU ${laughCanister.node.sku} has invalid modifiers`),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('displays error when product in purchased products no longer exists in catalog', async () => {
+    const getRecentlyOrderedProducts = vi.fn();
+    const searchProducts = vi.fn<(...arg: unknown[]) => SearchProductsResponse>();
+
+    const laughCanister = buildRecentlyOrderedProductNodeWith({
+      node: { productName: 'Deleted Product', variantSku: 'DELETED-SKU', productId: '999' },
+    });
+
+    when(getRecentlyOrderedProducts)
+      .calledWith(stringContainingAll('first: 12', 'offset: 0', 'orderBy: "-lastOrderedAt"'))
+      .thenReturn(
+        buildGetRecentlyOrderedProductsWith({
+          data: { orderedProducts: { totalCount: 1, edges: [laughCanister] } },
+        }),
+      );
+
+    when(searchProducts)
+      .calledWith(stringContainingAll(`productIds: [${laughCanister.node.productId}]`))
+      .thenReturn({ data: { productsSearch: [] } });
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', ({ query }) =>
+        HttpResponse.json(getRecentlyOrderedProducts(query)),
+      ),
+      graphql.query('SearchProducts', ({ query }) => HttpResponse.json(searchProducts(query))),
+      graphql.query('getCart', () =>
+        HttpResponse.json(buildGetCartWith({ data: { site: { cart: null } } })),
+      ),
+    );
+
+    renderWithProviders(<QuickOrder />, { preloadedState });
+
+    const row = await screen.findByRole('row', { name: /Deleted Product/ });
+
+    await userEvent.click(within(row).getByRole('checkbox'));
+
+    const addButton = screen.getByRole('button', { name: 'Add selected to' });
+
+    await userEvent.click(addButton);
+
+    await userEvent.click(screen.getByRole('menuitem', { name: /Add selected to cart/ }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(`SKU ${laughCanister.node.sku} product doesn't exist`),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('groups multiple errors by type into separate snackbar messages', async () => {
+    const getRecentlyOrderedProducts = vi.fn();
+    const searchProducts = vi.fn<(...arg: unknown[]) => SearchProductsResponse>();
+
+    const productId = 86;
+
+    const deletedProduct = buildRecentlyOrderedProductNodeWith({
+      node: {
+        productName: 'Deleted Product',
+        variantSku: 'DELETED-SKU',
+        productId: '999',
+      },
+    });
+
+    const staleVariantProduct = buildRecentlyOrderedProductNodeWith({
+      node: {
+        productName: 'Stale Variant Product',
+        variantSku: 'OLD-VARIANT-SKU',
+        variantId: '66',
+        productId: String(productId),
+      },
+    });
+
+    const staleModifierProduct = buildRecentlyOrderedProductNodeWith({
+      node: {
+        productName: 'Stale Modifier Product',
+        variantSku: 'MODIFIER-SKU',
+        variantId: '77',
+        productId: String(productId),
+        optionList: [
+          buildRecentlyOrderedProductNodeOptionListWith({
+            product_option_id: 111,
+            display_name: 'Old Color',
+            value: '106',
+          }),
+        ],
+      },
+    });
+
+    when(getRecentlyOrderedProducts)
+      .calledWith(stringContainingAll('first: 12', 'offset: 0', 'orderBy: "-lastOrderedAt"'))
+      .thenReturn(
+        buildGetRecentlyOrderedProductsWith({
+          data: {
+            orderedProducts: {
+              totalCount: 3,
+              edges: [deletedProduct, staleVariantProduct, staleModifierProduct],
+            },
+          },
+        }),
+      );
+
+    when(searchProducts)
+      .calledWith(
+        stringContainingAll(
+          `productIds:`,
+          deletedProduct.node.productId,
+          staleVariantProduct.node.productId,
+        ),
+      )
+      .thenReturn({
+        data: {
+          productsSearch: [
+            buildSearchProductWith({
+              id: productId,
+              name: 'Catalog Product',
+              sku: staleVariantProduct.node.sku,
+              orderQuantityMaximum: 0,
+              orderQuantityMinimum: 0,
+              inventoryLevel: 100,
+              options: [
+                { option_id: 111, display_name: 'New Color', is_required: false, sort_order: 0 },
+              ],
+              variants: [
+                buildVariantWith({
+                  product_id: productId,
+                  variant_id: 77,
+                  sku: 'MODIFIER-SKU',
+                  purchasing_disabled: false,
+                }),
+              ],
+            }),
+          ],
+        },
+      });
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', ({ query }) =>
+        HttpResponse.json(getRecentlyOrderedProducts(query)),
+      ),
+      graphql.query('SearchProducts', ({ query }) => HttpResponse.json(searchProducts(query))),
+      graphql.query('getCart', () =>
+        HttpResponse.json(buildGetCartWith({ data: { site: { cart: null } } })),
+      ),
+    );
+
+    renderWithProviders(<QuickOrder />, { preloadedState });
+
+    const deletedRow = await screen.findByRole('row', { name: /Deleted Product/ });
+    const staleVariantRow = await screen.findByRole('row', { name: /Stale Variant Product/ });
+    const staleModifierRow = await screen.findByRole('row', { name: /Stale Modifier Product/ });
+
+    await userEvent.click(within(deletedRow).getByRole('checkbox'));
+    await userEvent.click(within(staleVariantRow).getByRole('checkbox'));
+    await userEvent.click(within(staleModifierRow).getByRole('checkbox'));
+
+    const addButton = screen.getByRole('button', { name: 'Add selected to' });
+
+    await userEvent.click(addButton);
+
+    await userEvent.click(screen.getByRole('menuitem', { name: /Add selected to cart/ }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          `SKUs ${deletedProduct.node.sku}, ${staleVariantProduct.node.sku} products don't exist`,
+        ),
+      ).toBeInTheDocument();
+
+      expect(
+        screen.getByText(`SKU ${staleModifierProduct.node.sku} has invalid modifiers`),
       ).toBeInTheDocument();
     });
   });
@@ -1897,10 +2251,7 @@ describe('when adding to quote', () => {
     expect(await screen.findByText('Products were added to your quote')).toBeInTheDocument();
   });
 
-  it('calls validateProducts query when feature flag is enabled', async () => {
-    const featureFlags = {
-      'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-    };
+  it('calls validateProducts query when backorder is enabled', async () => {
     const backorderEnabled = true;
 
     const getRecentlyOrderedProducts = vi.fn();
@@ -1967,7 +2318,7 @@ describe('when adding to quote', () => {
     renderWithProviders(<QuickOrder />, {
       preloadedState: {
         ...preloadedState,
-        global: buildGlobalStateWith({ backorderEnabled, featureFlags }),
+        global: buildGlobalStateWith({ backorderEnabled }),
       },
       initialGlobalContext: { productQuoteEnabled: true, shoppingListEnabled: true },
     });
@@ -1992,9 +2343,6 @@ describe('when adding to quote', () => {
   });
 
   it('displays correct error messages when adding to quote with NON_PURCHASABLE errors', async () => {
-    const featureFlags = {
-      'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-    };
     const backorderEnabled = true;
 
     const getRecentlyOrderedProducts = vi.fn();
@@ -2078,7 +2426,7 @@ describe('when adding to quote', () => {
     renderWithProviders(<QuickOrder />, {
       preloadedState: {
         ...preloadedState,
-        global: buildGlobalStateWith({ backorderEnabled, featureFlags }),
+        global: buildGlobalStateWith({ backorderEnabled }),
       },
       initialGlobalContext: { productQuoteEnabled: true, shoppingListEnabled: true },
     });
@@ -2097,9 +2445,6 @@ describe('when adding to quote', () => {
   });
 
   it('groups multiple products with the same error type into a single snackbar', async () => {
-    const featureFlags = {
-      'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-    };
     const backorderEnabled = true;
 
     const getRecentlyOrderedProducts = vi.fn();
@@ -2280,7 +2625,7 @@ describe('when adding to quote', () => {
     renderWithProviders(<QuickOrder />, {
       preloadedState: {
         ...preloadedState,
-        global: buildGlobalStateWith({ backorderEnabled, featureFlags }),
+        global: buildGlobalStateWith({ backorderEnabled }),
       },
       initialGlobalContext: { productQuoteEnabled: true, shoppingListEnabled: true },
     });
@@ -2309,10 +2654,6 @@ describe('when adding to quote', () => {
   });
 
   it('adds to quote when threshold error occurs and NP/OOS flag is enabled', async () => {
-    const featureFlags = {
-      'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-    };
-
     const laughCanister = buildRecentlyOrderedProductNodeWith({
       node: { productName: 'Laugh Canister' },
     });
@@ -2375,7 +2716,7 @@ describe('when adding to quote', () => {
       preloadedState: {
         ...preloadedState,
         global: buildGlobalStateWith({
-          featureFlags,
+          backorderEnabled: true,
           blockPendingQuoteNonPurchasableOOS: { isEnableProduct: true },
         }),
       },
@@ -2393,10 +2734,6 @@ describe('when adding to quote', () => {
   });
 
   it('adds to quote when threshold error occurs and NP/OOS flag is disabled', async () => {
-    const featureFlags = {
-      'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-    };
-
     const laughCanister = buildRecentlyOrderedProductNodeWith({
       node: { productName: 'Laugh Canister' },
     });
@@ -2459,7 +2796,7 @@ describe('when adding to quote', () => {
       preloadedState: {
         ...preloadedState,
         global: buildGlobalStateWith({
-          featureFlags,
+          backorderEnabled: true,
           blockPendingQuoteNonPurchasableOOS: { isEnableProduct: false },
         }),
       },
@@ -2477,13 +2814,10 @@ describe('when adding to quote', () => {
   });
 });
 
-describe('When backend validation feature flag is on', () => {
-  const featureFlags = {
-    'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-  };
+describe('when backorder validation is enabled', () => {
   const backorderEnabled = true;
 
-  const backendValidationEnabledState = {
+  const backorderEnabledState = {
     ...preloadedState,
     company: {
       ...preloadedState.company,
@@ -2492,7 +2826,7 @@ describe('When backend validation feature flag is on', () => {
         role: CustomerRole.SENIOR_BUYER, // Override to Senior Buyer (value 1)
       },
     },
-    global: buildGlobalStateWith({ backorderEnabled, featureFlags }),
+    global: buildGlobalStateWith({ backorderEnabled }),
   };
 
   it('displays an error message when adding to cart fails', async () => {
@@ -2500,9 +2834,6 @@ describe('When backend validation feature flag is on', () => {
       ...preloadedState,
       global: buildGlobalStateWith({
         backorderEnabled: true,
-        featureFlags: {
-          'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-        },
       }),
     };
     const getRecentlyOrderedProducts = vi.fn();
@@ -2538,7 +2869,7 @@ describe('When backend validation feature flag is on', () => {
               sku: laughCanister.node.sku,
               orderQuantityMaximum: 0,
               orderQuantityMinimum: 0,
-              inventoryLevel: 2, // This product is out of stock
+              inventoryLevel: 2,
               inventoryTracking: 'product',
               variants: [variant],
             }),
@@ -2616,9 +2947,6 @@ describe('When backend validation feature flag is on', () => {
       ...preloadedState,
       global: buildGlobalStateWith({
         backorderEnabled: true,
-        featureFlags: {
-          'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-        },
       }),
     };
 
@@ -2764,9 +3092,6 @@ describe('When backend validation feature flag is on', () => {
       ...preloadedState,
       global: buildGlobalStateWith({
         backorderEnabled: true,
-        featureFlags: {
-          'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-        },
       }),
     };
     const getRecentlyOrderedProducts = vi.fn();
@@ -2903,9 +3228,6 @@ describe('When backend validation feature flag is on', () => {
       ...preloadedState,
       global: buildGlobalStateWith({
         backorderEnabled: true,
-        featureFlags: {
-          'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-        },
       }),
     };
 
@@ -3050,9 +3372,6 @@ describe('When backend validation feature flag is on', () => {
       ...preloadedState,
       global: buildGlobalStateWith({
         backorderEnabled: true,
-        featureFlags: {
-          'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
-        },
       }),
     };
 
@@ -3243,7 +3562,7 @@ describe('When backend validation feature flag is on', () => {
       ),
     );
 
-    renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+    renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
     await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
@@ -3343,7 +3662,7 @@ describe('When backend validation feature flag is on', () => {
       ),
     );
 
-    renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+    renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
     await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
@@ -3397,7 +3716,7 @@ describe('When backend validation feature flag is on', () => {
       graphql.query('getCart', () => HttpResponse.json(getCart())),
     );
 
-    renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+    renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
     await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
@@ -3498,7 +3817,7 @@ describe('When backend validation feature flag is on', () => {
       ),
     );
 
-    renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+    renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
     await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
@@ -3639,7 +3958,7 @@ describe('When backend validation feature flag is on', () => {
       ),
     );
 
-    renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+    renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
     await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
@@ -3737,7 +4056,7 @@ describe('When backend validation feature flag is on', () => {
       ),
     );
 
-    renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+    renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
     await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
@@ -3763,13 +4082,17 @@ describe('When backend validation feature flag is on', () => {
 
     const createCartSimple = vi.fn();
 
+    const optionListItem = buildRecentlyOrderedProductNodeOptionListWith({
+      product_option_id: 111,
+      display_name: 'Color',
+      value: '8',
+    });
+
     const laughCanister = buildRecentlyOrderedProductNodeWith({
       node: {
         productName: 'Laugh Canister',
         basePrice: '122.33',
-        optionList: [
-          buildRecentlyOrderedProductNodeOptionListWith({ product_option_id: 111, value: '8' }),
-        ],
+        optionList: [optionListItem],
         optionSelections: [
           {
             option_id: 111,
@@ -3799,6 +4122,12 @@ describe('When backend validation feature flag is on', () => {
               orderQuantityMaximum: 10,
               orderQuantityMinimum: 5,
               inventoryLevel: 100,
+              options: [
+                buildSearchProductOptionsWith({
+                  option_id: 111,
+                  display_name: 'Color',
+                }),
+              ],
               variants: [
                 buildVariantWith({
                   product_id: Number(laughCanister.node.productId),
@@ -3851,7 +4180,7 @@ describe('When backend validation feature flag is on', () => {
       ),
     );
 
-    renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+    renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
     const row = await screen.findByRole('row', { name: /Laugh Canister/ });
 
@@ -3864,7 +4193,7 @@ describe('When backend validation feature flag is on', () => {
     await userEvent.click(screen.getByRole('menuitem', { name: /Add selected to cart/ }));
 
     await waitFor(() => {
-      expect(screen.getByText('Products were added to cart')).toBeInTheDocument();
+      expect(screen.getByText('1 product was added to cart')).toBeInTheDocument();
     });
 
     expect(Cookies.get('cartId')).toBe('12345');
@@ -3918,6 +4247,7 @@ describe('When backend validation feature flag is on', () => {
               quantity: 2,
             }),
           ]),
+          target: 'CART',
         })
         .thenReturn({
           data: {
@@ -3975,7 +4305,7 @@ describe('When backend validation feature flag is on', () => {
         ),
       );
 
-      renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+      renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
       await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
@@ -4082,6 +4412,7 @@ describe('When backend validation feature flag is on', () => {
                 quantity: 3,
               }),
             ]),
+            target: 'CART',
           })
           .thenReturn({
             data: {
@@ -4118,7 +4449,7 @@ describe('When backend validation feature flag is on', () => {
           graphql.mutation('addCartLineItemsTwo', () => HttpResponse.json(addCartLineItemsTwo())),
         );
 
-        renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+        renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
         await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
@@ -4240,7 +4571,7 @@ describe('When backend validation feature flag is on', () => {
         graphql.mutation('createCartSimple', () => HttpResponse.json(createCartSimple())),
       );
 
-      renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+      renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
       await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
@@ -4327,6 +4658,7 @@ describe('When backend validation feature flag is on', () => {
               quantity: 1,
             }),
           ]),
+          target: 'CART',
         })
         .thenReturn({
           data: {
@@ -4378,7 +4710,7 @@ describe('When backend validation feature flag is on', () => {
         ),
       );
 
-      renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+      renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
       await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
@@ -4473,6 +4805,7 @@ describe('When backend validation feature flag is on', () => {
               quantity: 5,
             }),
           ]),
+          target: 'CART',
         })
         .thenReturn({
           data: {
@@ -4514,7 +4847,7 @@ describe('When backend validation feature flag is on', () => {
         graphql.mutation('addCartLineItemsTwo', () => HttpResponse.json(addCartLineItemsTwo())),
       );
 
-      renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+      renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
       await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
@@ -4640,7 +4973,7 @@ describe('When backend validation feature flag is on', () => {
         graphql.mutation('addCartLineItemsTwo', () => HttpResponse.json(addCartLineItemsTwo())),
       );
 
-      renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+      renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
       await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
@@ -4773,7 +5106,7 @@ describe('When backend validation feature flag is on', () => {
         graphql.mutation('addCartLineItemsTwo', () => HttpResponse.json(addCartLineItemsTwo())),
       );
 
-      renderWithProviders(<QuickOrder />, { preloadedState: backendValidationEnabledState });
+      renderWithProviders(<QuickOrder />, { preloadedState: backorderEnabledState });
 
       await waitForElementToBeRemoved(() => screen.queryByText(/loading/i));
 
@@ -4812,11 +5145,10 @@ describe('When backend validation feature flag is on', () => {
 
     it('handles successful CSV upload when pass_with_modifiers feature flag is enabled', async () => {
       const preloadedStateWithBothFlags = {
-        ...backendValidationEnabledState,
+        ...backorderEnabledState,
         global: buildGlobalStateWith({
           backorderEnabled,
           featureFlags: {
-            'B2B-3318.move_stock_and_backorder_validation_to_backend': true,
             'B2B-3978.pass_with_modifiers_to_product_upload': true,
           },
         }),
@@ -4948,6 +5280,380 @@ describe('When backend validation feature flag is on', () => {
       await waitFor(() => {
         expect(screen.getByText(/Products were added to cart/i)).toBeInTheDocument();
       });
+    });
+  });
+});
+
+describe('when backorder messaging is enabled on purchased products', () => {
+  const variantSku = 'PP-123';
+
+  const setupPurchasedProductsTable = ({
+    totalOnHand = 2,
+    availableToSell = 4,
+    backorderMessage = 'Lead time: 2-4 weeks',
+    inventoryFetchFails = false,
+  }: {
+    totalOnHand?: number;
+    availableToSell?: number;
+    backorderMessage?: string;
+    inventoryFetchFails?: boolean;
+  } = {}) => {
+    const orderedProduct = buildRecentlyOrderedProductNodeWith({
+      node: {
+        productName: 'Laugh Canister',
+        variantSku,
+        sku: variantSku,
+        basePrice: '100',
+      },
+    });
+
+    const getRecentlyOrderedProducts = vi.fn().mockReturnValue(
+      buildGetRecentlyOrderedProductsWith({
+        data: { orderedProducts: { totalCount: 1, edges: [orderedProduct] } },
+      }),
+    );
+
+    const searchProducts = vi.fn().mockReturnValue({
+      data: {
+        productsSearch: [
+          buildSearchProductWith({
+            id: Number(orderedProduct.node.productId),
+            name: orderedProduct.node.productName,
+            sku: variantSku,
+            variants: [
+              buildVariantWith({
+                sku: variantSku,
+                variant_id: Number(orderedProduct.node.variantId),
+                product_id: Number(orderedProduct.node.productId),
+                purchasing_disabled: false,
+              }),
+            ],
+          }),
+        ],
+      },
+    });
+
+    const variantInfo = buildVariantInfoWith({
+      variantSku,
+      inventoryTracking: 'variant',
+      availableToSell,
+      unlimitedBackorder: false,
+      totalOnHand,
+      backorderMessage,
+    });
+
+    const getVariantInfoBySkus = when(vi.fn())
+      .calledWith(expect.stringContaining(`variantSkus: ["${variantSku}"]`))
+      .thenReturn(buildVariantInfoResponseWith({ data: { variantSku: [variantInfo] } }));
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', ({ query }) =>
+        HttpResponse.json(getRecentlyOrderedProducts(query)),
+      ),
+      graphql.query('SearchProducts', ({ query }) => HttpResponse.json(searchProducts(query))),
+      graphql.query('GetVariantInfoBySkus', ({ query }) =>
+        inventoryFetchFails ? HttpResponse.error() : HttpResponse.json(getVariantInfoBySkus(query)),
+      ),
+    );
+
+    return { orderedProduct };
+  };
+
+  const setupPurchasedProductsTableWithPicklist = ({
+    mainTotalOnHand = 100,
+    mainAvailableToSell = 100,
+    picklistTotalOnHand = 9,
+    picklistAvailableToSell = 10,
+  }: {
+    mainTotalOnHand?: number;
+    mainAvailableToSell?: number;
+    picklistTotalOnHand?: number;
+    picklistAvailableToSell?: number;
+  } = {}) => {
+    const modifierId = 100;
+    const optionValueId = 200;
+    const picklistProductId = 999111;
+
+    const orderedProduct = buildRecentlyOrderedProductNodeWith({
+      node: {
+        productName: 'Laugh Canister',
+        variantSku,
+        sku: variantSku,
+        basePrice: '100',
+        optionSelections: [{ option_id: modifierId, value_id: optionValueId }],
+      },
+    });
+
+    const getRecentlyOrderedProducts = vi.fn().mockReturnValue(
+      buildGetRecentlyOrderedProductsWith({
+        data: { orderedProducts: { totalCount: 1, edges: [orderedProduct] } },
+      }),
+    );
+
+    const parentProduct = buildSearchProductWith({
+      id: Number(orderedProduct.node.productId),
+      name: orderedProduct.node.productName,
+      sku: variantSku,
+      modifiers: [
+        {
+          id: modifierId,
+          type: 'product_list',
+          display_name: 'Bundle option 1',
+          required: false,
+          option_values: [{ id: optionValueId, value_data: { product_id: picklistProductId } }],
+        },
+      ],
+      variants: [
+        buildVariantWith({
+          sku: variantSku,
+          variant_id: Number(orderedProduct.node.variantId),
+          product_id: Number(orderedProduct.node.productId),
+          purchasing_disabled: false,
+        }),
+      ],
+    });
+
+    const picklistProduct = buildSearchProductWith({
+      id: picklistProductId,
+      name: 'Picklist Widget',
+      inventoryTracking: 'product',
+      availableToSell: picklistAvailableToSell,
+      unlimitedBackorder: false,
+      totalOnHand: picklistTotalOnHand,
+      backorderMessage: 'Picklist lead time: 6 weeks',
+      variants: [],
+    });
+
+    const searchProducts = vi.fn();
+    when(searchProducts)
+      .calledWith(stringContainingAll(`productIds: [${orderedProduct.node.productId}]`))
+      .thenReturn({ data: { productsSearch: [parentProduct] } });
+    when(searchProducts)
+      .calledWith(stringContainingAll(`productIds: [${picklistProductId}]`))
+      .thenReturn({ data: { productsSearch: [picklistProduct] } });
+
+    const variantInfo = buildVariantInfoWith({
+      variantSku,
+      inventoryTracking: 'variant',
+      availableToSell: mainAvailableToSell,
+      unlimitedBackorder: false,
+      totalOnHand: mainTotalOnHand,
+      backorderMessage: 'Main lead time',
+    });
+
+    const getVariantInfoBySkus = when(vi.fn())
+      .calledWith(expect.stringContaining(`variantSkus: ["${variantSku}"]`))
+      .thenReturn(buildVariantInfoResponseWith({ data: { variantSku: [variantInfo] } }));
+
+    server.use(
+      graphql.query('RecentlyOrderedProducts', ({ query }) =>
+        HttpResponse.json(getRecentlyOrderedProducts(query)),
+      ),
+      graphql.query('SearchProducts', ({ query }) => HttpResponse.json(searchProducts(query))),
+      graphql.query('GetVariantInfoBySkus', ({ query }) =>
+        HttpResponse.json(getVariantInfoBySkus(query)),
+      ),
+    );
+
+    return { orderedProduct };
+  };
+
+  it('shows backorder lines by default when qty exceeds on hand', async () => {
+    setupPurchasedProductsTable();
+
+    renderWithProviders(<QuickOrder />, { preloadedState: backorderPreloadedState });
+
+    expect(await screen.findByText('Laugh Canister')).toBeInTheDocument();
+
+    const table = screen.getByRole('table');
+    const quantityInput = within(table).getByRole('spinbutton');
+
+    await userEvent.type(quantityInput, '10', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: Infinity,
+    });
+
+    expect(await screen.findByRole('checkbox', { name: /Backorder details/i })).toBeChecked();
+
+    await waitFor(() => {
+      expect(screen.getByText('2 ready to ship')).toBeVisible();
+    });
+    expect(screen.getByText('2 will be backordered')).toBeVisible();
+    expect(screen.getByText('Lead time: 2-4 weeks')).toBeVisible();
+  });
+
+  it('hides backorder lines when toggle is turned off', async () => {
+    setupPurchasedProductsTable();
+
+    renderWithProviders(<QuickOrder />, { preloadedState: backorderPreloadedState });
+
+    expect(await screen.findByText('Laugh Canister')).toBeInTheDocument();
+
+    const table = screen.getByRole('table');
+    const quantityInput = within(table).getByRole('spinbutton');
+
+    await userEvent.type(quantityInput, '10', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: Infinity,
+    });
+
+    const backorderToggle = await screen.findByRole('checkbox', { name: /Backorder details/i });
+    expect(backorderToggle).toBeChecked();
+    expect(await screen.findByText('2 will be backordered')).toBeVisible();
+
+    await userEvent.click(backorderToggle);
+
+    expect(screen.queryByText('2 ready to ship')).not.toBeInTheDocument();
+    expect(screen.queryByText('2 will be backordered')).not.toBeInTheDocument();
+    expect(screen.queryByText('Lead time: 2-4 weeks')).not.toBeInTheDocument();
+  });
+
+  it('hides backorder toggle and lines when qty is within on hand', async () => {
+    setupPurchasedProductsTable({ totalOnHand: 9, availableToSell: 10 });
+
+    renderWithProviders(<QuickOrder />, { preloadedState: backorderPreloadedState });
+
+    expect(await screen.findByText('Laugh Canister')).toBeInTheDocument();
+
+    const table = screen.getByRole('table');
+    const quantityInput = within(table).getByRole('spinbutton');
+
+    await userEvent.type(quantityInput, '2', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: Infinity,
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('checkbox', { name: /Backorder details/i }),
+      ).not.toBeInTheDocument();
+    });
+    expect(screen.queryByText('will be backordered', { exact: false })).not.toBeInTheDocument();
+  });
+
+  it('hides backorder toggle and lines when messaging is disabled', async () => {
+    setupPurchasedProductsTable();
+
+    renderWithProviders(<QuickOrder />, { preloadedState });
+
+    expect(await screen.findByText('Laugh Canister')).toBeInTheDocument();
+
+    const table = screen.getByRole('table');
+    const quantityInput = within(table).getByRole('spinbutton');
+
+    await userEvent.type(quantityInput, '10', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: Infinity,
+    });
+
+    expect(screen.queryByRole('checkbox', { name: /Backorder details/i })).not.toBeInTheDocument();
+    expect(screen.queryByText('will be backordered', { exact: false })).not.toBeInTheDocument();
+  });
+
+  it('still shows purchased products without backorder UI when inventory fetch fails', async () => {
+    setupPurchasedProductsTable({ inventoryFetchFails: true });
+
+    renderWithProviders(<QuickOrder />, { preloadedState: backorderPreloadedState });
+
+    expect(await screen.findByText('Laugh Canister')).toBeInTheDocument();
+
+    const table = screen.getByRole('table');
+    const quantityInput = within(table).getByRole('spinbutton');
+
+    await userEvent.type(quantityInput, '10', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: Infinity,
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('checkbox', { name: /Backorder details/i }),
+      ).not.toBeInTheDocument();
+    });
+    expect(screen.queryByText('will be backordered', { exact: false })).not.toBeInTheDocument();
+  });
+
+  it('shows a labeled picklist backorder block by default when qty exceeds picklist on hand', async () => {
+    setupPurchasedProductsTableWithPicklist();
+
+    renderWithProviders(<QuickOrder />, { preloadedState: backorderPreloadedState });
+
+    expect(await screen.findByText('Laugh Canister')).toBeInTheDocument();
+
+    const table = screen.getByRole('table');
+    const quantityInput = within(table).getByRole('spinbutton');
+
+    await userEvent.type(quantityInput, '10', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: Infinity,
+    });
+
+    expect(await screen.findByRole('checkbox', { name: /Backorder details/i })).toBeChecked();
+
+    await waitFor(() => {
+      expect(screen.getByText('Bundle option 1:')).toBeVisible();
+    });
+    expect(screen.getByText('9 ready to ship')).toBeVisible();
+    expect(screen.getByText('1 will be backordered')).toBeVisible();
+    expect(screen.getByText('Picklist lead time: 6 weeks')).toBeVisible();
+  });
+
+  it('hides the picklist backorder block when toggle is turned off', async () => {
+    setupPurchasedProductsTableWithPicklist();
+
+    renderWithProviders(<QuickOrder />, { preloadedState: backorderPreloadedState });
+
+    expect(await screen.findByText('Laugh Canister')).toBeInTheDocument();
+
+    const table = screen.getByRole('table');
+    const quantityInput = within(table).getByRole('spinbutton');
+
+    await userEvent.type(quantityInput, '10', {
+      initialSelectionStart: 0,
+      initialSelectionEnd: Infinity,
+    });
+
+    const backorderToggle = await screen.findByRole('checkbox', { name: /Backorder details/i });
+    expect(backorderToggle).toBeChecked();
+    expect(await screen.findByText('Bundle option 1:')).toBeVisible();
+
+    await userEvent.click(backorderToggle);
+
+    expect(screen.queryByText('Bundle option 1:')).not.toBeInTheDocument();
+    expect(screen.queryByText('Picklist lead time: 6 weeks')).not.toBeInTheDocument();
+  });
+
+  describe('on mobile', () => {
+    beforeEach(() => {
+      vi.spyOn(document.body, 'clientWidth', 'get').mockReturnValue(500);
+    });
+
+    it('shows backorder lines in the card view by default when qty exceeds on hand', async () => {
+      setupPurchasedProductsTable();
+
+      renderWithProviders(<QuickOrder />, { preloadedState: backorderPreloadedState });
+
+      expect(await screen.findByText('Laugh Canister')).toBeInTheDocument();
+
+      await waitFor(() => {
+        expect(screen.queryByRole('table')).not.toBeInTheDocument();
+      });
+
+      const productCard = screen.getByText('Laugh Canister').closest('.MuiCardContent-root');
+      const quantityInput = within(productCard as HTMLElement).getByRole('spinbutton');
+
+      await userEvent.type(quantityInput, '10', {
+        initialSelectionStart: 0,
+        initialSelectionEnd: Infinity,
+      });
+
+      expect(await screen.findByRole('checkbox', { name: /Backorder details/i })).toBeChecked();
+
+      await waitFor(() => {
+        expect(screen.getByText('2 ready to ship')).toBeVisible();
+      });
+      expect(screen.getByText('2 will be backordered')).toBeVisible();
+      expect(screen.getByText('Lead time: 2-4 weeks')).toBeVisible();
     });
   });
 });

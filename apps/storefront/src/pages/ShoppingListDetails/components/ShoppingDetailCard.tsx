@@ -1,11 +1,18 @@
 import { Delete, Edit, StickyNote2, Warning as WarningIcon } from '@mui/icons-material';
 import { Box, CardContent, styled, TextField, Typography } from '@mui/material';
 
+import BackorderMessage from '@/components/BackorderMessage';
+import PicklistBackorderMessages from '@/components/PicklistBackorderMessages';
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
 import { useB3Lang } from '@/lib/lang';
+import type { CatalogQuickVariantSku, ProductSearch } from '@/shared/service/b2b/graphql/product';
 import b2bGetVariantImageByVariantInfo from '@/utils/b2bGetVariantImageByVariantInfo';
 import { currencyFormat } from '@/utils/b3CurrencyFormat';
 import { getBCPrice } from '@/utils/b3Product/b3Product';
+import {
+  getCatalogProductRowDisplayState,
+  getPicklistSelectionsFromStoredOptions,
+} from '@/utils/catalogBackorderDisplay';
 
 import { getProductOptionsFields } from '../../../utils/b3Product/shared/config';
 
@@ -31,6 +38,10 @@ interface ShoppingDetailCardProps {
   selectedDelegate: (row: CustomFieldItems) => boolean;
   b2bAndBcShoppingListActionsPermissions: boolean;
   requirements?: QtyRequirements;
+  inventoryBySku?: Record<string, CatalogQuickVariantSku>;
+  picklistProductsById?: Record<number, ProductSearch>;
+  backorderUiEnabled?: boolean;
+  showBackorderDetails?: boolean;
 }
 
 const StyledImage = styled('img')(() => ({
@@ -58,6 +69,10 @@ function ShoppingDetailCard(props: ShoppingDetailCardProps) {
     b2bAndBcShoppingListActionsPermissions,
     requirements,
     selectedDelegate,
+    inventoryBySku = {},
+    picklistProductsById = {},
+    backorderUiEnabled = false,
+    showBackorderDetails = false,
   } = props;
 
   const {
@@ -108,6 +123,20 @@ function ShoppingDetailCard(props: ShoppingDetailCardProps) {
     b2bGetVariantImageByVariantInfo(currentVariants, { variantId, variantSku }) || primaryImage;
 
   const backgroundColor = selectedDelegate(shoppingDetail) ? 'rgba(25, 118, 210, 0.08)' : 'transparent';
+
+  const inventoryRow = inventoryBySku[variantSku?.toUpperCase()];
+  const { backorderFields } = getCatalogProductRowDisplayState({
+    qty: Number(quantity) || 0,
+    showAvailableToSellHelper: false,
+    inventoryRow,
+    backorderUiEnabled,
+    formatOnlyAvailable: () => '',
+  });
+
+  const picklistSelections = getPicklistSelectionsFromStoredOptions({
+    options: optionList,
+    productsSearch,
+  });
 
   return (
     <Box
@@ -271,6 +300,23 @@ function ShoppingDetailCard(props: ShoppingDetailCardProps) {
               </Box>
             </Box>
           )}
+          {backorderFields && (
+            <Box sx={{ mt: -0.5, mb: 1, width: '100%' }}>
+              <BackorderMessage
+                totalOnHand={backorderFields.totalOnHand}
+                quantityBackordered={backorderFields.quantityBackordered}
+                backorderMessage={backorderFields.backorderMessage}
+                visible={showBackorderDetails}
+              />
+            </Box>
+          )}
+          <PicklistBackorderMessages
+            selections={picklistSelections}
+            picklistProductsById={picklistProductsById}
+            qty={Number(quantity) || 0}
+            visible={showBackorderDetails}
+            backorderUiEnabled={backorderUiEnabled}
+          />
           <Typography
             sx={{
               color: '#212121',

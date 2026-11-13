@@ -1,5 +1,5 @@
 import { Modifiers, ProductItemOption } from './common';
-import { AllOptionProps, ProductItem, Variant } from './products';
+import { ProductItem, Variant } from './products';
 
 export interface ShoppingListItem {
   customerInfo: {
@@ -33,12 +33,16 @@ export interface ShoppingListProductItem extends ProductItem {
   modifiers?: Modifiers[];
   costPrice?: string;
   variants?: Variant[];
-  allOptions?: Partial<AllOptionProps>[];
   selectOptions?: string;
   orderQuantityMaximum?: number;
   orderQuantityMinimum?: number;
   variantId?: number | string;
   orderQuantityIncrement?: number;
+  inventoryTracking?: string;
+  availableToSell?: number;
+  unlimitedBackorder?: boolean;
+  totalOnHand?: number | null;
+  backorderMessage?: string | null;
 }
 
 export interface ShoppingListAddProductOption {

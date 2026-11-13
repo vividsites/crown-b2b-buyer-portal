@@ -12,6 +12,10 @@
 - [Development Commands](#-development-commands)
 - [File Structure Patterns](#-file-structure-patterns)
 - [Testing Guidelines](#-testing-guidelines)
+  - [Testing Requirements](#testing-requirements)
+  - [Testing Library Philosophy](#testing-library-philosophy)
+  - [Mocking Best Practices](#mocking-best-practices)
+  - [Test Infrastructure Reminders](#test-infrastructure-reminders)
 - [Import Rules & Path Aliases](#-import-rules--path-aliases)
 - [Code Generation](#-code-generation)
 - [Common Pitfalls & Anti-Patterns](#-common-pitfalls--anti-patterns)
@@ -21,6 +25,12 @@
 - [Component Structure Examples](#-component-structure-examples)
 - [Testing Environment Setup](#-testing-environment-setup)
 - [Quick Reference: Testing Checklist](#-quick-reference-testing-checklist)
+
+---
+
+## 🤖 AI Coding Agent Setup (BigCommerce Team)
+
+Install the internal `b2b-buyer-portal` plugin from the internal plugin repository to get the full context.
 
 ---
 
@@ -218,21 +228,21 @@ The codebase contains these patterns, but **do not add more**:
 
 All commands must be run from `apps/storefront/`:
 
-| Command | Description | Use When |
-|---------|-------------|----------|
-| `yarn dev` | Start development server | Local development |
-| `yarn build` | Build for production | Pre-deployment |
-| `yarn tsc --noEmit` | Type checking only | Quick type validation |
-| `yarn lint` | Run all linters | Before committing |
-| `yarn lint:eslint` | ESLint only | Fix code style issues |
-| `yarn lint:dependencies` | Dependency validation | Check import rules |
-| `yarn lint:knip` | Unused code detection | Find dead code |
-| `yarn format` | Auto-fix linting issues | Fix auto-fixable errors |
-| `yarn test` | Run tests (watch mode) | During development |
-| `yarn test <filename>` | Run specific test file | Test single file |
-| `yarn coverage` | Test coverage report | Check test coverage |
-| `yarn generate` | Generate GraphQL types | After schema changes |
-| `yarn generate:local` | Generate types (local env) | Local development |
+| Command                  | Description                | Use When                |
+| ------------------------ | -------------------------- | ----------------------- |
+| `yarn dev`               | Start development server   | Local development       |
+| `yarn build`             | Build for production       | Pre-deployment          |
+| `yarn tsc --noEmit`      | Type checking only         | Quick type validation   |
+| `yarn lint`              | Run all linters            | Before committing       |
+| `yarn lint:eslint`       | ESLint only                | Fix code style issues   |
+| `yarn lint:dependencies` | Dependency validation      | Check import rules      |
+| `yarn lint:knip`         | Unused code detection      | Find dead code          |
+| `yarn format`            | Auto-fix linting issues    | Fix auto-fixable errors |
+| `yarn test`              | Run tests (watch mode)     | During development      |
+| `yarn test <filename>`   | Run specific test file     | Test single file        |
+| `yarn coverage`          | Test coverage report       | Check test coverage     |
+| `yarn generate`          | Generate GraphQL types     | After schema changes    |
+| `yarn generate:local`    | Generate types (local env) | Local development       |
 
 ### Example Workflow
 
@@ -273,7 +283,6 @@ src/pages/[PageName]/
 
 ### Shared Code Structure
 
- 
 > ⚠️ **We are removing the B3/B2/B2B prefixes** Prefer clean, semantic names.
 
 ```
@@ -286,7 +295,7 @@ src/
 │       └── Button.test.tsx
 ├── hooks/                      # Shared hooks (domain-agnostic)
 │   ├── useDebounce.ts
-│   └── useFeatureFlags.ts
+│   └── useFeatureFlag.ts
 ├── utils/                      # Pure utility functions
 │   ├── formatters.ts
 │   └── validators.ts
@@ -301,15 +310,52 @@ src/
 
 1. **Page-specific code stays with the page** - Don't move components to `src/components/` unless they're truly reusable and domain agnostic
 2. **Tests live next to code** - `Component.tsx` → `Component.test.tsx`
-3. **Test from a use-case point of view** - For pages, focus on integration tests that cover user workflows.  Add component-level tests only for reusable components.
+3. **Test from a use-case point of view** - For pages, focus on integration tests that cover user workflows. Add component-level tests only for reusable components.
 4. **Hooks live with their users** - Page-specific hooks go in `pages/[Page]/hooks/`
 5. **Shared code must be domain-agnostic** - No business logic in `src/components/` or `src/utils/`
 6. **Resolve feature flags and conditions at the highest level possible** - Then pass explicit props down to focused components.
 
-
 ---
 
 ## 🧪 Testing Guidelines
+
+### Testing Requirements
+
+- **React components**: Aim for high test coverage; focus on user-facing behavior and integration workflows.
+- **Test stack**: Vitest + MSW + Testing Library (all from `apps/storefront/`).
+- **Coverage**: Run `yarn coverage` for reports. Thresholds can be enforced at build time via `vite.config.ts` when needed.
+- **Legacy code**: Maintain or improve existing coverage when touching legacy areas.
+
+### Testing Library Philosophy
+
+Core principle: *"The more your tests resemble the way your software is used, the more confidence they can give you."*
+
+1. **Query by accessibility role first** - Use `getByRole`, `getByLabelText`, `getByText`. Prefer the `name` option with `getByRole` (e.g. `getByRole('button', { name: /submit/i })`). Avoid `getByTestId` or `container.querySelector` except when no accessible query is feasible (e.g. non-interactive icons, SVG-only elements, or DOM nodes without discernible text/roles).
+2. **Prefer `userEvent` for interactions** - Use `userEvent` instead of `fireEvent` for typical user flows. Reserve `fireEvent` for edge cases that `userEvent` cannot handle (e.g. file input events or low-level `MessageEvent` workarounds). Import `userEvent` from `tests/test-utils`. With fake timers use `userEvent.setup({ advanceTimers: vi.advanceTimersByTime })`.
+3. **Use `screen` for queries** - Do not rely on destructured queries from `render()`; query from `screen` so assertions stay resilient to re-renders.
+4. **Prefer `findBy*` for async appearance** - When waiting for something to appear, use `await screen.findByRole(...)` (or other `findBy*`) instead of `getBy*` inside `waitFor`; it is simpler and uses the same timeout.
+5. **Single assertion per `waitFor`** - When using `waitFor`, put only one assertion inside the callback; follow-up assertions go outside the block.
+6. **Test "renders nothing" with queries** - Prefer `expect(screen.queryByRole(...)).not.toBeInTheDocument()` over `expect(container).toBeEmptyDOMElement()`.
+7. **Assert on behavior, not implementation** - Assert on DOM and user-visible outcomes; avoid asserting on component state, refs, or internal props.
+8. **Name tests by user-facing behavior** - Describe what the user sees or can do (e.g. "shows error when submit fails") rather than implementation (e.g. "calls setState when submit fails").
+
+### Mocking Best Practices
+
+1. **Mock boundaries, not implementations** - Mock external services and system boundaries (HTTP via MSW, browser APIs). Avoid mocking your own hooks and internal modules when possible.
+2. **Only mock what the component under test uses** - If a `vi.mock` exists only because a transitive dependency needs it, fix the test setup (providers, wrappers in `tests/test-utils.tsx`) rather than adding manual mocks per file.
+3. **Assert on every mock you keep** - If no test asserts on a mocked function, it is a signal it should be in global setup or removed entirely.
+4. **Prefer MSW over `vi.mock` for HTTP** - Use `startMockServer()` from `tests/test-utils` with `server.use()` for handlers. Define handlers per test or per test file; avoid global or shared handler modules so each test explicitly declares the API behavior it needs. Unmocked requests hang forever, so you only need to mock the requests your test actually uses.
+5. **Always use the custom render from `tests/test-utils`** - Use `renderWithProviders`, never import `render` directly from `@testing-library/react`. The custom wrapper provides QueryClient, Redux, Router, and other providers.
+6. **Keep mocks type-safe** - Use `vi.mocked()` to get typed mock references.
+
+### Test Infrastructure Reminders
+
+- **No global MSW handlers** - Define handlers per test or per test file with `server.use()`. Avoid app-wide or shared handler modules so tests stay explicit and isolated.
+- **Global mocks** - For modules that need mocking across many tests, use `__mocks__/` at repo root or under `apps/storefront/` as appropriate.
+- **Data fixtures** - Prefer builders (see [Test Data Builders](#test-data-builders)); when exporting fixture data from modules, export functions that return fresh instances rather than shared constants.
+- **Vitest config** - `vite.config.ts` sets `clearMocks`, `mockReset`, and `restoreMocks`; mocks are reset after each test, so avoid redundant `vi.clearAllMocks()` in `beforeEach` unless you need to reset call history within a file.
+
+---
 
 ### Test File Conventions
 
@@ -403,7 +449,7 @@ renderWithProviders(<Invoice />, {
 
 ### API Mocking with MSW
 
-Use Mock Service Worker (MSW) for API mocking:
+Use Mock Service Worker (MSW) for API mocking. The test server is configured so that **any request that is not mocked hangs forever** (never resolves). You only need to mock the requests your test actually needs; unmocked requests will not complete, so you avoid having to mock every possible API call.
 
 ```typescript
 import { graphql, http, HttpResponse, startMockServer } from 'tests/test-utils';
@@ -491,7 +537,7 @@ when(getOrders)
 ```typescript
 // ❌ BAD
 it('should display invoice details after loading', ...)
-// ✅ GOOD  
+// ✅ GOOD
 it('displays invoice details after loading', ...)
 ```
 
@@ -636,10 +682,10 @@ import { formatCurrency } from '../utils/formatters'; // Use path alias
 
 Configured in `tsconfig.json` and `vite.config.ts`:
 
-| Alias | Resolves To | Use For |
-|-------|-------------|---------|
-| `@/` | `src/` | Application code |
-| `tests/` | `tests/` | Test utilities |
+| Alias    | Resolves To | Use For          |
+| -------- | ----------- | ---------------- |
+| `@/`     | `src/`      | Application code |
+| `tests/` | `tests/`    | Test utilities   |
 
 ```typescript
 // ✅ Use path aliases
@@ -661,12 +707,12 @@ import { Invoice } from '../../../types/invoice';
 
 These rules are intentionally disabled project-wide due to legacy code, but **avoid adding more code that violates them**:
 
-| Rule | Why It's Bad | What To Do Instead |
-|------|--------------|-------------------|
-| `react/jsx-props-no-spreading` | Spreads hide which props are being passed | Explicitly list props |
-| `@typescript-eslint/no-explicit-any` | Loses type safety | Use proper types or `unknown` |
-| `no-console` | Console logs in production | Use proper logging or remove |
-| `react/destructuring-assignment` | Unclear prop usage | Destructure props at function start |
+| Rule                                 | Why It's Bad                              | What To Do Instead                  |
+| ------------------------------------ | ----------------------------------------- | ----------------------------------- |
+| `react/jsx-props-no-spreading`       | Spreads hide which props are being passed | Explicitly list props               |
+| `@typescript-eslint/no-explicit-any` | Loses type safety                         | Use proper types or `unknown`       |
+| `no-console`                         | Console logs in production                | Use proper logging or remove        |
+| `react/destructuring-assignment`     | Unclear prop usage                        | Destructure props at function start |
 
 ```typescript
 // ❌ BAD
@@ -733,14 +779,14 @@ function InvoiceList() {
 
 The store contains these slices (avoid adding to them):
 
-| Slice | Purpose | Example Data |
-|-------|---------|--------------|
-| `company` | User/company info | Customer ID, company name, role |
-| `b2bFeatures` | Feature flags | Masquerade mode, enabled features |
-| `global` | Global UI state | Messages, loading states |
-| `storeInfo` | Store configuration | Store ID, currency, tax settings |
-| `lang` | Translations | Current locale, translated strings |
-| `quoteInfo` | Quote state | Current quote, quote items |
+| Slice         | Purpose             | Example Data                       |
+| ------------- | ------------------- | ---------------------------------- |
+| `company`     | User/company info   | Customer ID, company name, role    |
+| `b2bFeatures` | Feature flags       | Masquerade mode, enabled features  |
+| `global`      | Global UI state     | Messages, loading states           |
+| `storeInfo`   | Store configuration | Store ID, currency, tax settings   |
+| `lang`        | Translations        | Current locale, translated strings |
+| `quoteInfo`   | Quote state         | Current quote, quote items         |
 
 ### Accessing Redux State (If You Must)
 
@@ -781,12 +827,12 @@ function InvoiceList({ customerId }: { customerId: number }) {
 
 ## ⚙️ Key Configuration Files
 
-| File | Purpose | When to Modify |
-|------|---------|----------------|
-| `vite.config.ts` | Build & test configuration | Add Vite plugins, change build output |
-| `.eslintrc.cjs` | Linting rules | Add/modify lint rules (rare) |
-| `tsconfig.json` | TypeScript configuration | Add path aliases, compiler options |
-| `.dependency-cruiser.cjs` | Dependency validation rules | Enforce import patterns |
+| File                      | Purpose                     | When to Modify                        |
+| ------------------------- | --------------------------- | ------------------------------------- |
+| `vite.config.ts`          | Build & test configuration  | Add Vite plugins, change build output |
+| `.eslintrc.cjs`           | Linting rules               | Add/modify lint rules (rare)          |
+| `tsconfig.json`           | TypeScript configuration    | Add path aliases, compiler options    |
+| `.dependency-cruiser.cjs` | Dependency validation rules | Enforce import patterns               |
 
 ---
 
@@ -824,6 +870,7 @@ Based on `CONTRIBUTING.md`:
 - Is the Matroska structure followed? ✅
 - Is code simpler than before? ✅
 - Is code clean? ✅
+- Are `react-intl` messages using ICU syntax correctly (especially `plural`/`select`), instead of manual patterns like `product(s)`? ✅
 - Explicit Props: No hidden dependencies ✅
 - Mixed concerns in one component ❌
 - Feature flag checks scattered throughout ❌

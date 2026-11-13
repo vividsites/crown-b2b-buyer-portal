@@ -3,11 +3,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getB2BProductPurchasable } from '@/shared/service/b2b/graphql/product';
 import { useAppSelector } from '@/store';
 
-import { useIsBackorderValidationEnabled } from '../useIsBackorderValidationEnabled';
+import { useIsBackorderEnabled } from '../useIsBackorderEnabled';
 
-interface MyMutationRecord extends MutationRecord {
-  target: HTMLElement;
-}
+import { getPdpSku } from './getPdpSku';
 
 interface ProductInfoProps {
   availability: boolean;
@@ -18,9 +16,12 @@ interface ProductInfoProps {
   unlimitedBackorder?: boolean;
 }
 
-const usePurchasableQuote = (openQuickView: boolean) => {
+const usePurchasableQuote = (
+  openQuickView: boolean,
+  isSkuFromPdpWithTextContentEnabled: boolean,
+) => {
   const [isBuyPurchasable, setBuyPurchasable] = useState<boolean>(true);
-  const isBackorderValidationEnabled = useIsBackorderValidationEnabled();
+  const isBackorderEnabled = useIsBackorderEnabled();
 
   const productInfoRef = useRef<ProductInfoProps>({
     availability: false,
@@ -41,7 +42,7 @@ const usePurchasableQuote = (openQuickView: boolean) => {
         return false;
       }
 
-      if (isBackorderValidationEnabled) {
+      if (isBackorderEnabled) {
         if (unlimitedBackorder) {
           return false;
         }
@@ -53,7 +54,7 @@ const usePurchasableQuote = (openQuickView: boolean) => {
 
       return qty > inventoryLevel;
     },
-    [isBackorderValidationEnabled],
+    [isBackorderEnabled],
   );
 
   useEffect(() => {
@@ -118,21 +119,34 @@ const usePurchasableQuote = (openQuickView: boolean) => {
       isDetailOpen = false;
     }
 
+    let currentSku = getPdpSku(productViewSku, isSkuFromPdpWithTextContentEnabled);
+
     if (productViewSku && isEnableProduct) {
-      const sku = productViewSku.innerHTML.trim();
-      callback(sku, isDetailOpen, true);
+      callback(currentSku, isDetailOpen, true);
     }
 
     const observer = new MutationObserver((mutations: MutationRecord[]) => {
-      let sku = '';
-      mutations.forEach((mutation) => {
-        const myMutation: MyMutationRecord = mutation as MyMutationRecord;
-        if (myMutation.type === 'childList' && myMutation.target.hasAttribute('data-product-sku')) {
-          const newSkuValue = myMutation.target.innerHTML.trim();
-          sku = newSkuValue;
-        }
-      });
-      if (sku) callback(sku, isDetailOpen, false);
+      if (!isSkuFromPdpWithTextContentEnabled) {
+        let sku = '';
+
+        mutations.forEach((mutation) => {
+          const target = mutation.target as HTMLElement;
+
+          if (mutation.type === 'childList' && target.hasAttribute('data-product-sku')) {
+            sku = getPdpSku(target, false);
+          }
+        });
+        if (sku) callback(sku, isDetailOpen, false);
+
+        return;
+      }
+
+      const sku = getPdpSku(productViewSku, true);
+
+      if (sku && sku !== currentSku) {
+        currentSku = sku;
+        callback(sku, isDetailOpen, false);
+      }
     });
 
     const config: MutationObserverInit = { childList: true, subtree: true };
@@ -203,7 +217,12 @@ const usePurchasableQuote = (openQuickView: boolean) => {
       if (observer) observer.disconnect();
       if (qtyDom) qtyDom.removeEventListener('input', handleQuantityChange);
     };
-  }, [openQuickView, isEnableProduct, isOutOfStockPurchaseQuantity]);
+  }, [
+    openQuickView,
+    isEnableProduct,
+    isOutOfStockPurchaseQuantity,
+    isSkuFromPdpWithTextContentEnabled,
+  ]);
 
   return [isBuyPurchasable];
 };

@@ -1,4 +1,5 @@
 import {
+  b2bAuthorization,
   endUserMasqueradingCompany,
   getAgentInfo,
   getB2BCompanyUserInfo,
@@ -34,7 +35,7 @@ import { CompanyStatus, CustomerRole, CustomerRoleName, LoginTypes, UserTypes } 
 
 import b2bLogger from './b3Logger';
 import { B3LStorage, B3SStorage } from './b3Storage';
-import { channelId, storeHash } from './basicConfig';
+import { channelId, isBigCommercePlatform, storeHash } from './basicConfig';
 import { getAccountHierarchyIsEnabled } from './storefrontConfig';
 
 import { clearShoppingListItemQuantities } from '@/shared/service/vs/shoppingListQuantityService';
@@ -54,13 +55,28 @@ export const getLoginTokenInfo = () => {
   return data;
 };
 
-export const loginInfo = async () => {
-  const loginTokenInfo = getLoginTokenInfo();
+// Logout clears bcGraphqlToken and customer state, which re-runs App init while
+// useLogout also refetches the token — both can call ensureBcGraphqlToken at once.
+let pendingStorefrontToken: Promise<void> | null = null;
 
-  const token = await getBCGraphqlToken(loginTokenInfo);
-  if (token) {
-    store.dispatch(setBcGraphQLToken(token));
+export const ensureBcGraphqlToken = async (): Promise<void> => {
+  if (store.getState().company.tokens.bcGraphqlToken) {
+    return;
   }
+
+  if (!pendingStorefrontToken) {
+    pendingStorefrontToken = (async () => {
+      const loginTokenInfo = getLoginTokenInfo();
+      const token = await getBCGraphqlToken(loginTokenInfo);
+      if (token) {
+        store.dispatch(setBcGraphQLToken(token));
+      }
+    })().finally(() => {
+      pendingStorefrontToken = null;
+    });
+  }
+
+  await pendingStorefrontToken;
 };
 
 const clearCurrentCustomerInfo = async () => {
@@ -164,7 +180,7 @@ const agentInfo = async (customerId: number | string, role: number) => {
   }
 };
 
-const getCompanyUserInfo = async () => {
+const getCompanyUserInfo = async (useBcLoginAndAuthorisation = false) => {
   try {
     const {
       customerInfo: {
@@ -172,7 +188,7 @@ const getCompanyUserInfo = async () => {
         userInfo: { role = '', id, companyRoleName = '' },
         permissions,
       },
-    } = await getB2BCompanyUserInfo();
+    } = await getB2BCompanyUserInfo(useBcLoginAndAuthorisation);
 
     return {
       userType,
@@ -197,20 +213,36 @@ const loginWithCurrentCustomerJWT = async () => {
 
   if (!currentCustomerJWT || prevCurrentCustomerJWT === currentCustomerJWT) return undefined;
 
-  const data = await getB2BToken(currentCustomerJWT, channelId).catch((error) => {
-    // eslint-disable-next-line no-console
-    console.error('Failed to get B2B token:', error);
-    throw error;
-  });
+  /*
+   * The new BC-first login/authorisation flow sources loginType and permissions
+   * elsewhere, so only the legacy flow needs them from this mutation. We tell
+   * getB2BToken which fields to request and only read/dispatch them when the
+   * flag is off.
+   */
+  const useBcLoginAndAuthorisation =
+    store.getState().global.featureFlags['PROJECT-7920.use_bc_login_and_authorisation'] ?? false;
+
+  const data = await getB2BToken(currentCustomerJWT, channelId, !useBcLoginAndAuthorisation).catch(
+    (error) => {
+      // eslint-disable-next-line no-console
+      console.error('Failed to get B2B token:', error);
+      throw error;
+    },
+  );
 
   const B2BToken = data.authorization.result.token as string;
-  const newLoginType = data.authorization.result.loginType as LoginTypes;
 
-  const B2BPermissions = data.authorization.result.permissions;
-  store.dispatch(setPermissionModules(B2BPermissions));
+  let newLoginType: LoginTypes | undefined;
+
+  if (!useBcLoginAndAuthorisation) {
+    newLoginType = data.authorization.result.loginType as LoginTypes;
+    store.dispatch(setLoginType(newLoginType));
+
+    const B2BPermissions = data.authorization.result.permissions;
+    store.dispatch(setPermissionModules(B2BPermissions));
+  }
 
   store.dispatch(setCurrentCustomerJWT(currentCustomerJWT));
-  store.dispatch(setLoginType(newLoginType));
   store.dispatch(setB2BToken(B2BToken));
 
   store.dispatch(clearMasqueradeCompany());
@@ -218,7 +250,7 @@ const loginWithCurrentCustomerJWT = async () => {
   return { B2BToken, newLoginType };
 };
 
-interface CustomerInfo {
+export interface CustomerInfo {
   role: number;
   userType: number;
   companyRoleName: string;
@@ -238,10 +270,18 @@ export const getCurrentCustomerInfo = async (
       throw error;
     });
     if (!data) return undefined;
-    loginType = data.newLoginType;
+    /*
+     * newLoginType is only populated in the legacy flow; under the BC-first flag
+     * it's undefined, so we keep the GENERAL_LOGIN default.
+     */
+    loginType = data.newLoginType ?? loginType;
   }
 
   try {
+    const { featureFlags } = store.getState().global;
+    const useBcLoginAndAuthorisation =
+      featureFlags['PROJECT-7920.use_bc_login_and_authorisation'] ?? false;
+
     const data = await getCustomerInfo();
 
     if (data?.detail) return undefined;
@@ -257,7 +297,7 @@ export const getCurrentCustomerInfo = async (
       customerGroupId,
     } = loginCustomer;
 
-    const companyUserInfo = await getCompanyUserInfo();
+    const companyUserInfo = await getCompanyUserInfo(useBcLoginAndAuthorisation);
 
     if (companyUserInfo && customerId) {
       const { userType, id, companyRoleName, permissions } = companyUserInfo;
@@ -301,7 +341,6 @@ export const getCurrentCustomerInfo = async (
         defaultShoppingListId: defaultShoppingList?.id || null,
       };
 
-      const { featureFlags } = store.getState().global;
       const useCombinedQuery =
         featureFlags['B2B-3817.disable_masquerading_cleanup_on_login'] ?? false;
 
@@ -343,7 +382,30 @@ export const getCurrentCustomerInfo = async (
 
       store.dispatch(resetDraftQuoteList());
       store.dispatch(resetDraftQuoteInfo());
-      store.dispatch(setPermissionModules(permissions));
+
+      const useBcAuthorizationForPermissions =
+        useBcLoginAndAuthorisation && isBigCommercePlatform();
+
+      if (useBcAuthorizationForPermissions) {
+        let { currentCustomerJWT } = store.getState().company.tokens;
+        if (!currentCustomerJWT) {
+          currentCustomerJWT =
+            (await getCurrentCustomerJWT(getAppClientId()).catch(() => '')) ?? '';
+        }
+        if (currentCustomerJWT) {
+          const authorizationData = await b2bAuthorization({
+            bcToken: currentCustomerJWT,
+            channelId,
+          }).catch((error) => {
+            b2bLogger.error(error);
+            return undefined;
+          });
+          const b2bPermissions = authorizationData?.authorization?.result?.permissions ?? [];
+          store.dispatch(setPermissionModules(b2bPermissions));
+        }
+      } else {
+        store.dispatch(setPermissionModules(permissions));
+      }
       store.dispatch(setCompanyInfo(companyPayload));
       store.dispatch(setCustomerInfo(customerInfo));
       store.dispatch(setQuoteUserId(quoteUserId));
@@ -363,6 +425,27 @@ export const getCurrentCustomerInfo = async (
     clearCurrentCustomerInfo();
   }
   return undefined;
+};
+
+export const refreshCurrentCustomerJWT = async () => {
+  const currentCustomerJWT = await getCurrentCustomerJWT(getAppClientId()).catch((error) => {
+    b2bLogger.error(error);
+    return undefined;
+  });
+
+  if (currentCustomerJWT) {
+    store.dispatch(setCurrentCustomerJWT(currentCustomerJWT));
+  }
+
+  return currentCustomerJWT;
+};
+
+export const refreshB2BToken = async (currentCustomerJWT: string) => {
+  const data = await getB2BToken(currentCustomerJWT, channelId);
+  const B2BToken = data.authorization.result.token as string;
+  store.dispatch(setB2BToken(B2BToken));
+
+  return B2BToken;
 };
 
 export const getSearchVal = (search: string, key: string) => {

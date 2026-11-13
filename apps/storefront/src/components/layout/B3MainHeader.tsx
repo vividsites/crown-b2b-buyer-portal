@@ -6,6 +6,7 @@ import { CART_URL } from '@/constants';
 import { dispatchEvent } from '@/hooks/useB2BCallback';
 import { useMobile } from '@/hooks/useMobile';
 import { useB3Lang } from '@/lib/lang';
+import { getHomeUrl } from '@/lib/lang/getHomeUrl';
 import { CustomStyleContext } from '@/shared/customStyleButton';
 import { isB2BUserSelector, rolePermissionSelector, useAppSelector } from '@/store';
 import b3TriggerCartNumber from '@/utils/b3TriggerCartNumber';
@@ -14,6 +15,7 @@ import { getContrastColor } from '../outSideComponents/utils/b3CustomStyles';
 
 import B3AccountInfo from './B3AccountInfo';
 import B3CompanyHierarchy from './B3CompanyHierarchy';
+import B3LocaleSwitcher from './B3LocaleSwitcher';
 import B3StatusNotification from './B3StatusNotification';
 
 export default function MainHeader({ title }: { title: string }) {
@@ -24,6 +26,7 @@ export default function MainHeader({ title }: { title: string }) {
     ({ b2bFeatures }) => b2bFeatures.masqueradeCompany.companyName,
   );
   const cartNumber = useAppSelector(({ global }) => global.cartNumber);
+  const locales = useAppSelector(({ global }) => global.locales);
   const navigate = useNavigate();
   const b3Lang = useB3Lang();
   const [isMobile] = useMobile();
@@ -96,6 +99,7 @@ export default function MainHeader({ title }: { title: string }) {
             alignItems: 'center',
           }}
         >
+          <B3LocaleSwitcher />
           {role !== 100 && <B3AccountInfo />}
           <Box sx={{ marginLeft: '8px' }}>
             {role === 100 && (
@@ -119,7 +123,7 @@ export default function MainHeader({ title }: { title: string }) {
                 fontSize: '16px',
               }}
               onClick={() => {
-                window.location.href = '/';
+                window.location.href = getHomeUrl(locales);
               }}
             >
               {b3Lang('global.B3MainHeader.home')}

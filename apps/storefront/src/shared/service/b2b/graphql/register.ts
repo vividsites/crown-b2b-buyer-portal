@@ -1,4 +1,4 @@
-import { channelId, storeHash } from '@/utils/basicConfig';
+import { channelId, isBigCommercePlatform, storeHash } from '@/utils/basicConfig';
 import { convertArrayToGraphql, convertObjectOrArrayKeysToCamel } from '@/utils/graphqlDataConvert';
 
 import B3Request from '../../request/b3Fetch';
@@ -81,13 +81,20 @@ const getAccountFormFields = (type: number) => `query B2BAccountFormFields {
     }
 }`;
 
-const getCustomerInfo = () => `{
+const getCustomerInfo = (useBcLoginAndAuthorisation = false) => {
+  const skipPermissions = useBcLoginAndAuthorisation && isBigCommercePlatform();
+
+  return `{
   customerInfo {
     userType,
-    permissions {
+    ${
+      skipPermissions
+        ? ''
+        : `permissions {
       code
       permissionLevel
-    },
+    },`
+    }
     userInfo {
       id
       phoneNumber
@@ -100,12 +107,14 @@ const getCustomerInfo = () => `{
     }
   }
 }`;
+};
 
 const getCountries = () => `query Countries {
   countries(storeHash:"${storeHash}") {
     id
     countryName
     countryCode
+    stateRequired
     states {
       stateName
       stateCode
@@ -212,9 +221,9 @@ export const getB2BAccountFormFields = (type: number) =>
     query: getAccountFormFields(type),
   });
 
-export const getB2BCompanyUserInfo = () =>
+export const getB2BCompanyUserInfo = (useBcLoginAndAuthorisation = false) =>
   B3Request.graphqlB2B({
-    query: getCustomerInfo(),
+    query: getCustomerInfo(useBcLoginAndAuthorisation),
   });
 
 export const getB2BCountries = () =>

@@ -1,21 +1,9 @@
-import { store } from '@/store';
-import { clearCompanySlice } from '@/store/slices/company';
-import { resetDraftQuoteInfo, resetDraftQuoteList } from '@/store/slices/quoteInfo';
-
 import b2bVerifyBcLoginStatus from './b2bVerifyBcLoginStatus';
 import b2bLogger from './b3Logger';
-
-import { clearShoppingListItemQuantities } from '@/shared/service/vs/shoppingListQuantityService';
-
-export const logoutSession = () => {
-  store.dispatch(clearCompanySlice());
-  store.dispatch(resetDraftQuoteList());
-  store.dispatch(resetDraftQuoteInfo());
-  clearShoppingListItemQuantities();
-};
+import { logoutSession } from './logoutSession';
 
 export const isB2bTokenPage = (gotoUrl?: string) => {
-  const noB2bTokenPages = ['quoteDraft', 'quoteDetail', 'register', 'login', 'forgotpassword'];
+  const noB2bTokenPages = ['quoteDraft', 'quoteDetail', 'register', 'login', 'forgotPassword'];
 
   if (gotoUrl) {
     return !noB2bTokenPages.some((item: string) => gotoUrl.includes(item));

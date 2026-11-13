@@ -4,8 +4,8 @@ import { getB2BProductPurchasable } from '@/shared/service/b2b/graphql/product';
 import config from '@/lib/config';
 import { useAppSelector } from '@/store';
 
-import { useFeatureFlags } from '../useFeatureFlags';
-import { useIsBackorderValidationEnabled } from '../useIsBackorderValidationEnabled';
+import { useFeatureFlag } from '../useFeatureFlag';
+import { useIsBackorderEnabled } from '../useIsBackorderEnabled';
 
 // interface ProductInfoProps {
 //   availability: boolean;
@@ -62,15 +62,12 @@ export function usePurchasableQuoteCards(cardsVersion: number, openQuickView: bo
   const [purchasabilityByProductId, setPurchasabilityByProductId] = useState<
     Record<string, boolean>
   >({});
-  const isBackorderValidationEnabled = useIsBackorderValidationEnabled();
-  const featureFlags = useFeatureFlags();
+  const isBackorderValidationEnabled = useIsBackorderEnabled();
   const isEnableProduct =
     useAppSelector(({ global }) => global.blockPendingQuoteNonPurchasableOOS.isEnableProduct) ||
     false;
 
-  const useTextContentForSku = Boolean(
-    featureFlags['B2B-3474.get_sku_from_pdp_with_text_content'],
-  );
+  const useTextContentForSku = useFeatureFlag('B2B-3474.get_sku_from_pdp_with_text_content');
 
   const computeIsPurchasable = useCallback(
     (

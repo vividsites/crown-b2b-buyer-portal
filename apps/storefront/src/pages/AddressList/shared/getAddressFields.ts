@@ -1,11 +1,10 @@
 import { getB2BAccountFormFields, getB2BAddressExtraFields } from '@/shared/service/b2b';
 import b2bLogger from '@/utils/b3Logger';
-
 import {
   AccountFormFieldsItems,
   getAccountFormFields,
   RegisterFieldsItems,
-} from '../../Registered/config';
+} from '@/utils/registerUtils';
 
 import { b2bAddressFields } from './config';
 
@@ -19,6 +18,7 @@ export interface CountryProps {
   countryName: string;
   id: string | number;
   states: StateProps[];
+  stateRequired?: boolean;
 }
 interface B2bExtraFieldsProps {
   defaultValue: string;
@@ -57,16 +57,14 @@ const convertExtraFields = (extraFields: B2bExtraFieldsProps[]): [] | ExtraField
     return fields;
   });
 
-  const convertB2BExtraFields = getAccountFormFields(b2bExtraFields).address;
+  const convertB2BExtraFields = getAccountFormFields(b2bExtraFields).address ?? [];
 
-  convertB2BExtraFields.map((extraField: ExtraFieldsProp) => {
-    const field = extraField;
-    field.custom = true;
+  const withCustom = convertB2BExtraFields.map((extraField: RegisterFieldsItems) => ({
+    ...extraField,
+    custom: true,
+  })) as ExtraFieldsProp[];
 
-    return extraField;
-  });
-
-  return convertB2BExtraFields;
+  return withCustom;
 };
 
 const getBcAddressFields = async () => {
@@ -108,7 +106,7 @@ export const getAddressFields = async (isB2BUser: boolean, countries: CountryPro
       if (addressFields) allAddressFields = addressFields;
     } else {
       const bcAddressFields = await getBcAddressFields();
-      allAddressFields = bcAddressFields;
+      allAddressFields = bcAddressFields ?? [];
     }
 
     allAddressFields.map((addressField: CustomFieldItems) => {

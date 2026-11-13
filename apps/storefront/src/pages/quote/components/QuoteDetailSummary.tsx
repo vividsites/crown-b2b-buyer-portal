@@ -1,7 +1,10 @@
 import { Box, Card, CardContent, Grid, Typography } from '@mui/material';
 
+import ShippingExpectationPrompt from '@/components/ShippingExpectationPrompt';
+import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 import { useB3Lang } from '@/lib/lang';
 import { useAppSelector } from '@/store';
+import { DisplayCurrency } from '@/types/currency';
 import { currencyFormatConvert } from '@/utils/b3CurrencyFormat';
 import { CustomerRole } from '@/types';
 
@@ -18,7 +21,9 @@ interface QuoteDetailSummaryProps {
   quoteDetailTax: number;
   status: string;
   quoteDetail: CustomFieldItems;
+  currency?: DisplayCurrency | CurrencyProps;
   shouldHidePrice: boolean;
+  hasBackorderedItems: boolean;
 }
 
 export default function QuoteDetailSummary({
@@ -26,13 +31,22 @@ export default function QuoteDetailSummary({
   quoteDetailTax = 0,
   status,
   quoteDetail,
+  currency,
   shouldHidePrice,
+  hasBackorderedItems,
 }: QuoteDetailSummaryProps) {
   const b3Lang = useB3Lang();
   const enteredInclusiveTax = useAppSelector(
     ({ storeConfigs }) => storeConfigs.currencies.enteredInclusiveTax,
   );
   const showInclusiveTaxPrice = useAppSelector(({ global }) => global.showInclusiveTaxPrice);
+  const backorderEnabled = useAppSelector(({ global }) => global.backorderEnabled);
+  const isBackorderMessagingEnabled = useFeatureFlag(
+    'BACK-134.backorders_phase_1_1_control_messaging_on_storefront',
+  );
+  const { showDefaultShippingExpectationPrompt, defaultShippingExpectationPrompt } = useAppSelector(
+    ({ global }) => global.backorderDisplaySettings,
+  );
 
   const role = useAppSelector(({ company }) => company.customer.role);
 
@@ -43,11 +57,13 @@ export default function QuoteDetailSummary({
     return showInclusiveTaxPrice ? price + quoteDetailTax : price;
   };
 
+  const effectiveCurrency = currency ?? quoteDetail.currency;
+
   const priceFormat = (price: number) =>
     currencyFormatConvert(price, {
-      currency: quoteDetail.currency,
+      currency: effectiveCurrency,
       isConversionRate: false,
-      useCurrentCurrency: !!quoteDetail.currency,
+      useCurrentCurrency: !!effectiveCurrency,
     });
 
   const getShippingAndTax = () => {
@@ -191,6 +207,14 @@ export default function QuoteDetailSummary({
                   </Typography>
                   <Typography>{role === CustomerRole.GUEST ? b3Lang('quoteDraft.quoteSummary.tbd') : showPrice(shippingAndTax.shippingVal)}</Typography>
                 </Grid>
+                {Number(status) !== 4 && isBackorderMessagingEnabled && (
+                  <ShippingExpectationPrompt
+                    backorderEnabled={backorderEnabled}
+                    hasBackorderedItems={hasBackorderedItems}
+                    showDefaultShippingExpectationPrompt={showDefaultShippingExpectationPrompt}
+                    defaultShippingExpectationPrompt={defaultShippingExpectationPrompt}
+                  />
+                )}
                 <Grid
                   role="row"
                   container

@@ -1,11 +1,14 @@
 import { useContext, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { getPdpSku } from '@/hooks/dom/getPdpSku';
+import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 import config from '@/lib/config';
 import { useB3Lang } from '@/lib/lang';
 import { GlobalContext } from '@/shared/global';
 import { isB2BUserSelector, useAppSelector } from '@/store';
 import { serialize } from '@/utils/b3Serialize';
+import { isBigCommercePlatform } from '@/utils/basicConfig';
 
 import CreateShoppingList from '../OrderDetail/components/CreateShoppingList';
 import OrderShoppingList from '../OrderDetail/components/OrderShoppingList';
@@ -22,9 +25,12 @@ function useData() {
   const platform = useAppSelector(({ global }) => global.storeInfo.platform);
   const setOpenPageFn = useAppSelector(({ global }) => global.setOpenPageFn);
   const isB2BUser = useAppSelector(isB2BUserSelector);
+  const isSkuFromPdpWithTextContentEnabled = useFeatureFlag(
+    'B2B-3474.get_sku_from_pdp_with_text_content',
+  );
 
   const getShoppingListItem = () => {
-    if (platform !== 'bigcommerce') {
+    if (!isBigCommercePlatform(platform)) {
       return window.b2b.utils.shoppingList.itemFromCurrentPage[0];
     }
 
@@ -38,7 +44,10 @@ function useData() {
 
     const productId = (productView.querySelector('input[name=product_id]') as any)?.value;
     const quantity = (productView.querySelector('[name="qty[]"]') as any)?.value ?? 1;
-    const sku = (productView.querySelector('[data-product-sku]')?.innerHTML ?? '').trim();
+    const sku = getPdpSku(
+      productView.querySelector('[data-product-sku]'),
+      isSkuFromPdpWithTextContentEnabled,
+    );
     const form = productView.querySelector('form[data-cart-item-add]') as HTMLFormElement;
     return {
       productId: Number(productId),

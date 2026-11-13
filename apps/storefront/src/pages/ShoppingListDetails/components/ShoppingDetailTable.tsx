@@ -6,13 +6,25 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
 } from 'react';
 import { Delete, Edit, StickyNote2, Warning as WarningIcon } from '@mui/icons-material';
-import { Box, Button, Grid, styled, TextField, Typography } from '@mui/material';
+import {
+  Box,
+  Button,
+  FormControlLabel,
+  Grid,
+  styled,
+  Switch,
+  TextField,
+  Typography,
+} from '@mui/material';
 import cloneDeep from 'lodash-es/cloneDeep';
 
+import BackorderMessage from '@/components/BackorderMessage';
+import PicklistBackorderMessages from '@/components/PicklistBackorderMessages';
 import {
   B3PaginationTable,
   GetRequestList,
@@ -20,17 +32,29 @@ import {
 } from '@/components/table/B3PaginationTable';
 import { PossibleNodeWrapper, TableColumnItem, WithRowControls } from '@/components/table/B3Table';
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
+import { useBackorderStorefrontMessaging } from '@/hooks/useBackorderStorefrontMessaging';
 import { useMobile } from '@/hooks/useMobile';
 import { ProductRequirementsMap } from '@/hooks/useProductRequirements';
+import { usePicklistInventory } from '@/hooks/usePicklistInventory';
 import { useSort } from '@/hooks/useSort';
 import { LangFormatFunction, useB3Lang } from '@/lib/lang';
 import { updateB2BShoppingListsItem, updateBcShoppingListsItem } from '@/shared/service/b2b';
+import {
+  type CatalogQuickVariantSku,
+  getVariantInfoBySkus,
+} from '@/shared/service/b2b/graphql/product';
 import { rolePermissionSelector, useAppSelector } from '@/store';
 import b2bGetVariantImageByVariantInfo from '@/utils/b2bGetVariantImageByVariantInfo';
 import { currencyFormat } from '@/utils/b3CurrencyFormat';
 import { getBCPrice, getDisplayPrice, getValidOptionsList } from '@/utils/b3Product/b3Product';
 import { getProductOptionsFields } from '@/utils/b3Product/shared/config';
 import { snackbar } from '@/utils/b3Tip';
+import {
+  catalogListHasBackorderedItemsForDisplay,
+  catalogListHasPicklistBackorderedItemsForDisplay,
+  getCatalogProductRowDisplayState,
+  getPicklistSelectionsFromStoredOptions,
+} from '@/utils/catalogBackorderDisplay';
 
 import B3FilterSearch from '../../../components/filter/B3FilterSearch';
 
@@ -101,7 +125,9 @@ interface SearchProps {
 
 interface PaginationTableRefProps extends HTMLInputElement {
   getList: () => void;
+  getCacheList: () => ListItemProps[];
   setList: (items?: ListItemProps[]) => void;
+  setCacheAllList: (items?: ListItemProps[]) => void;
   getSelectedValue: () => void;
   refresh: (type?: TableRefreshConfig) => void;
 }
@@ -122,7 +148,7 @@ const StyledShoppingListTableContainer = styled('div')(() => ({
         paddingTop: '25px',
       },
     },
-    '& tr: hover': {
+    '& tr:hover': {
       '& #shoppingList-actionList': {
         opacity: 1,
       }
@@ -229,21 +255,123 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
   //const [disabledSelectAll, setDisabledSelectAll] = useState<boolean>(false);
 
   //const [priceHidden, setPriceHidden] = useState<boolean>(false);
+  const [variantInfoList, setVariantInfoList] = useState<CatalogQuickVariantSku[]>([]);
+  const fetchedInventorySkusRef = useRef<Set<string>>(new Set());
+  const [showBackorderDetails, setShowBackorderDetails] = useState(true);
+  const [tableDataVersion, setTableDataVersion] = useState(0);
 
   const [handleSetOrderBy, order, orderBy] = useSort(sortKeys, defaultSortKey, search, setSearch);
 
-  const wrappedGetShoppingListDetails: GetRequestList<SearchProps, CustomFieldItems> = useCallback(
-    async (params) => {
+  const {
+    isBackorderMessagingContextEnabled,
+    isBackorderMessagingEnabled,
+    hasAnyBackorderDisplay,
+  } = useBackorderStorefrontMessaging();
+  const backorderUiEnabled = isBackorderMessagingContextEnabled && hasAnyBackorderDisplay;
+
+  const [picklistProductIds, setPicklistProductIds] = useState<number[]>([]);
+  const picklistProductsById = usePicklistInventory(picklistProductIds);
+
+  const inventoryBySku = useMemo(() => {
+    const map: Record<string, CatalogQuickVariantSku> = {};
+    variantInfoList.forEach((row) => {
+      if (row.variantSku) {
+        map[row.variantSku.toUpperCase()] = row;
+      }
+    });
+    return map;
+  }, [variantInfoList]);
+
+  const fetchInventoryForSkus = useCallback(
+    async (skus: string[]) => {
+      if (!backorderUiEnabled || skus.length === 0) return;
+
+      const existingSkus = fetchedInventorySkusRef.current;
+
+      const newSkus = [...new Set(skus.map((sku) => sku.toUpperCase()))].filter(
+        (sku) => !existingSkus.has(sku),
+      );
+
+      if (newSkus.length === 0) return;
+
+      newSkus.forEach((sku) => existingSkus.add(sku));
+
+      try {
+        const { variantSku: nextVariantInfoList = [] } = await getVariantInfoBySkus(newSkus);
+        setVariantInfoList((prev) => [...prev, ...nextVariantInfoList]);
+      } catch {
+        newSkus.forEach((sku) => existingSkus.delete(sku));
+        // Inventory fetch failure should not block the product list
+      }
+    },
+    [backorderUiEnabled],
+  );
+
+  const hasBackorderedItems = useMemo(() => {
+    if (!isBackorderMessagingEnabled) {
+      return false;
+    }
+
+    const cacheList: ListItemProps[] = paginationTableRef.current?.getCacheList() || [];
+    const items = cacheList.map(({ node }) => ({
+      qty: Number(node.quantity) || 0,
+      variantSku: node.variantSku,
+    }));
+
+    if (catalogListHasBackorderedItemsForDisplay(items, inventoryBySku)) {
+      return true;
+    }
+
+    const picklistRows = cacheList.map(({ node }) => ({
+      qty: Number(node.quantity) || 0,
+      selections: getPicklistSelectionsFromStoredOptions(node),
+    }));
+
+    return catalogListHasPicklistBackorderedItemsForDisplay(picklistRows, picklistProductsById);
+    // tableDataVersion drives re-evaluation when list or qty changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inventoryBySku, picklistProductsById, isBackorderMessagingEnabled, tableDataVersion]);
+
+  const showBackorderToggle = backorderUiEnabled && hasBackorderedItems;
+
+  const getListWithInventory = useCallback(
+    async (params: SearchProps) => {
       const result = await getShoppingListDetails(params);
+      const listProducts = result?.edges as ListItemProps[] | undefined;
+
       const productIds: number[] = [];
-      (result.edges || []).forEach((item: PossibleNodeWrapper<CustomFieldItems>) => {
+      (listProducts || []).forEach((item: PossibleNodeWrapper<CustomFieldItems>) => {
         const id = item.node?.productId;
         if (id && !productIds.includes(id)) productIds.push(id);
       });
       if (productIds.length) fetchRequirements(productIds);
+
+      if (!backorderUiEnabled) {
+        setPicklistProductIds((prev) => (prev.length === 0 ? prev : []));
+      } else if (listProducts?.length) {
+        const skus = listProducts
+          .map((item) => item.node.variantSku)
+          .filter((sku): sku is string => Boolean(sku));
+        fetchInventoryForSkus(skus).catch(() => {
+          // Inventory fetch failure should not block the product list
+        });
+
+        const pagePicklistProductIds = listProducts.flatMap((item) =>
+          getPicklistSelectionsFromStoredOptions(item.node).map((selection) => selection.productId),
+        );
+        setPicklistProductIds((prev) => {
+          const merged = [...new Set([...prev, ...pagePicklistProductIds])];
+          // The merge is a union of two deduplicated sets, so an unchanged length means no new
+          // ids — keep the old reference so pages without picklists don't force a re-render.
+          return merged.length === prev.length ? prev : merged;
+        });
+      }
+
+      setTableDataVersion((version) => version + 1);
+
       return result;
     },
-    [getShoppingListDetails, fetchRequirements],
+    [backorderUiEnabled, fetchInventoryForSkus, fetchRequirements, getShoppingListDetails],
   );
 
   const handleUpdateProductQty = (id: number | string, value: number | string) => {
@@ -266,6 +394,7 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
     setQtyNotChangeFlag(isInvalid || Number(currentQty) === newQty);
 
     const listItems: ListItemProps[] = paginationTableRef.current?.getList() || [];
+    const listCacheItems: ListItemProps[] = paginationTableRef.current?.getCacheList() || [];
     const newListItems = listItems?.map((item: ListItemProps) => {
       const { node } = item;
       if (node?.id === id) {
@@ -275,12 +404,19 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
 
       return item;
     });
+    const newListCacheItems = listCacheItems?.map((item: ListItemProps) => {
+      const { node } = item;
+      if (node?.id === id) {
+        node.quantity = `${newQty}`;
+        node.disableCurrentCheckbox = newQty === 0 || isInvalid;
+      }
 
-    //const nonNumberProducts = newListItems.filter(
-    //  (item: ListItemProps) => Number(item.node.quantity) === 0,
-    //);
-    //setDisabledSelectAll(nonNumberProducts.length === newListItems.length);
+      return item;
+    });
+
     paginationTableRef.current?.setList([...newListItems]);
+    paginationTableRef.current?.setCacheAllList([...newListCacheItems]);
+    setTableDataVersion((version) => version + 1);
   };
 
   const initSearch = (type?: TableRefreshConfig) => {
@@ -704,37 +840,75 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
       key: 'Qty',
       title: b3Lang('shoppingList.table.quantity'),
       render: (row) => {
+        const inventoryRow = inventoryBySku[row.variantSku?.toUpperCase()];
+        const { backorderFields } = getCatalogProductRowDisplayState({
+          qty: Number(row.quantity) || 0,
+          showAvailableToSellHelper: false,
+          inventoryRow,
+          backorderUiEnabled,
+          formatOnlyAvailable: () => '',
+        });
+
+        const picklistSelections = getPicklistSelectionsFromStoredOptions(row);
 
         return (
-          <StyledTextField
-            size="small"
-            type="number"
-            variant="filled"
+          <Box
             sx={{
-              width: '72px',
-              '& .MuiFormHelperText-root': { marginLeft: 0, marginRight: 0 },
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-start',
+              width: '100%',
             }}
-            disabled={
-              b2bAndBcShoppingListActionsPermissions ? isReadForApprove || isJuniorApprove : true
-            }
-            value={row.quantity}
-            inputProps={{
-              inputMode: 'numeric',
-              pattern: '[0-9]*',
-              min: 0,
-            }}
-            onChange={(e) => {
-              handleUpdateProductQty(row.id, e.target.value);
-            }}
-            onBlur={() => {
-              handleUpdateShoppingListItemQty(row.itemId);
-            }}
-          />
+          >
+            <StyledTextField
+              size="small"
+              type="number"
+              variant="filled"
+              sx={{
+                width: '100%',
+              }}
+              disabled={
+                b2bAndBcShoppingListActionsPermissions ? isReadForApprove || isJuniorApprove : true
+              }
+              value={row.quantity}
+              inputProps={{
+                inputMode: 'numeric',
+                pattern: '[0-9]*',
+              }}
+              onChange={(e) => {
+                handleUpdateProductQty(row.id, e.target.value);
+              }}
+              onBlur={() => {
+                handleUpdateShoppingListItemQty(row.itemId);
+              }}
+            />
+            {backorderFields && (
+              <Box sx={{ mt: 1, width: '100%', textAlign: 'left' }}>
+                <BackorderMessage
+                  totalOnHand={backorderFields.totalOnHand}
+                  quantityBackordered={backorderFields.quantityBackordered}
+                  backorderMessage={backorderFields.backorderMessage}
+                  visible={showBackorderDetails}
+                />
+              </Box>
+            )}
+            {picklistSelections.length > 0 && (
+              <Box sx={{ width: '100%', textAlign: 'left' }}>
+                <PicklistBackorderMessages
+                  selections={picklistSelections}
+                  picklistProductsById={picklistProductsById}
+                  qty={Number(row.quantity) || 0}
+                  visible={showBackorderDetails}
+                  backorderUiEnabled={backorderUiEnabled}
+                />
+              </Box>
+            )}
+          </Box>
         );
       },
-      width: '15%',
+      width: backorderUiEnabled ? '18%' : '15%',
       style: {
-        textAlign: 'right',
+        textAlign: 'left',
       },
       isSortable: true,
     },
@@ -891,6 +1065,19 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
             quantity: shoppingListInfo?.products?.totalCount || 0,
           })}
         </Typography>
+        {showBackorderToggle && (
+          <FormControlLabel
+            control={
+              <Switch
+                checked={showBackorderDetails}
+                onChange={(e) => setShowBackorderDetails(e.target.checked)}
+              />
+            }
+            label={b3Lang('quoteDetail.table.backorderDetails')}
+            labelPlacement="start"
+            sx={{ mr: 0, gap: '0.5rem', flexShrink: 0 }}
+          />
+        )}
       </Box>
       <Grid container spacing={2} alignItems="center">
         <Grid item sx={{flex: '1 1 auto'}}>
@@ -932,7 +1119,7 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
         ref={paginationTableRef}
         columnItems={columnItems}
         rowsPerPageOptions={[10, 20, 50]}
-        getRequestList={wrappedGetShoppingListDetails}
+        getRequestList={getListWithInventory}
         searchParams={search}
         isCustomRender={false}
         showCheckbox={false}
@@ -967,6 +1154,10 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
             b2bAndBcShoppingListActionsPermissions={b2bAndBcShoppingListActionsPermissions}
             requirements={requirementsMap.get(Number(row.productId))}
             selectedDelegate={selectedDelegate}
+            inventoryBySku={inventoryBySku}
+            picklistProductsById={picklistProductsById}
+            backorderUiEnabled={backorderUiEnabled}
+            showBackorderDetails={showBackorderDetails}
           />
         )}
       />
