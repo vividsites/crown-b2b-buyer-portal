@@ -99,7 +99,6 @@ export default function CrownRegistration({ setOpenPage }: PageProps) {
               <>
                 <CardHeader>
                   <PageTitle>{b3Lang('crownRegistration.page.title')}</PageTitle>
-                  <PageIntro>{b3Lang('crownRegistration.page.intro')}</PageIntro>
                 </CardHeader>
                 <CardBody>
                   <RegistrationForm onSubmitted={handleSubmitted} />
