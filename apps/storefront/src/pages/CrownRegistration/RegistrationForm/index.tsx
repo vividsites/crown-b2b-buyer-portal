@@ -270,7 +270,7 @@ export function RegistrationForm({ onSubmitted }: RegistrationFormProps) {
           id="crown-reg-submit"
           number="04"
           title={b3Lang('crownRegistration.section.submit.title')}
-          description={b3Lang('crownRegistration.section.submit.description')}
+          description=""
         >
           <CrownCheckbox
             control={control}
