@@ -8,6 +8,7 @@ const buildValuesWith = builder<RegistrationFormValues>(() => {
 
   return {
     existingCustomer: false,
+    salesRepName: '',
     companyName: faker.company.name(),
     firstName: faker.person.firstName(),
     lastName: faker.person.lastName(),

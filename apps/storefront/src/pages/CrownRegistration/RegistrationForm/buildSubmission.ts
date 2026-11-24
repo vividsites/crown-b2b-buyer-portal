@@ -46,6 +46,9 @@ export const buildSubmission = (
     return { ok: false, field: 'bState' };
   }
 
+  // the sales rep box is only shown for existing customers; a hidden value is ignored
+  const salesRepName = values.existingCustomer ? values.salesRepName.trim() : '';
+
   const submission: RegistrationSubmission = {
     turnstileToken,
     contact: {
@@ -56,6 +59,7 @@ export const buildSubmission = (
       // the password is sent exactly as typed
       password: values.password,
       existingCustomer: values.existingCustomer,
+      ...(salesRepName ? { salesRepName } : {}),
     },
     company: { name: values.companyName.trim() },
     privacyAcknowledged: true,

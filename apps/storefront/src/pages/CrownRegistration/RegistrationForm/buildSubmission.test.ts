@@ -41,6 +41,29 @@ const buildValuesWith = builder<RegistrationFormValues>(() => ({
 
 const TOKEN = faker.string.alphanumeric(24);
 
+describe('buildSubmission sales rep name', () => {
+  it('sends the trimmed sales rep name for an existing customer', () => {
+    const values = buildValuesWith({ existingCustomer: true, salesRepName: '  Pat Jones ' });
+    const result = buildSubmission(values, countries, TOKEN);
+
+    expect(result.ok && result.submission.contact.salesRepName).toBe('Pat Jones');
+  });
+
+  it('omits a blank sales rep name', () => {
+    const values = buildValuesWith({ existingCustomer: true, salesRepName: '   ' });
+    const result = buildSubmission(values, countries, TOKEN);
+
+    expect(result.ok && 'salesRepName' in result.submission.contact).toBe(false);
+  });
+
+  it('ignores a stale sales rep name once the checkbox is cleared', () => {
+    const values = buildValuesWith({ existingCustomer: false, salesRepName: 'Pat Jones' });
+    const result = buildSubmission(values, countries, TOKEN);
+
+    expect(result.ok && 'salesRepName' in result.submission.contact).toBe(false);
+  });
+});
+
 describe('buildSubmission', () => {
   it('builds the same-as-billing payload with only the shorthand for shipping', () => {
     const values = buildValuesWith({

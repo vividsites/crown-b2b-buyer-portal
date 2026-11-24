@@ -8,6 +8,8 @@ export const US_ZIP_PATTERN = /^\d{5}(-\d{4})?$/;
 
 const baseSchema = z.object({
   existingCustomer: z.boolean(),
+  // optional, even when existingCustomer is checked
+  salesRepName: z.string(),
   companyName: z.string(),
   firstName: z.string(),
   lastName: z.string(),
@@ -114,6 +116,7 @@ export const registrationSchema = baseSchema.superRefine((values, ctx) => {
 
 export const defaultRegistrationValues: RegistrationFormValues = {
   existingCustomer: false,
+  salesRepName: '',
   companyName: '',
   firstName: '',
   lastName: '',

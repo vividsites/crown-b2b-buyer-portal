@@ -18,6 +18,8 @@ interface CrownTextFieldProps<T extends FieldValues> {
   inputMode?: HTMLAttributes<HTMLInputElement>['inputMode'];
   placeholder?: string;
   fullRow?: boolean;
+  // see FieldLabelProps.concealed
+  concealed?: boolean;
   // extra hook (Phase 2 email precheck)
   onBlur?: (value: string) => void;
   // Already-rendered error that is not part of react-hook-form's state, so it is not
@@ -37,6 +39,7 @@ export function CrownTextField<T extends FieldValues>({
   inputMode,
   placeholder,
   fullRow = false,
+  concealed = false,
   onBlur,
   persistentError,
 }: CrownTextFieldProps<T>) {
@@ -58,7 +61,7 @@ export function CrownTextField<T extends FieldValues>({
         }
 
         return (
-          <FieldLabel fullRow={fullRow}>
+          <FieldLabel fullRow={fullRow} concealed={concealed}>
             <FieldLabelText>{required ? `${label} *` : label}</FieldLabelText>
             <ControlInput
               id={name}

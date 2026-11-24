@@ -134,6 +134,7 @@ export function RegistrationForm({ onSubmitted }: RegistrationFormProps) {
   };
 
   const sameAsBilling = watch('sameAsBilling');
+  const existingCustomer = watch('existingCustomer');
 
   const onValid = () => {
     setSummaryMessages([]);
@@ -187,7 +188,13 @@ export function RegistrationForm({ onSubmitted }: RegistrationFormProps) {
             name="existingCustomer"
             label={b3Lang('crownRegistration.field.existingCustomer')}
             variant="plain"
-            fullRow
+            pairedField
+          />
+          <CrownTextField
+            control={control}
+            name="salesRepName"
+            label={b3Lang('crownRegistration.field.salesRepName')}
+            concealed={!existingCustomer}
           />
           <CrownTextField
             control={control}
