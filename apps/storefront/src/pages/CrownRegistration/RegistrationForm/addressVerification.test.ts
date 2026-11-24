@@ -35,14 +35,10 @@ describe('getAddressesToVerify', () => {
     expect(result.map(({ scope }) => scope)).toEqual(['billing', 'shipping']);
   });
 
-  it('excludes Canadian addresses', () => {
-    expect(getAddressesToVerify(values({ bCountry: 'CA' }))).toEqual([]);
-  });
+  it('always reads the country as US', () => {
+    const result = getAddressesToVerify(values({ sameAsBilling: false }));
 
-  it('keeps a US shipping address when billing is Canadian', () => {
-    const result = getAddressesToVerify(values({ bCountry: 'CA', sameAsBilling: false }));
-
-    expect(result.map(({ scope }) => scope)).toEqual(['shipping']);
+    expect(result.map(({ address }) => address.country)).toEqual(['US', 'US']);
   });
 });
 

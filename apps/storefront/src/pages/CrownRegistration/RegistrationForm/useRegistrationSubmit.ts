@@ -5,7 +5,7 @@ import { Country } from '@/shared/global/context/config';
 import { registerBusinessAccount } from '@/shared/service/vs';
 
 import { buildSubmission } from './buildSubmission';
-import { mapServerErrors } from './mapServerErrors';
+import { mapServerErrors, PersistentFieldError } from './mapServerErrors';
 import { RegistrationFormValues } from './schema';
 import { VerifyOutcome } from './useAddressVerification';
 
@@ -19,6 +19,9 @@ interface UseRegistrationSubmitArgs {
   // Called after every failed registration request: the token is single-use, so
   // the Turnstile widget has to be reset.
   onFailure: () => void;
+  // Replaces the persistent field errors: with the server's, or with none at the
+  // start of a submit.
+  replacePersistentErrors: (errors: PersistentFieldError[]) => void;
 }
 
 export function useRegistrationSubmit({
@@ -28,6 +31,7 @@ export function useRegistrationSubmit({
   getToken,
   verifyAddresses,
   onFailure,
+  replacePersistentErrors,
 }: UseRegistrationSubmitArgs) {
   const { setError, setFocus, getValues } = form;
   const isSubmittingRef = useRef(false);
@@ -42,6 +46,7 @@ export function useRegistrationSubmit({
     isSubmittingRef.current = true;
     setIsSubmitting(true);
     setBannerKey(undefined);
+    replacePersistentErrors([]);
 
     const showMissingToken = () => setBannerKey('crownRegistration.error.turnstileMissing');
 
@@ -92,6 +97,7 @@ export function useRegistrationSubmit({
       } catch (error) {
         const {
           fieldErrors,
+          persistentErrors: nextPersistentErrors = [],
           bannerKey: nextBannerKey,
           focusField,
         } = mapServerErrors(error, fresh.sameAsBilling);
@@ -99,6 +105,7 @@ export function useRegistrationSubmit({
         fieldErrors.forEach(({ field, message }) => {
           setError(field, { type: 'server', message });
         });
+        replacePersistentErrors(nextPersistentErrors);
         setBannerKey(nextBannerKey);
         if (focusField) {
           setFocus(focusField);
@@ -109,7 +116,17 @@ export function useRegistrationSubmit({
       isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
-  }, [countries, getToken, getValues, onFailure, onSuccess, setError, setFocus, verifyAddresses]);
+  }, [
+    countries,
+    getToken,
+    getValues,
+    onFailure,
+    onSuccess,
+    replacePersistentErrors,
+    setError,
+    setFocus,
+    verifyAddresses,
+  ]);
 
   return { submit, isSubmitting, isVerifying, bannerKey };
 }

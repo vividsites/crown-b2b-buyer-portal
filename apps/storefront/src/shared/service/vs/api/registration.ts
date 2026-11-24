@@ -34,6 +34,8 @@ export interface RegistrationRequest {
     phone: string;
     password: string;
     existingCustomer: boolean;
+    // optional; only sent when the applicant entered one
+    salesRepName?: string;
   };
   company: { name: string };
   privacyAcknowledged: true;

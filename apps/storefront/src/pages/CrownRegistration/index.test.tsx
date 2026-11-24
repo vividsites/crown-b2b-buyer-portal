@@ -125,17 +125,14 @@ const fillDetails = async (user: User) => {
 const fillAddress = async (
   user: User,
   region: RegExp,
-  values: { address1: string; city: string; country?: string; state: string; zip: string },
+  values: { address1: string; city: string; state: string; zip: string },
 ) => {
   const scope = within(section(region));
 
-  if (values.country) {
-    await user.selectOptions(scope.getByLabelText(/^country/i), values.country);
-  }
   await fill(user, scope.getByLabelText(/street address/i), values.address1);
   await fill(user, scope.getByLabelText(/^city/i), values.city);
-  await user.selectOptions(scope.getByLabelText(/^(state|province)/i), values.state);
-  await fill(user, scope.getByLabelText(/^(zip|postal) code/i), values.zip);
+  await user.selectOptions(scope.getByLabelText(/^state/i), values.state);
+  await fill(user, scope.getByLabelText(/^zip code/i), values.zip);
 };
 
 const fillBilling = (user: User) =>
@@ -216,6 +213,12 @@ const correctedShipping = {
   },
 };
 
+const EMAIL_EXISTS = /An account with this email already exists/;
+const ADDRESS_EXISTS =
+  'An account with this address already exists. Please contact customer support at';
+const COMPANY_EXISTS =
+  'An account with this company name already exists. Please contact customer support at';
+
 const failWith = (status: number, errors: { code: string; field?: string; message: string }[]) =>
   respondWith(() => HttpResponse.json({ errors }, { status }));
 
@@ -243,7 +246,7 @@ describe('CrownRegistration page', () => {
     expect(section(/03 — shipping address/i)).toBeVisible();
     expect(section(/04 — submit/i)).toBeVisible();
 
-    expect(within(section(/billing address/i)).getByLabelText(/^country/i)).toHaveValue('US');
+    expect(within(section(/billing address/i)).queryByLabelText(/^country/i)).toBeNull();
     expect(screen.getByRole('checkbox', { name: /same as billing/i })).toBeChecked();
     expect(within(section(/shipping address/i)).queryByLabelText(/street address/i)).toBeNull();
     expect(screen.getByRole('checkbox', { name: /privacy policy/i })).not.toBeChecked();
@@ -289,34 +292,25 @@ describe('CrownRegistration page', () => {
   it.each([
     ['billing', /billing address/i],
     ['shipping', /shipping address/i],
-  ])('swaps the %s region label, list and postal rules for Canada', async (kind, region) => {
+  ])('has no country field and applies US ZIP rules in the %s address', async (kind, region) => {
     const { user } = renderPage();
     if (kind === 'shipping') {
       await user.click(screen.getByRole('checkbox', { name: /same as billing/i }));
     }
     const scope = within(section(region));
 
-    await user.selectOptions(scope.getByLabelText(/^state/i), 'IL');
-    await user.selectOptions(scope.getByLabelText(/^country/i), 'CA');
+    expect(scope.queryByLabelText(/^country/i)).toBeNull();
 
-    const province = scope.getByLabelText(/^province/i);
-    expect(province).toHaveValue('');
-    expect(
-      within(province)
-        .getAllByRole('option')
-        .map((option) => option.textContent),
-    ).toEqual(['Select province', 'Ontario', 'Quebec']);
-
-    const postal = scope.getByLabelText(/^postal code/i);
-    await user.type(postal, '12345');
+    const zip = scope.getByLabelText(/^zip code/i);
+    await user.type(zip, 'K1A 0B1');
     await user.tab();
-    expect(await screen.findByText('Enter a postal code like K1A 0B1')).toBeVisible();
+    expect(await screen.findByText('Enter a 5-digit ZIP code')).toBeVisible();
 
-    await user.clear(postal);
-    await user.type(postal, 'K1A 0B1');
+    await user.clear(zip);
+    await user.type(zip, '60601');
     await user.tab();
     await waitFor(() =>
-      expect(screen.queryByText('Enter a postal code like K1A 0B1')).not.toBeInTheDocument(),
+      expect(screen.queryByText('Enter a 5-digit ZIP code')).not.toBeInTheDocument(),
     );
   });
 
@@ -330,19 +324,6 @@ describe('CrownRegistration page', () => {
     expect(options).toEqual(['Select state', 'Illinois', 'Texas']);
   });
 
-  it('clears a postal error when the country changes', async () => {
-    const { user } = renderPage();
-    const scope = within(section(/billing address/i));
-
-    await user.type(scope.getByLabelText(/^zip code/i), 'abc');
-    await user.tab();
-    expect(await screen.findByText('Enter a 5-digit ZIP code')).toBeVisible();
-
-    await user.selectOptions(scope.getByLabelText(/^country/i), 'CA');
-
-    expect(screen.queryByText('Enter a 5-digit ZIP code')).toBeNull();
-  });
-
   it('requires the shipping address only when it differs from billing', async () => {
     const { user } = renderPage();
     const toggle = screen.getByRole('checkbox', { name: /same as billing/i });
@@ -351,7 +332,6 @@ describe('CrownRegistration page', () => {
     const shipping = within(section(/shipping address/i));
     expect(shipping.getByLabelText(/street address/i)).toBeVisible();
     expect(shipping.getByLabelText(/^city/i)).toBeVisible();
-    expect(shipping.getByLabelText(/^country/i)).toBeVisible();
     expect(shipping.getByLabelText(/^state/i)).toBeVisible();
     expect(shipping.getByLabelText(/^zip code/i)).toBeVisible();
 
@@ -369,7 +349,26 @@ describe('CrownRegistration page', () => {
     await user.type(screen.getByLabelText(/work email/i), 'ada@acmefoods.com');
     await user.tab();
 
-    expect(await screen.findByText('An account with this email already exists')).toBeVisible();
+    expect(await screen.findByText(EMAIL_EXISTS)).toBeVisible();
+  });
+
+  it('keeps the duplicate-email error and its support link after the email loses focus', async () => {
+    vi.spyOn(b2bService, 'checkUserEmail').mockResolvedValue({ isValid: false });
+    const { user } = renderPage();
+    const email = screen.getByLabelText(/work email/i);
+
+    await user.type(email, 'ada@acmefoods.com');
+    await user.tab();
+    await screen.findByText(EMAIL_EXISTS);
+    await user.click(email);
+    await user.tab();
+
+    expect(screen.getByText(EMAIL_EXISTS)).toBeVisible();
+    expect(
+      within(section(/your details/i)).getByRole('link', {
+        name: 'CrownCommerceSupport@crownpack.com',
+      }),
+    ).toHaveAttribute('href', 'mailto:CrownCommerceSupport@crownpack.com');
   });
 
   it('submits the exact payload for a same-as-billing registration and shows the confirmation', async () => {
@@ -409,7 +408,7 @@ describe('CrownRegistration page', () => {
     expect(autoLoginMock).not.toHaveBeenCalled();
   });
 
-  it('submits a separate Canadian shipping address with its region name', async () => {
+  it('submits a separate shipping address with its region name and a hard-coded US country', async () => {
     const requests = respondWith(success);
     const { user } = renderPage();
 
@@ -417,11 +416,10 @@ describe('CrownRegistration page', () => {
     await fillBilling(user);
     await user.click(screen.getByRole('checkbox', { name: /same as billing/i }));
     await fillAddress(user, /shipping address/i, {
-      address1: '100 Queen St',
-      city: 'Ottawa',
-      country: 'CA',
-      state: 'ON',
-      zip: 'K1A 0B1',
+      address1: '100 Congress Ave',
+      city: 'Austin',
+      state: 'TX',
+      zip: '78701',
     });
     await acknowledgePrivacy(user);
     await user.click(submitButton());
@@ -430,13 +428,13 @@ describe('CrownRegistration page', () => {
     expect(requests[0]).toMatchObject({
       shippingAddress: {
         sameAsBilling: false,
-        address1: '100 Queen St',
+        address1: '100 Congress Ave',
         address2: '',
-        city: 'Ottawa',
-        state: 'ON',
-        stateName: 'Ontario',
-        postalCode: 'K1A 0B1',
-        country: 'CA',
+        city: 'Austin',
+        state: 'TX',
+        stateName: 'Texas',
+        postalCode: '78701',
+        country: 'US',
       },
     });
   });
@@ -470,7 +468,7 @@ describe('CrownRegistration page', () => {
       await fillValidForm(user);
       await user.click(submitButton());
 
-      expect(await screen.findByText('An account with this email already exists')).toBeVisible();
+      expect(await screen.findByText(EMAIL_EXISTS)).toBeVisible();
       expect(screen.getByLabelText(/work email/i)).toHaveFocus();
     });
 
@@ -494,8 +492,69 @@ describe('CrownRegistration page', () => {
       await fillValidForm(user);
       await user.click(submitButton());
 
-      expect(await screen.findByText('Billing taken')).toBeVisible();
+      expect(await screen.findByText(ADDRESS_EXISTS)).toBeVisible();
       expect(within(section(/billing address/i)).getByLabelText(/street address/i)).toHaveFocus();
+    });
+
+    it('keeps the duplicate-address error and its support link after the field is blurred', async () => {
+      failWith(409, [
+        { code: 'ADDRESS_EXISTS', field: 'billingAddress', message: 'Billing taken' },
+      ]);
+      const { user } = renderPage();
+
+      await fillValidForm(user);
+      await user.click(submitButton());
+      await screen.findByText(ADDRESS_EXISTS);
+
+      await user.tab();
+      await user.tab();
+
+      expect(screen.getByText(ADDRESS_EXISTS)).toBeVisible();
+      expect(
+        within(section(/billing address/i)).getByRole('link', {
+          name: 'CrownCommerceSupport@crownpack.com',
+        }),
+      ).toHaveAttribute('href', 'mailto:CrownCommerceSupport@crownpack.com');
+    });
+
+    it('clears the duplicate-address error when the ZIP is edited', async () => {
+      failWith(409, [
+        { code: 'ADDRESS_EXISTS', field: 'billingAddress', message: 'Billing taken' },
+      ]);
+      const { user } = renderPage();
+
+      await fillValidForm(user);
+      await user.click(submitButton());
+      await screen.findByText(ADDRESS_EXISTS);
+
+      await user.type(within(section(/billing address/i)).getByLabelText(/^zip code/i), '1');
+
+      expect(screen.queryByText(ADDRESS_EXISTS)).toBeNull();
+    });
+
+    it('keeps the duplicate-company error after blur and clears it when the name is edited', async () => {
+      failWith(409, [
+        { code: 'ADDRESS_EXISTS', field: 'companyName', message: 'Company taken' },
+      ]);
+      const { user } = renderPage();
+
+      await fillValidForm(user);
+      await user.click(submitButton());
+      await screen.findByText(COMPANY_EXISTS);
+      expect(screen.getByLabelText(/company name/i)).toHaveFocus();
+
+      await user.tab();
+
+      expect(screen.getByText(COMPANY_EXISTS)).toBeVisible();
+      expect(
+        within(section(/your details/i)).getByRole('link', {
+          name: 'CrownCommerceSupport@crownpack.com',
+        }),
+      ).toBeVisible();
+
+      await user.type(screen.getByLabelText(/company name/i), 'x');
+
+      expect(screen.queryByText(COMPANY_EXISTS)).toBeNull();
     });
 
     it('shows ADDRESS_EXISTS for a separate shipping address on the shipping street field', async () => {
@@ -516,7 +575,7 @@ describe('CrownRegistration page', () => {
       await acknowledgePrivacy(user);
       await user.click(submitButton());
 
-      expect(await screen.findByText('Shipping taken')).toBeVisible();
+      expect(await screen.findByText(ADDRESS_EXISTS)).toBeVisible();
       expect(within(section(/shipping address/i)).getByLabelText(/street address/i)).toHaveFocus();
     });
 
@@ -529,7 +588,7 @@ describe('CrownRegistration page', () => {
       await fillValidForm(user);
       await user.click(submitButton());
 
-      expect(await screen.findByText('Shipping taken')).toBeVisible();
+      expect(await screen.findByText(ADDRESS_EXISTS)).toBeVisible();
       expect(within(section(/billing address/i)).getByLabelText(/street address/i)).toHaveFocus();
     });
 
@@ -694,27 +753,6 @@ describe('CrownRegistration page', () => {
       expect(logError).toHaveBeenCalledWith('Address validation failed', expect.anything());
     });
 
-    it('never sends a Canadian address for validation', async () => {
-      const calls = respondToValidation(() => HttpResponse.json({ status: 'match' }));
-      const requests = respondWith(success);
-      const { user } = renderPage();
-
-      await fillDetails(user);
-      await fillAddress(user, /billing address/i, {
-        address1: '100 Queen St',
-        city: 'Ottawa',
-        country: 'CA',
-        state: 'ON',
-        zip: 'K1A 0B1',
-      });
-      await acknowledgePrivacy(user);
-      await user.click(submitButton());
-
-      await screen.findByRole('heading', { name: 'Your account is pending approval' });
-      expect(requests).toHaveLength(1);
-      expect(calls).toHaveLength(0);
-    });
-
     const fillSeparateShipping = async (user: User) => {
       await fillDetails(user);
       await fillBilling(user);
@@ -783,7 +821,7 @@ describe('CrownRegistration page', () => {
       await user.click(
         within(screen.getByRole('dialog')).getByRole('button', { name: 'Use this address' }),
       );
-      await screen.findByText('An account with this email already exists');
+      await screen.findByText(EMAIL_EXISTS);
 
       respondWith(success);
       emitToken('token-2');
@@ -884,6 +922,6 @@ describe('CrownRegistration page', () => {
     await user.tab();
 
     await waitFor(() => expect(logError).toHaveBeenCalled());
-    expect(screen.queryByText('An account with this email already exists')).toBeNull();
+    expect(screen.queryByText(EMAIL_EXISTS)).toBeNull();
   });
 });

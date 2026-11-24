@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { renderWithProviders, screen, waitFor } from 'tests/test-utils';
@@ -8,7 +9,9 @@ import b2bLogger from '@/utils/b3Logger';
 import { CrownTextField } from '../components/CrownTextField';
 
 import { defaultRegistrationValues, RegistrationFormValues, registrationSchema } from './schema';
+import { SupportContactError } from './SupportContactError';
 import { useEmailPrecheck } from './useEmailPrecheck';
+import { usePersistentErrors } from './usePersistentErrors';
 
 function Harness() {
   const form = useForm<RegistrationFormValues>({
@@ -17,17 +20,37 @@ function Harness() {
     mode: 'onBlur',
     reValidateMode: 'onBlur',
   });
-  const { onEmailBlur } = useEmailPrecheck(form);
+  const { persistentErrors, setPersistentError, clearPersistentErrors } = usePersistentErrors();
+  const { onEmailBlur } = useEmailPrecheck(form, { setPersistentError, clearPersistentErrors });
+
+  // the page clears a persistent error when its field is edited
+  useEffect(() => {
+    const subscription = form.watch((_, { name, type }) => {
+      if (name && type === 'change') {
+        clearPersistentErrors(name);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [form, clearPersistentErrors]);
 
   return (
     <>
-      <CrownTextField control={form.control} name="email" label="Work email" onBlur={onEmailBlur} />
+      <CrownTextField
+        control={form.control}
+        name="email"
+        label="Work email"
+        onBlur={onEmailBlur}
+        persistentError={
+          persistentErrors.email && <SupportContactError messageKey={persistentErrors.email} />
+        }
+      />
       <CrownTextField control={form.control} name="firstName" label="First name" />
     </>
   );
 }
 
-const emailExists = 'An account with this email already exists';
+const emailExists = /An account with this email already exists/;
 
 const mockCheck = (isValid: boolean) =>
   vi.spyOn(b2bService, 'checkUserEmail').mockResolvedValue({ isValid });
@@ -68,6 +91,29 @@ describe('useEmailPrecheck', () => {
 
     expect(await screen.findByText(emailExists)).toBeInTheDocument();
     expect(check).toHaveBeenCalledWith(expect.objectContaining({ email: 'buyer@acmefoods.com' }));
+  });
+
+  it('keeps the duplicate error, with a support link, after blur and clears it on edit', async () => {
+    mockCheck(false);
+    const { user } = renderWithProviders(<Harness />);
+    const email = screen.getByLabelText(/work email/i);
+
+    await user.type(email, 'buyer@acmefoods.com');
+    await user.tab();
+    expect(await screen.findByText(emailExists)).toBeInTheDocument();
+
+    await user.click(email);
+    await user.tab();
+
+    expect(screen.getByText(emailExists)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'CrownCommerceSupport@crownpack.com' })).toHaveAttribute(
+      'href',
+      'mailto:CrownCommerceSupport@crownpack.com',
+    );
+
+    await user.type(email, 'x');
+
+    expect(screen.queryByText(emailExists)).not.toBeInTheDocument();
   });
 
   it('shows no error when the email is available', async () => {

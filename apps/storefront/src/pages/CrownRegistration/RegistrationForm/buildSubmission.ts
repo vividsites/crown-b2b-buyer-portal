@@ -1,7 +1,7 @@
 import { Country } from '@/shared/global/context/config';
 import { RegistrationSubmission, RegistrationSubmissionAddress } from '@/shared/service/vs';
 
-import { resolveStateName } from './regions';
+import { REGISTRATION_COUNTRY, resolveStateName } from './regions';
 import { AddressPrefix, RegistrationFormValues } from './schema';
 
 type BuildSubmissionResult =
@@ -15,9 +15,8 @@ const buildAddress = (
   countries: Country[],
   prefix: AddressPrefix,
 ): AddressResult => {
-  const country = values[`${prefix}Country`];
   const state = values[`${prefix}State`].trim();
-  const stateName = resolveStateName(countries, country, state);
+  const stateName = resolveStateName(countries, REGISTRATION_COUNTRY, state);
 
   if (stateName === undefined) {
     return { ok: false };
@@ -32,7 +31,7 @@ const buildAddress = (
       state,
       stateName,
       postalCode: values[`${prefix}Zip`].trim(),
-      country,
+      country: REGISTRATION_COUNTRY,
     },
   };
 };
@@ -47,6 +46,9 @@ export const buildSubmission = (
     return { ok: false, field: 'bState' };
   }
 
+  // the sales rep box is only shown for existing customers; a hidden value is ignored
+  const salesRepName = values.existingCustomer ? values.salesRepName.trim() : '';
+
   const submission: RegistrationSubmission = {
     turnstileToken,
     contact: {
@@ -57,6 +59,7 @@ export const buildSubmission = (
       // the password is sent exactly as typed
       password: values.password,
       existingCustomer: values.existingCustomer,
+      ...(salesRepName ? { salesRepName } : {}),
     },
     company: { name: values.companyName.trim() },
     privacyAcknowledged: true,

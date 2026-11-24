@@ -11,12 +11,32 @@ export const fullRowOptions = {
   shouldForwardProp: (prop: string) => prop !== 'fullRow',
 };
 
-export const FieldLabel = styled('label', fullRowOptions)<FullRowProps>`
+// FieldGrid fits 3 columns of at least 220px (3 x 220 + 2 x 20 gap)
+export const THREE_COLUMN_GRID = '@container (min-width: 700px)';
+
+export interface FieldLabelProps extends FullRowProps {
+  // Takes the grid cell right after a checkbox that spans the first two columns.
+  // While concealed it keeps its cell (invisible) when the grid has 3+ columns, so
+  // the row height does not change; on narrower grids it is removed from the layout.
+  concealed?: boolean;
+}
+
+export const FieldLabel = styled('label', {
+  shouldForwardProp: (prop: string) => prop !== 'fullRow' && prop !== 'concealed',
+})<FieldLabelProps>`
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-width: 0;
   ${({ fullRow }) => (fullRow ? 'grid-column: 1 / -1;' : '')}
+  ${({ concealed }) =>
+    concealed
+      ? `display: none;
+  ${THREE_COLUMN_GRID} {
+    display: flex;
+    visibility: hidden;
+  }`
+      : ''}
 `;
 
 export const FieldLabelText = styled.span`

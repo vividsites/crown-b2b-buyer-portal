@@ -6,15 +6,27 @@ import { useB3Lang } from '@/lib/lang';
 
 import { crownColors } from '../tokens';
 
-import { FieldError, fullRowOptions, FullRowProps } from './fieldStyles';
+import { FieldError, FullRowProps, THREE_COLUMN_GRID } from './fieldStyles';
 
 type CheckboxVariant = 'boxed' | 'plain';
 
-const CheckboxWrapper = styled('div', fullRowOptions)<FullRowProps>`
+const CheckboxWrapper = styled('div', {
+  shouldForwardProp: (prop: string) => prop !== 'fullRow' && prop !== 'pairedField',
+})<FullRowProps & { pairedField?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 6px;
   ${({ fullRow }) => (fullRow ? 'grid-column: 1 / -1;' : '')}
+  ${({ pairedField }) =>
+    pairedField
+      ? `grid-column: 1 / -1;
+  ${THREE_COLUMN_GRID} {
+    grid-column: 1 / span 2;
+    /* bottom-align with the paired textbox beside it */
+    align-self: end;
+    padding-bottom: 12px;
+  }`
+      : ''}
 `;
 
 const CheckboxRow = styled('label', {
@@ -47,6 +59,8 @@ interface CrownCheckboxProps<T extends FieldValues> {
   label: ReactNode;
   variant?: CheckboxVariant;
   fullRow?: boolean;
+  // spans the first two grid columns so a field can sit beside it (see CrownTextField)
+  pairedField?: boolean;
   required?: boolean;
   onChange?: (checked: boolean) => void;
 }
@@ -57,6 +71,7 @@ export function CrownCheckbox<T extends FieldValues>({
   label,
   variant = 'plain',
   fullRow = false,
+  pairedField = false,
   required = false,
   onChange,
 }: CrownCheckboxProps<T>) {
@@ -71,7 +86,7 @@ export function CrownCheckbox<T extends FieldValues>({
         const errorText = error?.message ? b3Lang(error.message) : undefined;
 
         return (
-          <CheckboxWrapper fullRow={fullRow}>
+          <CheckboxWrapper fullRow={fullRow} pairedField={pairedField}>
             <CheckboxRow variant={variant}>
               <CheckboxInput
                 type="checkbox"

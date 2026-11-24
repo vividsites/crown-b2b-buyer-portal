@@ -9,7 +9,10 @@ const countries: Country[] = [
   {
     countryCode: 'US',
     countryName: 'United States',
-    states: [{ stateCode: 'IL', stateName: 'Illinois' }],
+    states: [
+      { stateCode: 'IL', stateName: 'Illinois' },
+      { stateCode: 'TX', stateName: 'Texas' },
+    ],
   },
   {
     countryCode: 'CA',
@@ -30,7 +33,6 @@ const buildValuesWith = builder<RegistrationFormValues>(() => ({
   bAddress1: faker.location.streetAddress(),
   bAddress2: '',
   bCity: faker.location.city(),
-  bCountry: 'US',
   bState: 'IL',
   bZip: '60601',
   sameAsBilling: true,
@@ -38,6 +40,29 @@ const buildValuesWith = builder<RegistrationFormValues>(() => ({
 }));
 
 const TOKEN = faker.string.alphanumeric(24);
+
+describe('buildSubmission sales rep name', () => {
+  it('sends the trimmed sales rep name for an existing customer', () => {
+    const values = buildValuesWith({ existingCustomer: true, salesRepName: '  Pat Jones ' });
+    const result = buildSubmission(values, countries, TOKEN);
+
+    expect(result.ok && result.submission.contact.salesRepName).toBe('Pat Jones');
+  });
+
+  it('omits a blank sales rep name', () => {
+    const values = buildValuesWith({ existingCustomer: true, salesRepName: '   ' });
+    const result = buildSubmission(values, countries, TOKEN);
+
+    expect(result.ok && 'salesRepName' in result.submission.contact).toBe(false);
+  });
+
+  it('ignores a stale sales rep name once the checkbox is cleared', () => {
+    const values = buildValuesWith({ existingCustomer: false, salesRepName: 'Pat Jones' });
+    const result = buildSubmission(values, countries, TOKEN);
+
+    expect(result.ok && 'salesRepName' in result.submission.contact).toBe(false);
+  });
+});
 
 describe('buildSubmission', () => {
   it('builds the same-as-billing payload with only the shorthand for shipping', () => {
@@ -78,15 +103,14 @@ describe('buildSubmission', () => {
     });
   });
 
-  it('builds a full Canadian shipping address when it differs from billing', () => {
+  it('builds a full US shipping address when it differs from billing', () => {
     const values = buildValuesWith({
       sameAsBilling: false,
       sAddress1: '100 Queen St',
       sAddress2: 'Dock 4',
-      sCity: 'Ottawa',
-      sCountry: 'CA',
-      sState: 'ON',
-      sZip: 'K1A 0B1',
+      sCity: 'Austin',
+      sState: 'TX',
+      sZip: '78701',
     });
 
     const result = buildSubmission(values, countries, TOKEN);
@@ -98,11 +122,11 @@ describe('buildSubmission', () => {
           sameAsBilling: false,
           address1: '100 Queen St',
           address2: 'Dock 4',
-          city: 'Ottawa',
-          state: 'ON',
-          stateName: 'Ontario',
-          postalCode: 'K1A 0B1',
-          country: 'CA',
+          city: 'Austin',
+          state: 'TX',
+          stateName: 'Texas',
+          postalCode: '78701',
+          country: 'US',
         },
       },
     });

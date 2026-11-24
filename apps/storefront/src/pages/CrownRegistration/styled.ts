@@ -96,6 +96,8 @@ export const FieldGrid = styled.div`
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 18px 20px;
   align-content: start;
+  /* lets fieldStyles' wide-grid container query react to the grid's own width */
+  container-type: inline-size;
 `;
 
 export const FullRow = styled.div`

@@ -1,37 +1,27 @@
-import { Control, UseFormClearErrors, UseFormSetValue, useWatch } from 'react-hook-form';
+import { ReactNode } from 'react';
+import { Control } from 'react-hook-form';
 
 import { useB3Lang } from '@/lib/lang';
-import { RegistrationCountry } from '@/shared/service/vs';
 
 import { CrownSelect } from '../components/CrownSelect';
 import { CrownTextField } from '../components/CrownTextField';
 
-import { RegionOption } from './regions';
+import { RegionOption, REGISTRATION_COUNTRY } from './regions';
 import { AddressPrefix, RegistrationFormValues } from './schema';
 
 interface AddressFieldsProps {
   prefix: AddressPrefix;
   control: Control<RegistrationFormValues>;
-  setValue: UseFormSetValue<RegistrationFormValues>;
-  clearErrors: UseFormClearErrors<RegistrationFormValues>;
-  getRegions: (country: RegistrationCountry) => RegionOption[];
+  getRegions: (country: typeof REGISTRATION_COUNTRY) => RegionOption[];
+  // shown under the street address until it is edited, e.g. a duplicate-address error
+  address1Error?: ReactNode;
 }
 
-type AddressFieldKey = 'Address1' | 'Address2' | 'City' | 'Country' | 'State' | 'Zip';
-
-const COUNTRIES: RegistrationCountry[] = ['US', 'CA'];
+type AddressFieldKey = 'Address1' | 'Address2' | 'City' | 'State' | 'Zip';
 
 // Renders as children of a FormSection grid.
-export function AddressFields({
-  prefix,
-  control,
-  setValue,
-  clearErrors,
-  getRegions,
-}: AddressFieldsProps) {
+export function AddressFields({ prefix, control, getRegions, address1Error }: AddressFieldsProps) {
   const b3Lang = useB3Lang();
-  const country = useWatch({ control, name: `${prefix}Country` });
-  const isCanada = country === 'CA';
   const section = prefix === 'b' ? 'billing' : 'shipping';
 
   const name = <K extends AddressFieldKey>(key: K) => `${prefix}${key}` as const;
@@ -45,6 +35,7 @@ export function AddressFields({
         required
         fullRow
         autoComplete={`${section} address-line1`}
+        persistentError={address1Error}
       />
       <CrownTextField
         control={control}
@@ -62,29 +53,12 @@ export function AddressFields({
       />
       <CrownSelect
         control={control}
-        name={name('Country')}
-        label={b3Lang('crownRegistration.field.country')}
-        required
-        autoComplete={`${section} country`}
-        options={COUNTRIES.map((code) => ({
-          value: code,
-          label: b3Lang(`crownRegistration.country.${code}`),
-        }))}
-        onChange={() => {
-          setValue(name('State'), '', { shouldValidate: false });
-          clearErrors([name('State'), name('Zip')]);
-        }}
-      />
-      <CrownSelect
-        control={control}
         name={name('State')}
-        label={b3Lang(`crownRegistration.field.${isCanada ? 'province' : 'state'}`)}
-        placeholder={b3Lang(
-          `crownRegistration.field.${isCanada ? 'provincePrompt' : 'statePrompt'}`,
-        )}
+        label={b3Lang('crownRegistration.field.state')}
+        placeholder={b3Lang('crownRegistration.field.statePrompt')}
         required
         autoComplete={`${section} address-level1`}
-        options={getRegions(country).map(({ stateCode, stateName }) => ({
+        options={getRegions(REGISTRATION_COUNTRY).map(({ stateCode, stateName }) => ({
           value: stateCode,
           label: stateName,
         }))}
@@ -92,10 +66,10 @@ export function AddressFields({
       <CrownTextField
         control={control}
         name={name('Zip')}
-        label={b3Lang(`crownRegistration.field.${isCanada ? 'postalCode' : 'zip'}`)}
+        label={b3Lang('crownRegistration.field.zip')}
         required
         autoComplete={`${section} postal-code`}
-        inputMode={isCanada ? 'text' : 'numeric'}
+        inputMode="numeric"
       />
     </>
   );

@@ -2,13 +2,14 @@ import { z } from 'zod';
 
 export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
 export const FREE_EMAIL_PATTERN = /@(gmail|yahoo|hotmail|outlook|aol)\./i;
+// At least one letter in any script, so accented names pass too.
+export const HAS_LETTER_PATTERN = /\p{L}/u;
 export const US_ZIP_PATTERN = /^\d{5}(-\d{4})?$/;
-export const CA_POSTAL_PATTERN = /^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/;
-
-const countrySchema = z.enum(['US', 'CA']);
 
 const baseSchema = z.object({
   existingCustomer: z.boolean(),
+  // optional, even when existingCustomer is checked
+  salesRepName: z.string(),
   companyName: z.string(),
   firstName: z.string(),
   lastName: z.string(),
@@ -19,14 +20,12 @@ const baseSchema = z.object({
   bAddress1: z.string(),
   bAddress2: z.string(),
   bCity: z.string(),
-  bCountry: countrySchema,
   bState: z.string(),
   bZip: z.string(),
   sameAsBilling: z.boolean(),
   sAddress1: z.string(),
   sAddress2: z.string(),
   sCity: z.string(),
-  sCountry: countrySchema,
   sState: z.string(),
   sZip: z.string(),
   privacyAcknowledged: z.boolean(),
@@ -52,9 +51,15 @@ export const registrationSchema = baseSchema.superRefine((values, ctx) => {
     return true;
   };
 
-  requireField('companyName', values.companyName);
-  requireField('firstName', values.firstName);
-  requireField('lastName', values.lastName);
+  const requireLetter = (field: 'companyName' | 'firstName' | 'lastName', value: string) => {
+    if (requireField(field, value) && !HAS_LETTER_PATTERN.test(value)) {
+      fail(field, `${field}Invalid`);
+    }
+  };
+
+  requireLetter('companyName', values.companyName);
+  requireLetter('firstName', values.firstName);
+  requireLetter('lastName', values.lastName);
 
   const email = values.email.trim();
   if (requireField('email', email)) {
@@ -94,13 +99,8 @@ export const registrationSchema = baseSchema.superRefine((values, ctx) => {
 
     const zipField = field('Zip');
     const zip = values[zipField].trim();
-    const country = values[`${prefix}Country`];
-    if (requireField(zipField, zip)) {
-      if (country === 'US' && !US_ZIP_PATTERN.test(zip)) {
-        fail(zipField, 'zipUS');
-      } else if (country === 'CA' && !CA_POSTAL_PATTERN.test(zip)) {
-        fail(zipField, 'postalCA');
-      }
+    if (requireField(zipField, zip) && !US_ZIP_PATTERN.test(zip)) {
+      fail(zipField, 'zipUS');
     }
   };
 
@@ -116,6 +116,7 @@ export const registrationSchema = baseSchema.superRefine((values, ctx) => {
 
 export const defaultRegistrationValues: RegistrationFormValues = {
   existingCustomer: false,
+  salesRepName: '',
   companyName: '',
   firstName: '',
   lastName: '',
@@ -126,14 +127,12 @@ export const defaultRegistrationValues: RegistrationFormValues = {
   bAddress1: '',
   bAddress2: '',
   bCity: '',
-  bCountry: 'US',
   bState: '',
   bZip: '',
   sameAsBilling: true,
   sAddress1: '',
   sAddress2: '',
   sCity: '',
-  sCountry: 'US',
   sState: '',
   sZip: '',
   privacyAcknowledged: false,

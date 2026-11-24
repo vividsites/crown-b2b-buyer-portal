@@ -135,7 +135,6 @@ describe('useAddressVerification', () => {
       bCity: 'CHICAGO',
       bState: 'IL',
       bZip: '60601-1234',
-      bCountry: 'US',
     });
     expect(dialogOf(result)).toBeNull();
   });
@@ -193,14 +192,6 @@ describe('useAddressVerification', () => {
     await startVerify(result);
 
     expect(calls).toHaveLength(2);
-  });
-
-  it('never validates Canadian addresses', async () => {
-    const calls = mockValidation(() => HttpResponse.json({ status: 'match' }));
-    const { result } = setup({ bCountry: 'CA' });
-
-    await expect(startVerify(result)).resolves.toEqual({ ok: true });
-    expect(calls).toHaveLength(0);
   });
 
   it('verifies shipping after billing when they differ', async () => {

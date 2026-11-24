@@ -1,6 +1,10 @@
 import { Country } from '@/shared/global/context/config';
 import { RegistrationCountry } from '@/shared/service/vs';
 
+// The client currently registers US businesses only, so the country is not a
+// form field; it is fixed here and sent with every address.
+export const REGISTRATION_COUNTRY: RegistrationCountry = 'US';
+
 export interface RegionOption {
   stateCode: string;
   stateName: string;
