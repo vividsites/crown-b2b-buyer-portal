@@ -14,9 +14,11 @@ import { AddressFields } from './AddressFields';
 import { AddressVerificationDialog } from './AddressVerificationDialog';
 import { FormFieldName } from './mapServerErrors';
 import { defaultRegistrationValues, RegistrationFormValues, registrationSchema } from './schema';
+import { SupportContactError } from './SupportContactError';
 import { Turnstile, TURNSTILE_HELPER_ID, TurnstileHandle } from './Turnstile';
 import { useAddressVerification } from './useAddressVerification';
 import { useEmailPrecheck } from './useEmailPrecheck';
+import { usePersistentErrors } from './usePersistentErrors';
 import { useRegions } from './useRegions';
 import { useRegistrationSubmit } from './useRegistrationSubmit';
 
@@ -43,13 +45,11 @@ const FIELD_ORDER: FormFieldName[] = [
   'bAddress1',
   'bAddress2',
   'bCity',
-  'bCountry',
   'bState',
   'bZip',
   'sAddress1',
   'sAddress2',
   'sCity',
-  'sCountry',
   'sState',
   'sZip',
   'privacyAcknowledged',
@@ -65,7 +65,7 @@ export function RegistrationForm({ onSubmitted }: RegistrationFormProps) {
     mode: 'onBlur',
     reValidateMode: 'onBlur',
   });
-  const { control, watch, clearErrors, setValue, handleSubmit } = form;
+  const { control, watch, clearErrors, handleSubmit } = form;
 
   const [summaryMessages, setSummaryMessages] = useState<string[]>([]);
 
@@ -80,7 +80,10 @@ export function RegistrationForm({ onSubmitted }: RegistrationFormProps) {
     return () => subscription.unsubscribe();
   }, [watch, clearErrors]);
 
-  const { onEmailBlur } = useEmailPrecheck(form);
+  const { persistentErrors, replacePersistentErrors, setPersistentError, clearPersistentErrors } =
+    usePersistentErrors();
+
+  const { onEmailBlur } = useEmailPrecheck(form, { setPersistentError, clearPersistentErrors });
 
   const handleSuccess = useCallback(
     (_result: { referenceId: string }, values: RegistrationFormValues) => {
@@ -110,7 +113,25 @@ export function RegistrationForm({ onSubmitted }: RegistrationFormProps) {
     getToken,
     verifyAddresses: verification.verifyAddresses,
     onFailure: resetTurnstile,
+    replacePersistentErrors,
   });
+
+  // Duplicate company/address errors survive blur; only editing the field clears them.
+  useEffect(() => {
+    const subscription = watch((_, { name, type }) => {
+      if (name && type === 'change') {
+        clearPersistentErrors(name);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [watch, clearPersistentErrors]);
+
+  const persistentErrorFor = (field: FormFieldName) => {
+    const messageKey = persistentErrors[field];
+
+    return messageKey ? <SupportContactError messageKey={messageKey} /> : undefined;
+  };
 
   const sameAsBilling = watch('sameAsBilling');
 
@@ -174,6 +195,7 @@ export function RegistrationForm({ onSubmitted }: RegistrationFormProps) {
             label={b3Lang('crownRegistration.field.companyName')}
             required
             autoComplete="organization"
+            persistentError={persistentErrorFor('companyName')}
           />
           <CrownTextField
             control={control}
@@ -198,6 +220,7 @@ export function RegistrationForm({ onSubmitted }: RegistrationFormProps) {
             required
             autoComplete="email"
             onBlur={onEmailBlur}
+            persistentError={persistentErrorFor('email')}
           />
           <CrownTextField
             control={control}
@@ -236,9 +259,8 @@ export function RegistrationForm({ onSubmitted }: RegistrationFormProps) {
           <AddressFields
             prefix="b"
             control={control}
-            setValue={setValue}
-            clearErrors={clearErrors}
             getRegions={getRegions}
+            address1Error={persistentErrorFor('bAddress1')}
           />
         </FormSection>
 
@@ -259,9 +281,8 @@ export function RegistrationForm({ onSubmitted }: RegistrationFormProps) {
             <AddressFields
               prefix="s"
               control={control}
-              setValue={setValue}
-              clearErrors={clearErrors}
               getRegions={getRegions}
+              address1Error={persistentErrorFor('sAddress1')}
             />
           )}
         </FormSection>

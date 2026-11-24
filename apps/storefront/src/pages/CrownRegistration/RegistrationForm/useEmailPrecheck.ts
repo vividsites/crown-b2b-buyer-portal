@@ -5,14 +5,21 @@ import { checkUserEmail } from '@/shared/service/b2b';
 import b2bLogger from '@/utils/b3Logger';
 import { channelId } from '@/utils/basicConfig';
 
+import { PersistentErrorKey } from './mapServerErrors';
 import { RegistrationFormValues } from './schema';
 
 // Early duplicate-email check on blur. The server re-checks on submit, so a
 // failed lookup is logged and otherwise ignored.
 export function useEmailPrecheck(
-  form: Pick<UseFormReturn<RegistrationFormValues>, 'trigger' | 'setError'>,
+  form: Pick<UseFormReturn<RegistrationFormValues>, 'trigger'>,
+  // the duplicate error is not kept in the form state, so that it survives blur
+  persistentErrors: {
+    setPersistentError: (field: 'email', messageKey: PersistentErrorKey) => void;
+    clearPersistentErrors: (field: string) => void;
+  },
 ) {
-  const { trigger, setError } = form;
+  const { trigger } = form;
+  const { setPersistentError, clearPersistentErrors } = persistentErrors;
   const latestRequestRef = useRef(0);
 
   const onEmailBlur = useCallback(
@@ -34,14 +41,16 @@ export function useEmailPrecheck(
           return;
         }
 
-        if (!isValid) {
-          setError('email', { type: 'server', message: 'crownRegistration.error.emailExists' });
+        if (isValid) {
+          clearPersistentErrors('email');
+        } else {
+          setPersistentError('email', 'crownRegistration.error.emailExists');
         }
       } catch (error) {
         b2bLogger.error(error);
       }
     },
-    [trigger, setError],
+    [trigger, setPersistentError, clearPersistentErrors],
   );
 
   return { onEmailBlur };

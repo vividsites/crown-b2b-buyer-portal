@@ -63,7 +63,8 @@ describe('mapServerErrors', () => {
 
   it('maps EMAIL_EXISTS inline on the email field and focuses it', () => {
     expect(mapServerErrors(apiError(409, 'EMAIL_EXISTS', 'email'), true)).toEqual({
-      fieldErrors: [{ field: 'email', message: 'crownRegistration.error.emailExists' }],
+      fieldErrors: [],
+      persistentErrors: [{ field: 'email', messageKey: 'crownRegistration.error.emailExists' }],
       focusField: 'email',
     });
   });
@@ -87,7 +88,10 @@ describe('mapServerErrors', () => {
     expect(
       mapServerErrors(apiError(409, 'ADDRESS_EXISTS', 'billingAddress', 'Address exists'), false),
     ).toEqual({
-      fieldErrors: [{ field: 'bAddress1', message: 'Address exists' }],
+      fieldErrors: [],
+      persistentErrors: [
+        { field: 'bAddress1', messageKey: 'crownRegistration.error.addressExists' },
+      ],
       focusField: 'bAddress1',
     });
   });
@@ -96,7 +100,10 @@ describe('mapServerErrors', () => {
     expect(
       mapServerErrors(apiError(409, 'ADDRESS_EXISTS', 'shippingAddress', 'Address exists'), false),
     ).toEqual({
-      fieldErrors: [{ field: 'sAddress1', message: 'Address exists' }],
+      fieldErrors: [],
+      persistentErrors: [
+        { field: 'sAddress1', messageKey: 'crownRegistration.error.addressExists' },
+      ],
       focusField: 'sAddress1',
     });
   });
@@ -105,20 +112,33 @@ describe('mapServerErrors', () => {
     expect(
       mapServerErrors(apiError(409, 'ADDRESS_EXISTS', 'shippingAddress', 'Address exists'), true),
     ).toEqual({
-      fieldErrors: [{ field: 'bAddress1', message: 'Address exists' }],
+      fieldErrors: [],
+      persistentErrors: [
+        { field: 'bAddress1', messageKey: 'crownRegistration.error.addressExists' },
+      ],
       focusField: 'bAddress1',
     });
   });
 
-  it('maps ADDRESS_EXISTS reported on a form field such as companyName inline on that field', () => {
+  it('maps ADDRESS_EXISTS on companyName to the persistent company error', () => {
     expect(
       mapServerErrors(
         apiError(400, 'ADDRESS_EXISTS', 'companyName', 'Company already exists'),
         true,
       ),
     ).toEqual({
-      fieldErrors: [{ field: 'companyName', message: 'Company already exists' }],
+      fieldErrors: [],
+      persistentErrors: [
+        { field: 'companyName', messageKey: 'crownRegistration.error.companyExists' },
+      ],
       focusField: 'companyName',
+    });
+  });
+
+  it('shows ADDRESS_EXISTS on any other form field inline with the server message', () => {
+    expect(mapServerErrors(apiError(400, 'ADDRESS_EXISTS', 'bCity', 'City taken'), true)).toEqual({
+      fieldErrors: [{ field: 'bCity', message: 'City taken' }],
+      focusField: 'bCity',
     });
   });
 

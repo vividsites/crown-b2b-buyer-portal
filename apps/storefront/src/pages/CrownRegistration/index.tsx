@@ -26,10 +26,9 @@ import {
   PageRouterLink,
   PageTitle,
 } from './styled';
+import { SUPPORT_EMAIL } from './supportEmail';
 import { useAutoLogin } from './useAutoLogin';
 import { useTypekitFonts } from './useTypekitFonts';
-
-const SUPPORT_EMAIL = 'CrownCommerceSupport@crownpack.com';
 
 export default function CrownRegistration({ setOpenPage }: PageProps) {
   const b3Lang = useB3Lang();

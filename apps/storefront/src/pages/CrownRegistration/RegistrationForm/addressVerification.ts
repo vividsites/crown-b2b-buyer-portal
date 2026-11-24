@@ -1,5 +1,6 @@
 import { RegistrationAddress } from '@/shared/service/vs';
 
+import { REGISTRATION_COUNTRY } from './regions';
 import { AddressPrefix, RegistrationFormValues } from './schema';
 
 export type VerifiedScope = 'billing' | 'shipping';
@@ -18,7 +19,7 @@ export const readAddress = (
   city: values[`${prefix}City`].trim(),
   state: values[`${prefix}State`].trim(),
   postalCode: values[`${prefix}Zip`].trim(),
-  country: values[`${prefix}Country`],
+  country: REGISTRATION_COUNTRY,
 });
 
 const normalize = (value: string) => value.trim().replace(/\s+/g, ' ').toUpperCase();
@@ -36,8 +37,7 @@ export const addressKey = (address: RegistrationAddress): string =>
     .map(normalize)
     .join('|');
 
-// Billing first; shipping only when it is separate. US addresses only: USPS
-// cannot verify Canadian ones.
+// Billing first; shipping only when it is separate.
 export const getAddressesToVerify = (
   values: RegistrationFormValues,
 ): { scope: VerifiedScope; address: RegistrationAddress }[] => {
@@ -49,10 +49,9 @@ export const getAddressesToVerify = (
     entries.push({ scope: 'shipping', address: readAddress(values, 's') });
   }
 
-  return entries.filter(({ address }) => address.country === 'US');
+  return entries;
 };
 
-// Country is left alone: a suggestion never changes it.
 export const addressFieldUpdates = (
   prefix: AddressPrefix,
   address: RegistrationAddress,

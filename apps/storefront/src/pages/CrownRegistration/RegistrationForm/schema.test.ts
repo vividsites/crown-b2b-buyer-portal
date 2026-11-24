@@ -18,14 +18,12 @@ const buildValuesWith = builder<RegistrationFormValues>(() => {
     bAddress1: faker.location.streetAddress(),
     bAddress2: '',
     bCity: faker.location.city(),
-    bCountry: 'US',
     bState: 'IL',
     bZip: faker.string.numeric(5),
     sameAsBilling: true,
     sAddress1: '',
     sAddress2: '',
     sCity: '',
-    sCountry: 'US',
     sState: '',
     sZip: '',
     privacyAcknowledged: true,
@@ -66,14 +64,34 @@ describe('registrationSchema', () => {
       sameAsBilling: false,
       sAddress1: faker.location.streetAddress(),
       sCity: faker.location.city(),
-      sState: 'ON',
-      sCountry: 'CA',
-      sZip: 'K1A 0B1',
+      sState: 'TX',
+      sZip: '78701',
       [field]: '',
     });
 
     expect(issuesFor(values)[field]).toBe(`crownRegistration.error.required.${field}`);
   });
+
+  it.each(['companyName', 'firstName', 'lastName'] as const)(
+    'requires at least one letter in %s',
+    (field) => {
+      expect(issuesFor(buildValuesWith({ [field]: '12345' }))).toEqual({
+        [field]: `crownRegistration.error.${field}Invalid`,
+      });
+      expect(issuesFor(buildValuesWith({ [field]: '- . 42' }))[field]).toBe(
+        `crownRegistration.error.${field}Invalid`,
+      );
+    },
+  );
+
+  it.each(['3M', 'A', "O'Brien-2", 'José', '山田'])(
+    'accepts a name containing a letter: %s',
+    (value) => {
+      expect(
+        issuesFor(buildValuesWith({ companyName: value, firstName: value, lastName: value })),
+      ).toEqual({});
+    },
+  );
 
   it('treats a whitespace-only value as blank', () => {
     expect(issuesFor(buildValuesWith({ companyName: '   ' }))).toEqual({
@@ -130,16 +148,7 @@ describe('registrationSchema', () => {
     ['62701', undefined],
     ['62701-1234', undefined],
   ])('validates US ZIP %s', (bZip, expected) => {
-    expect(issuesFor(buildValuesWith({ bCountry: 'US', bZip })).bZip).toBe(expected);
-  });
-
-  it.each([
-    ['12345', 'crownRegistration.error.postalCA'],
-    ['K1A 0B1', undefined],
-    ['k1a0b1', undefined],
-    ['K1A-0B1', undefined],
-  ])('validates CA postal code %s', (bZip, expected) => {
-    expect(issuesFor(buildValuesWith({ bCountry: 'CA', bState: 'ON', bZip })).bZip).toBe(expected);
+    expect(issuesFor(buildValuesWith({ bZip })).bZip).toBe(expected);
   });
 
   it('ignores shipping fields when shipping is the same as billing', () => {
@@ -148,17 +157,16 @@ describe('registrationSchema', () => {
     expect(issuesFor(values)).toEqual({});
   });
 
-  it("validates shipping fields with the shipping country's rules when shipping differs", () => {
+  it('validates the shipping ZIP when shipping differs', () => {
     const values = buildValuesWith({
       sameAsBilling: false,
       sAddress1: faker.location.streetAddress(),
       sCity: faker.location.city(),
-      sState: 'ON',
-      sCountry: 'CA',
-      sZip: '12345',
+      sState: 'TX',
+      sZip: 'K1A 0B1',
     });
 
-    expect(issuesFor(values)).toEqual({ sZip: 'crownRegistration.error.postalCA' });
+    expect(issuesFor(values)).toEqual({ sZip: 'crownRegistration.error.zipUS' });
   });
 
   it('requires privacy acknowledgement', () => {

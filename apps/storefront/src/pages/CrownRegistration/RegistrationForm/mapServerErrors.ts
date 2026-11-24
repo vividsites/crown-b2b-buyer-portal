@@ -10,9 +10,24 @@ import { defaultRegistrationValues, RegistrationFormValues } from './schema';
 
 export type FormFieldName = keyof RegistrationFormValues;
 
+// Duplicate email/company/address errors include a support email link. They are kept out
+// of react-hook-form's error state, which drops an error on blur once client-side
+// validation passes, because the user has to be able to select and click the link.
+export type PersistentErrorKey =
+  | 'crownRegistration.error.emailExists'
+  | 'crownRegistration.error.companyExists'
+  | 'crownRegistration.error.addressExists';
+
+export interface PersistentFieldError {
+  field: FormFieldName;
+  // i18n key; the support email link is rendered after the text
+  messageKey: PersistentErrorKey;
+}
+
 interface MappedServerErrors {
   // message: i18n key OR escaped server text
   fieldErrors: { field: FormFieldName; message: string }[];
+  persistentErrors?: PersistentFieldError[];
   // i18n key
   bannerKey?: string;
   focusField?: FormFieldName;
@@ -53,6 +68,11 @@ export const mapServerErrors = (error: unknown, sameAsBilling: boolean): MappedS
     result.focusField ??= field;
   };
 
+  const addPersistentError = (field: FormFieldName, messageKey: PersistentErrorKey) => {
+    result.persistentErrors = [...(result.persistentErrors ?? []), { field, messageKey }];
+    result.focusField ??= field;
+  };
+
   const addBanner = (key: string) => {
     result.bannerKey ??= key;
   };
@@ -66,7 +86,7 @@ export const mapServerErrors = (error: unknown, sameAsBilling: boolean): MappedS
         addBanner('crownRegistration.error.rateLimited');
         break;
       case REGISTRATION_ERROR_CODES.emailExists:
-        addFieldError('email', 'crownRegistration.error.emailExists');
+        addPersistentError('email', 'crownRegistration.error.emailExists');
         break;
       case REGISTRATION_ERROR_CODES.validation:
         if (isFormField(field) && message) {
@@ -77,10 +97,13 @@ export const mapServerErrors = (error: unknown, sameAsBilling: boolean): MappedS
         break;
       case REGISTRATION_ERROR_CODES.addressExists: {
         // the API also reports duplicates on other fields, e.g. companyName
-        const target =
-          mapAddressField(field, sameAsBilling) ?? (isFormField(field) ? field : undefined);
-        if (target && message) {
-          addFieldError(target, escapeServerMessage(message));
+        const addressField = mapAddressField(field, sameAsBilling);
+        if (addressField) {
+          addPersistentError(addressField, 'crownRegistration.error.addressExists');
+        } else if (field === 'companyName') {
+          addPersistentError('companyName', 'crownRegistration.error.companyExists');
+        } else if (isFormField(field) && message) {
+          addFieldError(field, escapeServerMessage(message));
         } else {
           addBanner(GENERIC);
         }
@@ -99,7 +122,7 @@ export const mapServerErrors = (error: unknown, sameAsBilling: boolean): MappedS
 
   error.errors.forEach(handle);
 
-  if (result.fieldErrors.length === 0 && !result.bannerKey) {
+  if (result.fieldErrors.length === 0 && !result.persistentErrors && !result.bannerKey) {
     result.bannerKey = GENERIC;
   }
 

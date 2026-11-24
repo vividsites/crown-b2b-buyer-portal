@@ -1,4 +1,4 @@
-import { HTMLAttributes } from 'react';
+import { HTMLAttributes, ReactNode } from 'react';
 import { Control, Controller, FieldValues, Path } from 'react-hook-form';
 
 import { useB3Lang } from '@/lib/lang';
@@ -20,6 +20,10 @@ interface CrownTextFieldProps<T extends FieldValues> {
   fullRow?: boolean;
   // extra hook (Phase 2 email precheck)
   onBlur?: (value: string) => void;
+  // Already-rendered error that is not part of react-hook-form's state, so it is not
+  // cleared on blur (e.g. a message with a link the user needs to click). A form
+  // error takes precedence while there is one.
+  persistentError?: ReactNode;
 }
 
 export function CrownTextField<T extends FieldValues>({
@@ -34,6 +38,7 @@ export function CrownTextField<T extends FieldValues>({
   placeholder,
   fullRow = false,
   onBlur,
+  persistentError,
 }: CrownTextFieldProps<T>) {
   const b3Lang = useB3Lang();
 
@@ -44,7 +49,7 @@ export function CrownTextField<T extends FieldValues>({
       render={({ field, fieldState: { error } }) => {
         const errorId = `${name}-error`;
         const hintId = `${name}-hint`;
-        const errorText = error?.message ? b3Lang(error.message) : undefined;
+        const errorText: ReactNode = error?.message ? b3Lang(error.message) : persistentError;
         let describedBy: string | undefined;
         if (errorText) {
           describedBy = errorId;
