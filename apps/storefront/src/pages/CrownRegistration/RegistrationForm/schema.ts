@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
 export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
-export const FREE_EMAIL_PATTERN = /@(gmail|yahoo|hotmail|outlook|aol)\./i;
 // At least one letter in any script, so accented names pass too.
 export const HAS_LETTER_PATTERN = /\p{L}/u;
 export const US_ZIP_PATTERN = /^\d{5}(-\d{4})?$/;
@@ -62,12 +61,8 @@ export const registrationSchema = baseSchema.superRefine((values, ctx) => {
   requireLetter('lastName', values.lastName);
 
   const email = values.email.trim();
-  if (requireField('email', email)) {
-    if (!EMAIL_PATTERN.test(email)) {
-      fail('email', 'emailInvalid');
-    } else if (FREE_EMAIL_PATTERN.test(email)) {
-      fail('email', 'emailCompany');
-    }
+  if (requireField('email', email) && !EMAIL_PATTERN.test(email)) {
+    fail('email', 'emailInvalid');
   }
 
   if (requireField('password', values.password)) {

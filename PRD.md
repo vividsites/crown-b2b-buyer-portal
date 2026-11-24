@@ -115,7 +115,7 @@ Make it quick and error-free for a qualified business to apply for a Crown onlin
 
 3. **Email asked once**
    As an applicant, I want to give my work email once and use it to sign in, so that I don't have to track two addresses.
-   *Example:* I type `jane@gmail.com` and see "Use a company email address". I type an email that's already registered and, when I leave the field, see "An account with this email already exists".
+   *Example:* I type `jane@acme` and see "Enter a valid email address". I type an email that's already registered and, when I leave the field, see "An account with this email already exists".
 
 4. **Address correction**
    As an applicant, I want to be told when my address doesn't match USPS records, so that deliveries and invoices aren't delayed.
@@ -281,7 +281,6 @@ A boxed checkbox, "Shipping address is the same as billing", is checked by defau
 |---|---|---|
 | Required | Empty | "{Label} is required" (labels: Work email, Direct phone, Billing city, …) |
 | Email format | fails `/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i` | "Enter a valid email address" |
-| Company email | matches `@(gmail\|yahoo\|hotmail\|outlook\|aol)\.` | "Use a company email address" |
 | Duplicate email | `checkUserEmail` → `!isValid` | "An account with this email already exists" |
 | Phone | < 10 digits | "Enter a 10-digit phone number" |
 | Password length | < 8 characters | "Use at least 8 characters" |
