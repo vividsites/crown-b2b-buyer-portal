@@ -71,15 +71,16 @@ describe('useEmailPrecheck', () => {
     expect(check).not.toHaveBeenCalled();
   });
 
-  it('does not call the service for a free email domain', async () => {
+  it('checks a free email domain for duplicates like any other address', async () => {
     const check = mockCheck(true);
     const { user } = renderWithProviders(<Harness />);
 
     await user.type(screen.getByLabelText(/work email/i), 'someone@gmail.com');
     await user.tab();
 
-    expect(await screen.findByText('Use a company email address')).toBeInTheDocument();
-    expect(check).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(check).toHaveBeenCalledWith(expect.objectContaining({ email: 'someone@gmail.com' })),
+    );
   });
 
   it('shows the duplicate error when the account already exists', async () => {

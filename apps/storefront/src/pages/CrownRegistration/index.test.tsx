@@ -261,10 +261,10 @@ describe('CrownRegistration page', () => {
     await user.tab();
     expect(await screen.findByText('Work email is required')).toBeVisible();
 
-    await user.type(email, 'x@gmail.com');
+    await user.type(email, 'not-an-email');
     expect(screen.queryByText('Work email is required')).toBeNull();
     await user.tab();
-    expect(await screen.findByText('Use a company email address')).toBeVisible();
+    expect(await screen.findByText('Enter a valid email address')).toBeVisible();
 
     await user.type(phone, '12345');
     await user.tab();

@@ -103,12 +103,9 @@ describe('registrationSchema', () => {
   it.each([
     ['not-an-email', 'crownRegistration.error.emailInvalid'],
     ['jane@acme.c', 'crownRegistration.error.emailInvalid'],
-    ['jane@gmail.com', 'crownRegistration.error.emailCompany'],
-    ['jane@yahoo.com', 'crownRegistration.error.emailCompany'],
-    ['jane@hotmail.com', 'crownRegistration.error.emailCompany'],
-    ['jane@outlook.com', 'crownRegistration.error.emailCompany'],
-    ['jane@aol.com', 'crownRegistration.error.emailCompany'],
-    ['JANE@GMAIL.COM', 'crownRegistration.error.emailCompany'],
+    ['jane@gmail.com', undefined],
+    ['jane@yahoo.com', undefined],
+    ['JANE@GMAIL.COM', undefined],
     ['jane@acmefoods.com', undefined],
   ])('validates email %s', (email, expected) => {
     expect(issuesFor(buildValuesWith({ email })).email).toBe(expected);

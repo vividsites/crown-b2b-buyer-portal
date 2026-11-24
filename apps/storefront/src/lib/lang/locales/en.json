@@ -20,7 +20,6 @@
   "crownRegistration.error.companyExists": "An account with this company name already exists. Please contact customer support at",
   "crownRegistration.error.addressExists": "An account with this address already exists. Please contact customer support at",
   "crownRegistration.error.emailInvalid": "Enter a valid email address",
-  "crownRegistration.error.emailCompany": "Use a company email address",
   "crownRegistration.error.emailExists": "An account with this email already exists. Please contact customer support at {SUPPORT_EMAIL} or use the forgot password feature.",
   "crownRegistration.error.phoneInvalid": "Enter a 10-digit phone number",
   "crownRegistration.error.passwordLength": "Use at least 8 characters",
