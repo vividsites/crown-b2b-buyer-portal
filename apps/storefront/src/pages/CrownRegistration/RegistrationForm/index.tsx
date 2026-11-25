@@ -201,6 +201,7 @@ export function RegistrationForm({ onSubmitted }: RegistrationFormProps) {
             name="companyName"
             label={b3Lang('crownRegistration.field.companyName')}
             required
+            maxLength={200}
             autoComplete="organization"
             persistentError={persistentErrorFor('companyName')}
           />
@@ -209,6 +210,7 @@ export function RegistrationForm({ onSubmitted }: RegistrationFormProps) {
             name="firstName"
             label={b3Lang('crownRegistration.field.firstName')}
             required
+            maxLength={100}
             autoComplete="given-name"
           />
           <CrownTextField
@@ -216,6 +218,7 @@ export function RegistrationForm({ onSubmitted }: RegistrationFormProps) {
             name="lastName"
             label={b3Lang('crownRegistration.field.lastName')}
             required
+            maxLength={100}
             autoComplete="family-name"
           />
           <CrownTextField
@@ -225,6 +228,7 @@ export function RegistrationForm({ onSubmitted }: RegistrationFormProps) {
             label={b3Lang('crownRegistration.field.email')}
             hint={b3Lang('crownRegistration.field.emailHint')}
             required
+            maxLength={100}
             autoComplete="email"
             onBlur={onEmailBlur}
             persistentError={persistentErrorFor('email')}
@@ -253,6 +257,7 @@ export function RegistrationForm({ onSubmitted }: RegistrationFormProps) {
             label={b3Lang('crownRegistration.field.phone')}
             placeholder={b3Lang('crownRegistration.field.phonePlaceholder')}
             required
+            maxLength={100}
             autoComplete="tel"
           />
         </FormSection>
