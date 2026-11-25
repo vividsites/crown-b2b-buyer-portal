@@ -149,6 +149,80 @@ describe('registrationSchema', () => {
     expect(issuesFor(buildValuesWith({ bZip })).bZip).toBe(expected);
   });
 
+  describe('length limits', () => {
+    const shippingValues = {
+      sameAsBilling: false,
+      sAddress1: faker.location.streetAddress(),
+      sCity: faker.location.city(),
+      sState: 'TX',
+      sZip: '78701',
+    };
+
+    it.each([
+      ['companyName', 200],
+      ['firstName', 100],
+      ['lastName', 100],
+      ['phone', 100],
+      ['bAddress1', 200],
+      ['bAddress2', 200],
+      ['bCity', 100],
+      ['sAddress1', 200],
+      ['sAddress2', 200],
+      ['sCity', 100],
+    ] as const)('accepts %s at exactly %i characters', (field, limit) => {
+      const value = field === 'phone' ? '5'.repeat(limit) : 'a'.repeat(limit);
+
+      expect(issuesFor(buildValuesWith({ ...shippingValues, [field]: value }))).toEqual({});
+    });
+
+    it('accepts an email at exactly 100 characters', () => {
+      const email = `${'a'.repeat(100 - '@acme.com'.length)}@acme.com`;
+
+      expect(email).toHaveLength(100);
+      expect(issuesFor(buildValuesWith({ email }))).toEqual({});
+    });
+
+    it.each([
+      ['companyName', 200],
+      ['firstName', 100],
+      ['lastName', 100],
+      ['phone', 100],
+      ['bAddress1', 200],
+      ['bAddress2', 200],
+      ['bCity', 100],
+      ['sAddress1', 200],
+      ['sAddress2', 200],
+      ['sCity', 100],
+    ] as const)('rejects %s over %i characters', (field, limit) => {
+      const value = field === 'phone' ? '5'.repeat(limit + 1) : 'a'.repeat(limit + 1);
+
+      expect(issuesFor(buildValuesWith({ ...shippingValues, [field]: value }))).toEqual({
+        [field]: `crownRegistration.error.maxLength.${limit}`,
+      });
+    });
+
+    it('rejects an email over 100 characters', () => {
+      const email = `${'a'.repeat(101 - '@acme.com'.length)}@acme.com`;
+
+      expect(issuesFor(buildValuesWith({ email })).email).toBe(
+        'crownRegistration.error.maxLength.100',
+      );
+    });
+
+    it('reports the length error first when an over-long value is also invalid', () => {
+      const result = registrationSchema.safeParse(buildValuesWith({ firstName: '1'.repeat(101) }));
+      const firstNameIssues = result.error?.issues.filter((issue) => issue.path[0] === 'firstName');
+
+      expect(firstNameIssues?.[0]?.message).toBe('crownRegistration.error.maxLength.100');
+    });
+
+    it('does not limit the sales rep name', () => {
+      expect(
+        issuesFor(buildValuesWith({ existingCustomer: true, salesRepName: 'a'.repeat(500) })),
+      ).toEqual({});
+    });
+  });
+
   it('ignores shipping fields when shipping is the same as billing', () => {
     const values = buildValuesWith({ sameAsBilling: true, sZip: 'abc', sAddress1: '' });
 

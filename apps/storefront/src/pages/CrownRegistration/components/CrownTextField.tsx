@@ -15,6 +15,7 @@ interface CrownTextFieldProps<T extends FieldValues> {
   hint?: string;
   type?: 'text' | 'email' | 'password' | 'tel';
   autoComplete?: string;
+  maxLength?: number;
   inputMode?: HTMLAttributes<HTMLInputElement>['inputMode'];
   placeholder?: string;
   fullRow?: boolean;
@@ -36,6 +37,7 @@ export function CrownTextField<T extends FieldValues>({
   hint,
   type = 'text',
   autoComplete,
+  maxLength,
   inputMode,
   placeholder,
   fullRow = false,
@@ -73,6 +75,7 @@ export function CrownTextField<T extends FieldValues>({
                 field.onBlur();
                 onBlur?.(field.value);
               }}
+              maxLength={maxLength}
               type={type}
               autoComplete={autoComplete}
               inputMode={inputMode}

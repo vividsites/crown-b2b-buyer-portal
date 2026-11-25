@@ -25,6 +25,8 @@
   "crownRegistration.error.passwordLength": "Use at least 8 characters",
   "crownRegistration.error.passwordMix": "Include at least one letter and one number",
   "crownRegistration.error.passwordMismatch": "Passwords do not match",
+  "crownRegistration.error.maxLength.100": "Maximum 100 characters",
+  "crownRegistration.error.maxLength.200": "Maximum 200 characters",
   "crownRegistration.error.zipUS": "Enter a 5-digit ZIP code",
   "crownRegistration.error.privacyRequired": "You must acknowledge the Privacy Policy",
   "crownRegistration.errorSummary.check": "Check",

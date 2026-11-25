@@ -33,6 +33,7 @@ export function AddressFields({ prefix, control, getRegions, address1Error }: Ad
         name={name('Address1')}
         label={b3Lang('crownRegistration.field.address1')}
         required
+        maxLength={200}
         fullRow
         autoComplete={`${section} address-line1`}
         persistentError={address1Error}
@@ -41,6 +42,7 @@ export function AddressFields({ prefix, control, getRegions, address1Error }: Ad
         control={control}
         name={name('Address2')}
         label={b3Lang('crownRegistration.field.address2')}
+        maxLength={200}
         fullRow
         autoComplete={`${section} address-line2`}
       />
@@ -48,6 +50,7 @@ export function AddressFields({ prefix, control, getRegions, address1Error }: Ad
         control={control}
         name={name('City')}
         label={b3Lang('crownRegistration.field.city')}
+        maxLength={100}
         required
         autoComplete={`${section} address-level2`}
       />

@@ -5,26 +5,41 @@ export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
 export const HAS_LETTER_PATTERN = /\p{L}/u;
 export const US_ZIP_PATTERN = /^\d{5}(-\d{4})?$/;
 
+// Limits come from BigCommerce's API documentation, which the VS API also follows.
+// Some look arbitrary, and BC is inconsistent about email (100 is the shortest limit
+// among its endpoints), so don't loosen them without checking the BC docs.
+const COMPANY_NAME_MAXLEN = 200;
+const FIRST_NAME_MAXLEN = 100;
+const LAST_NAME_MAXLEN = 100;
+const EMAIL_MAXLEN = 100;
+const PHONE_MAXLEN = 100;
+const ADDRESS_MAXLEN = 200;
+const CITY_MAXLEN = 100;
+
+// Message is an i18n key (crownRegistration.error.maxLength.<limit>), one per distinct limit.
+const limitedString = (limit: number) =>
+  z.string().max(limit, { message: `crownRegistration.error.maxLength.${limit}` });
+
 const baseSchema = z.object({
   existingCustomer: z.boolean(),
   // optional, even when existingCustomer is checked
   salesRepName: z.string(),
-  companyName: z.string(),
-  firstName: z.string(),
-  lastName: z.string(),
-  email: z.string(),
+  companyName: limitedString(COMPANY_NAME_MAXLEN),
+  firstName: limitedString(FIRST_NAME_MAXLEN),
+  lastName: limitedString(LAST_NAME_MAXLEN),
+  email: limitedString(EMAIL_MAXLEN),
   password: z.string(),
   confirmPassword: z.string(),
-  phone: z.string(),
-  bAddress1: z.string(),
-  bAddress2: z.string(),
-  bCity: z.string(),
+  phone: limitedString(PHONE_MAXLEN),
+  bAddress1: limitedString(ADDRESS_MAXLEN),
+  bAddress2: limitedString(ADDRESS_MAXLEN),
+  bCity: limitedString(CITY_MAXLEN),
   bState: z.string(),
   bZip: z.string(),
   sameAsBilling: z.boolean(),
-  sAddress1: z.string(),
-  sAddress2: z.string(),
-  sCity: z.string(),
+  sAddress1: limitedString(ADDRESS_MAXLEN),
+  sAddress2: limitedString(ADDRESS_MAXLEN),
+  sCity: limitedString(CITY_MAXLEN),
   sState: z.string(),
   sZip: z.string(),
   privacyAcknowledged: z.boolean(),
